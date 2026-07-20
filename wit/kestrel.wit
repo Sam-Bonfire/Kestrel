@@ -1,0 +1,139 @@
+package kestrel:provider;
+
+// ─────────────────────────────────────────────
+// Mail Provider Interface
+// ─────────────────────────────────────────────
+
+interface mail-provider {
+
+    /// A message header/snippet payload returned during sync.
+    /// NOTE: body-text and body-html are intentionally absent here.
+    /// Full bodies are fetched on-demand via fetch-message-body.
+    record message-payload {
+        id: string,
+        external-id: string,
+        thread-id: string,
+        subject: option<string>,
+        sender-name: option<string>,
+        sender-email: string,
+        recipients: string,          // JSON array string
+        date-sent: s64,
+        date-received: s64,
+        snippet: option<string>,
+        labels: option<string>,      // JSON array of provider-native label strings
+                                     // e.g. Gmail: ["INBOX","UNREAD","Label_42"]
+                                     // e.g. Outlook: ["Inbox","Newsletter"]
+        is-read: bool,
+    }
+
+    /// Full message body fetched on-demand when a message is opened.
+    record message-body {
+        body-text: option<string>,
+        body-html: option<string>,
+    }
+
+    /// Cursor-based sync result for incremental message fetching.
+    record sync-result {
+        messages: list<message-payload>,
+        next-cursor: string,
+    }
+
+    /// Fetch new/updated message headers since the last cursor position.
+    sync-mail: func(auth-token: string, cursor: option<string>) -> result<sync-result, string>;
+
+    /// Fetch the full body of a single message by its provider-side external ID.
+    fetch-message-body: func(auth-token: string, external-id: string) -> result<message-body, string>;
+
+    /// Soft-delete a message on the provider (moves to Trash).
+    delete-message: func(auth-token: string, external-id: string) -> result<_, string>;
+}
+
+// ─────────────────────────────────────────────
+// Calendar Provider Interface
+// ─────────────────────────────────────────────
+
+interface calendar-provider {
+
+    record calendar-payload {
+        id: string,
+        name: string,
+        color: option<string>,
+        is-primary: bool,
+    }
+
+    record attendee {
+        email: string,
+        name: option<string>,
+        response-status: option<string>, // "accepted" | "declined" | "tentative" | "needsAction"
+    }
+
+    record event-payload {
+        id: string,
+        external-id: string,
+        title: string,
+        description: option<string>,
+        location: option<string>,
+        start-time: s64,
+        end-time: s64,
+        is-all-day: bool,
+        recurrence-rules: option<string>, // RRULE string e.g. "FREQ=WEEKLY;BYDAY=MO"
+        organizer-email: option<string>,
+        organizer-name: option<string>,
+        attendees: option<string>,        // JSON array of attendee objects
+        status: option<string>,           // "confirmed" | "tentative" | "cancelled"
+    }
+
+    /// Fetch all calendars available under this account.
+    fetch-calendars: func(auth-token: string) -> result<list<calendar-payload>, string>;
+
+    /// Fetch all events within a UTC timestamp range.
+    fetch-events: func(auth-token: string, start-time: s64, end-time: s64) -> result<list<event-payload>, string>;
+
+    /// Create or update a calendar event.
+    /// action: "create" | "update"
+    mutate-event: func(auth-token: string, action: string, payload: event-payload) -> result<_, string>;
+
+    /// Soft-delete an event on the provider.
+    delete-event: func(auth-token: string, external-id: string) -> result<_, string>;
+}
+
+// ─────────────────────────────────────────────
+// Provider Branding Interface
+// ─────────────────────────────────────────────
+
+interface provider-branding {
+
+    /// Branding metadata returned by each plugin so the host UI can render
+    /// provider-specific connect buttons and account badges dynamically.
+    record branding-payload {
+        name: string,           // e.g. "Gmail", "Outlook"
+        button-text: string,    // e.g. "Continue with Google"
+        button-color: string,   // hex, e.g. "#4285F4"
+        icon-svg: string,       // raw inline SVG XML string
+    }
+
+    /// Return the branding configuration for this provider.
+    get-branding: func() -> branding-payload;
+}
+
+// ─────────────────────────────────────────────
+// Plugin World
+// ─────────────────────────────────────────────
+
+world kestrel-plugin {
+
+    /// OAuth2 client credentials for this provider, resolved by the host
+    /// daemon at startup from secretspec or environment variables.
+    record client-credentials {
+        client-id: string,
+        client-secret: string,
+    }
+
+    /// Host-provided function: plugin calls this to retrieve its OAuth credentials
+    /// rather than bundling secrets inside the .wasm binary.
+    import get-client-credentials: func(provider: string) -> result<client-credentials, string>;
+
+    export mail-provider;
+    export calendar-provider;
+    export provider-branding;
+}

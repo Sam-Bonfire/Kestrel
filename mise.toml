@@ -1,0 +1,47 @@
+# Kestrel Tool & Task Configuration
+
+[tools]
+rust = "stable"
+node = "22"
+pnpm = "latest"
+jujutsu = "latest"
+
+[tasks."dev:backend"]
+description = "Start the Axum daemon in development mode"
+dir = "backend"
+run = "cargo watch -x run"
+
+[tasks."dev:frontend-mail"]
+description = "Start the Kestrel Mail Tauri dev server"
+dir = "frontend-mail"
+run = "pnpm tauri dev"
+
+[tasks."dev:frontend-calendar"]
+description = "Start the Kestrel Calendar Tauri dev server"
+dir = "frontend-calendar"
+run = "pnpm tauri dev"
+
+[tasks."build:backend"]
+description = "Build release binary for the backend"
+dir = "backend"
+run = "cargo build --release"
+
+[tasks."build:frontend-mail"]
+description = "Build Kestrel Mail native packages using Tauri"
+dir = "frontend-mail"
+run = "pnpm tauri build"
+
+[tasks."build:frontend-calendar"]
+description = "Build Kestrel Calendar native packages using Tauri"
+dir = "frontend-calendar"
+run = "pnpm tauri build"
+
+[tasks."test:backend"]
+description = "Run backend cargo tests"
+dir = "backend"
+run = "cargo test"
+
+[tasks."db:migrate"]
+description = "Run SQLx migrations locally"
+dir = "backend"
+run = "cargo sqlx migrate run"

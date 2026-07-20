@@ -1,0 +1,6 @@
+{
+  "name": "Notion Mail Client",
+  "description": "A high-focus email client with a focused mail list, center peek mail preview, and Kestrel Mono Dark styling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
