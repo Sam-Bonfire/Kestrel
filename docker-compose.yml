@@ -33,11 +33,11 @@ services:
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
       
+      # Canonical base URL for oauth redirects and API calls
+      - KESTREL_BASE_URL=${KESTREL_BASE_URL}
+      
       # Background Sync Configurations
       - SYNC_INTERVAL_MINUTES=${SYNC_INTERVAL_MINUTES:-5}
-      
-      # Push Notification Integrations (Fallback if SECRETSPEC_PATH is empty)
-      - FCM_API_KEY=${FCM_API_KEY}
 
 volumes:
   kestrel-data:

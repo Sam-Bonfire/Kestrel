@@ -1,0 +1,38 @@
+# Rust build outputs
+target/
+
+# Node.js dependencies & builds
+node_modules/
+dist/
+.svelte-kit/
+.tauri/
+
+# Local databases & sync caches
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+kestrel.db
+kestrel_queue.db
+
+# Configuration secrets & env profiles
+.env
+.env.*
+!.env.example
+secrets/
+
+# IDE settings
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# System stores
+Thumbs.db
+.DS_Store
+
+# Reference prototypes (Ignore local React design prototype)
+prototype/

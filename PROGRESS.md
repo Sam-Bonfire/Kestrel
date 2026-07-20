@@ -24,10 +24,10 @@ Last Updated: 2026-07-20
 
 # Current Task
 
-Task ID: **K-004**
-Requirement: Commit baseline specifications.
-Description: Commit baseline specs and WIT boundaries to jj workspace branch.
-Files: [kestrel_spec.md](file:///C:/Users/Sam/Consusson/Projects/Kestrel/kestrel_spec.md), [ARCHITECTURE.md](file:///C:/Users/Sam/Consusson/Projects/Kestrel/ARCHITECTURE.md), [wit/kestrel.wit](file:///C:/Users/Sam/Consusson/Projects/Kestrel/wit/kestrel.wit)
+Task ID: **K-007**
+Requirement: Build repository shortcut task bindings.
+Description: Setup mise task wrappers for local cargo and pnpm command runs.
+Files: [mise.toml](file:///C:/Users/Sam/Consusson/Projects/Kestrel/mise.toml)
 Status: **In Progress**
 Started: 2026-07-20
 
@@ -57,10 +57,10 @@ All tasks map directly to the **Kestrel** Project in the Notion database.
 | K-001: Init `mise.toml` with dependencies | Completed | 2026-07-20 |
 | K-002: Init `jj` repo and first commit | Completed | 2026-07-20 |
 | K-003: Scaffold Cargo workspace config | Completed | 2026-07-20 |
-| K-004: Commit ARCHITECTURE/specs docs | In Progress | 2026-07-20 |
-| K-005: Create Docker compose files | Pending | — |
-| K-006: Generate proper `.gitignore` mappings | Pending | — |
-| K-007: Setup mise shortcut scripts | Pending | — |
+| K-004: Commit ARCHITECTURE/specs docs | Completed | 2026-07-20 |
+| K-005: Create Docker compose files | Completed | 2026-07-20 |
+| K-006: Generate proper `.gitignore` mappings | Completed | 2026-07-20 |
+| K-007: Setup mise shortcut scripts | In Progress | 2026-07-20 |
 | K-008 to K-021: Epic 1 Backend Foundation | Pending | — |
 | K-022 to K-029: Epic 2 Backend Auth | Pending | — |
 | K-030 to K-036: Epic 3 Plugin System | Pending | — |
@@ -81,6 +81,9 @@ All tasks map directly to the **Kestrel** Project in the Notion database.
 | K-001 | 2026-07-20 | Pinned mise.toml created; verified Node, pnpm, Rust, and jj installed via mise |
 | K-002 | 2026-07-20 | Initialized jj repository with Git-compatibility backend and set initial description |
 | K-003 | 2026-07-20 | Created workspace Cargo.toml configuration file at repository root |
+| K-004 | 2026-07-20 | Committed specification docs (kestrel_spec.md, ARCHITECTURE.md, wit/kestrel.wit, DECISION_LOG.md) to jj tree |
+| K-005 | 2026-07-20 | Updated docker-compose.yml environment variables mapping base URL configuration |
+| K-006 | 2026-07-20 | Added local .gitignore layout protecting local database and reference folders |
 
 ---
 
