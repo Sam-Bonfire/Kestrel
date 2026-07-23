@@ -1,0 +1,51 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    name: Build & Publish Release Artifacts
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.5.2
+
+      - name: Install Node Dependencies
+        run: pnpm install
+
+      - name: Build Backend Release Binary
+        run: cargo build --release --manifest-path backend/Cargo.toml
+
+      - name: Build Tauri Mail Desktop Bundle
+        run: pnpm --filter frontend-mail tauri build
+
+      - name: Build Tauri Calendar Desktop Bundle
+        run: pnpm --filter frontend-calendar tauri build
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            backend/target/release/backend.exe
+            frontend-mail/src-tauri/target/release/bundle/msi/*.msi
+            frontend-calendar/src-tauri/target/release/bundle/msi/*.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

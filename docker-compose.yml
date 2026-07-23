@@ -38,6 +38,12 @@ services:
       
       # Background Sync Configurations
       - SYNC_INTERVAL_MINUTES=${SYNC_INTERVAL_MINUTES:-5}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8080}/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   kestrel-data:

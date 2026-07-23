@@ -1,7 +1,10 @@
 # Kestrel Tool & Task Configuration
 
+[env]
+RUSTUP_TOOLCHAIN = "stable-x86_64-pc-windows-gnu"
+
 [tools]
-rust = "stable"
+rust = "stable-x86_64-pc-windows-gnu"
 node = "22"
 pnpm = "latest"
 jujutsu = "latest"
@@ -9,7 +12,7 @@ jujutsu = "latest"
 [tasks."dev:backend"]
 description = "Start the Axum daemon in development mode"
 dir = "backend"
-run = "cargo watch -x run"
+run = 'cargo watch -x "run --bin backend"'
 
 [tasks."dev:frontend-mail"]
 description = "Start the Kestrel Mail Tauri dev server"
@@ -45,3 +48,18 @@ run = "cargo test"
 description = "Run SQLx migrations locally"
 dir = "backend"
 run = "cargo sqlx migrate run"
+
+[tasks."dev"]
+description = "Start all services (backend + mail + calendar) concurrently"
+depends = ["dev:backend", "dev:frontend-mail", "dev:frontend-calendar"]
+
+[tasks."dev:mail"]
+description = "Start backend + Mail Tauri app"
+depends = ["dev:backend", "dev:frontend-mail"]
+
+[tasks."dev:calendar"]
+description = "Start backend + Calendar Tauri app"
+depends = ["dev:backend", "dev:frontend-calendar"]
+
+
+

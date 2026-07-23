@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-canvas-base: #0D0D0D;
+  --color-canvas-card: #131313;
+  --color-canvas-hover: #1C1B1B;
+  --color-canvas-modal: #2A2A2A;
+  --color-text-primary: #E5E2E1;
+  --color-text-secondary: #A0A0A0;
+  --color-border-hairline: #353534;
+  --color-accent-gmail: #EA4335;
+  --color-accent-outlook: #0078D4;
+  --color-today-red: #D15B47;
+  --color-starred-amber: #E5B722;
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+body {
+  background-color: var(--color-canvas-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+.kestrel-card {
+  background-color: var(--color-canvas-card);
+  border: 1px solid var(--color-border-hairline);
+  border-radius: var(--radius-lg);
+}
+
+.kestrel-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(1px);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

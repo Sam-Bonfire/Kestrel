@@ -1,0 +1,31 @@
+{
+  "name": "@kestrel/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./components": "./src/components/index.js",
+    "./tokens": "./src/tokens/index.js",
+    "./api": "./src/api/index.js",
+    "./stores": "./src/stores/index.js",
+    "./offline": "./src/offline/index.js",
+    "./styles/*": "./src/styles/*"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "svelte": "^4.0.0 || ^5.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.1.1",
+    "svelte": "^4.2.19",
+    "typescript": "^5.8.2"
+  }
+}
