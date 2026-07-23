@@ -1,13 +1,8 @@
-<script>
-  import { createEventDispatcher } from 'svelte';
-
-  export let message = 'Something went wrong.';
-
-  const dispatch = createEventDispatcher();
-
-  function handleRetry() {
-    dispatch('retry');
-  }
+<script lang="ts">
+  let { message = 'Something went wrong.', onretry } = $props<{
+    message?: string;
+    onretry?: () => void;
+  }>();
 </script>
 
 <div class="error-banner" role="alert">
@@ -28,9 +23,11 @@
     </svg>
     <span class="error-banner__text">{message}</span>
   </div>
-  <button class="error-banner__retry" on:click={handleRetry}>
-    Retry
-  </button>
+  {#if onretry}
+    <button class="error-banner__retry" onclick={onretry}>
+      Retry
+    </button>
+  {/if}
 </div>
 
 <style>

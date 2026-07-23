@@ -1,6 +1,7 @@
 <script lang="ts">
   import { 
-    Plus, ChevronLeft, ChevronRight, Settings, Eye, EyeOff, Check, ChevronDown 
+    Plus, ChevronLeft, ChevronRight, Settings, Eye, EyeOff, Check, ChevronDown,
+    CalendarDays, Calendar as CalendarIcon, Clock, AlignLeft
   } from 'lucide-svelte';
 
   export interface Calendar {
@@ -23,13 +24,21 @@
     onDateSelect = (d: Date) => {},
     onNewEventClick = () => {},
     accounts = $bindable([] as Account[]),
-    onToggleCalendar = (accId: string, calId: string) => {}
+    onToggleCalendar = (accId: string, calId: string) => {},
+    events = [] as any[],
+    isMobileOrTablet = false,
+    viewMode = 'month',
+    onViewModeChange = (mode: string) => {}
   } = $props<{
     selectedDate?: Date;
     onDateSelect?: (d: Date) => void;
     onNewEventClick?: () => void;
     accounts?: Account[];
     onToggleCalendar?: (accId: string, calId: string) => void;
+    events?: any[];
+    isMobileOrTablet?: boolean;
+    viewMode?: string;
+    onViewModeChange?: (mode: string) => void;
   }>();
 
   let currentMonth = $state(new Date());
@@ -75,7 +84,7 @@
   }
 
   function toggleAccount(accId: string) {
-    accounts = accounts.map(a => a.id === accId ? { ...a, isExpanded: !a.isExpanded } : a);
+    accounts = accounts.map((a: Account) => a.id === accId ? { ...a, isExpanded: !a.isExpanded } : a);
   }
 
   const COLOR_HEX: Record<string, string> = {
@@ -139,9 +148,10 @@
         {#if day}
           {@const isSelected = day.toDateString() === selectedDate.toDateString()}
           {@const isToday = day.toDateString() === new Date().toDateString()}
+          {@const hasEvent = events.some((e: any) => e.date === day.toISOString().split('T')[0])}
           <button
             onclick={() => { onDateSelect(day!); currentMonth = day!; }}
-            class="h-6 w-full rounded flex items-center justify-center transition-all cursor-pointer relative text-[11px]
+            class="h-6 w-full rounded flex flex-col items-center justify-center transition-all cursor-pointer relative text-[11px]
               {isToday 
                 ? 'bg-[var(--color-today-red)] text-white font-semibold shadow-sm' 
                 : isSelected 
@@ -149,6 +159,11 @@
                 : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]'}"
           >
             <span>{day.getDate()}</span>
+            {#if hasEvent && !isSelected && !isToday}
+              <div class="w-1 h-1 bg-[var(--color-text-secondary)] rounded-full absolute bottom-0.5"></div>
+            {:else if hasEvent}
+              <div class="w-1 h-1 bg-white rounded-full absolute bottom-0.5"></div>
+            {/if}
           </button>
         {:else}
           <div></div>
@@ -159,11 +174,40 @@
 
   <!-- Accounts & Calendars Collapsible List (Matching Prototype) -->
   <div class="flex-1 overflow-y-auto space-y-4 pr-1">
-    <div class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]/60 font-semibold px-1">
-      Calendars & Accounts
-    </div>
+    
+    {#if isMobileOrTablet}
+      <div id="sidebar-view-modes" class="space-y-3 pt-1">
+        <h3 class="px-1 text-[10px] font-mono tracking-wider text-[var(--color-text-secondary)]/60 uppercase font-semibold">
+          View Modes
+        </h3>
+        <div class="space-y-1">
+          {#each [
+            { label: 'Month', mode: 'month', icon: CalendarDays },
+            { label: 'Week', mode: 'week', icon: CalendarIcon },
+            { label: 'Day', mode: 'day', icon: Clock },
+            { label: 'Agenda', mode: 'agenda', icon: AlignLeft },
+          ] as item}
+            <button
+              onclick={() => onViewModeChange(item.mode)}
+              class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-mono transition-colors cursor-pointer {viewMode === item.mode ? 'bg-white text-black font-semibold' : 'text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)]'}"
+            >
+              <div class="flex items-center gap-2.5">
+                <svelte:component this={item.icon} class="w-4 h-4 shrink-0" />
+                <span>{item.label}</span>
+              </div>
+              {#if viewMode === item.mode}
+                <Check class="w-3.5 h-3.5 stroke-[2.5]" />
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
-    <div class="space-y-3">
+    <div class="space-y-3 pt-1">
+      <div class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]/60 font-semibold px-1">
+        Calendars & Accounts
+      </div>
       {#each accounts as acc}
         <div class="space-y-1.5">
           <!-- Account Toggle Row -->

@@ -22,12 +22,40 @@
   --radius-lg: 8px;
 }
 
-body {
+html, body {
   background-color: var(--color-canvas-base);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   margin: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
   overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+}
+
+*, *::before, *::after {
+  overscroll-behavior: contain;
+}
+
+/* Tauri Borderless Window Dragging Primitives */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+[data-tauri-drag-region] button,
+[data-tauri-drag-region] input,
+[data-tauri-drag-region] select,
+[data-tauri-drag-region] textarea,
+[data-tauri-drag-region] a,
+[data-tauri-drag-region] [role="button"],
+[data-tauri-drag-region] .no-drag,
+.no-drag,
+.no-drag * {
+  -webkit-app-region: no-drag !important;
+  app-region: no-drag !important;
 }
 
 .kestrel-card {

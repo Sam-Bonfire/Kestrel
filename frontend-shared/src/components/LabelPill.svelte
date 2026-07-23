@@ -1,17 +1,20 @@
-<script>
+<script lang="ts">
   import { tagColors } from '../tokens/index.js';
 
-  export let tag = 'devops';
-  export let label = '';
+  let { tag = 'devops', label = '' } = $props<{
+    tag?: string;
+    label?: string;
+  }>();
 
-  $: palette = getPalette(tag);
-
-  function getPalette(t) {
-    if (t in tagColors) {
-      return tagColors[t];
+  function getPalette(t: string): { text: string; bg: string; border: string } {
+    const key = t.toLowerCase();
+    if (key in tagColors) {
+      return (tagColors as Record<string, { text: string; bg: string; border: string }>)[key];
     }
     return { text: t, bg: t + '15', border: t + '30' };
   }
+
+  let palette = $derived(getPalette(tag));
 </script>
 
 <span
@@ -22,13 +25,7 @@
     border-color: {palette.border};
   "
 >
-  {#if $$slots.default}
-    <slot />
-  {:else if label}
-    {label}
-  {:else}
-    {tag}
-  {/if}
+  {label || tag}
 </span>
 
 <style>

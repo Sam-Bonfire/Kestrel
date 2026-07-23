@@ -40,7 +40,8 @@
     onBulkToggleUnread = (ids: string[], isUnread: boolean) => {},
     onBulkToggleStar = (ids: string[], isStarred: boolean) => {},
     onApplyLabel = (id: string, label: string) => {},
-    allLabels = [] as string[]
+    allLabels = [] as string[],
+    onOpenMobileSidebar = () => {}
   } = $props<{
     threads?: EmailThread[];
     selectedThreadId?: string | null;
@@ -52,6 +53,7 @@
     onToggleUnread?: (id: string) => void;
     onBulkArchive?: (ids: string[]) => void;
     onBulkDelete?: (ids: string[]) => void;
+    onBulkToggleUnread?: (ids: string[], isUnread: boolean) => void;
     onBulkToggleStar?: (ids: string[], isStarred: boolean) => void;
     onApplyLabel?: (id: string, label: string) => void;
     allLabels?: string[];
@@ -75,12 +77,11 @@
   let activeCategory = $state<'All' | 'Primary' | 'Updates' | 'Social' | 'Forums'>('All');
   let activeLabelFilter = $state<'All' | string>('All');
   let unreadFilterOnly = $state(false);
-  let archivedFilterOnly = $state(false);
+  let hasAttachmentFilterOnly = $state(false);
+  let activeDateRange = $state<'All' | 'Today' | 'This Week' | 'This Month'>('All');
   let showCategoryFilterDropdown = $state(false);
   let showLabelFilterDropdown = $state(false);
   let showDateRangeDropdown = $state(false);
-  let hasAttachmentFilterOnly = $state(false);
-  let activeDateRange = $state<'All' | 'Today' | 'Last 7 Days'>('All');
 
   const viewLabels: Record<string, string> = {
     inbox: 'Inbox', unread: 'Unread', sent: 'Sent', drafts: 'Drafts',
@@ -92,23 +93,23 @@
   // Filtered threads displayed in list
   let filteredList = $derived(
     threads
-      .filter(t => {
+      .filter((t: EmailThread) => {
         if (activeCategory === 'All') return true;
         return t.category === activeCategory;
       })
-      .filter(t => {
+      .filter((t: EmailThread) => {
         if (activeLabelFilter === 'All') return true;
         return t.labels.includes(activeLabelFilter);
       })
-      .filter(t => {
+      .filter((t: EmailThread) => {
         if (unreadFilterOnly && !t.isUnread) return false;
         return true;
       })
-      .filter(t => {
+      .filter((t: EmailThread) => {
         if (hasAttachmentFilterOnly && !t.hasAttachment) return false;
         return true;
       })
-      .filter(t => {
+      .filter((t: EmailThread) => {
         if (activeDateRange === 'All') return true;
         // Mock date filtering logic
         const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -117,15 +118,15 @@
       })
   );
 
-  let unreadCount = $derived(filteredList.filter(t => t.isUnread).length);
+  let unreadCount = $derived(filteredList.filter((t: EmailThread) => t.isUnread).length);
 
   // Selection helpers
   let isAllChecked = $derived(
-    filteredList.length > 0 && filteredList.every(t => checkedThreads[t.id])
+    filteredList.length > 0 && filteredList.every((t: EmailThread) => checkedThreads[t.id])
   );
 
   let anyChecked = $derived(
-    filteredList.some(t => checkedThreads[t.id])
+    filteredList.some((t: EmailThread) => checkedThreads[t.id])
   );
 
   let checkedIds = $derived(
@@ -137,7 +138,7 @@
       checkedThreads = {};
     } else {
       const nextChecked: Record<string, boolean> = {};
-      filteredList.forEach(t => {
+      filteredList.forEach((t: EmailThread) => {
         nextChecked[t.id] = true;
       });
       checkedThreads = nextChecked;
@@ -199,13 +200,10 @@
   
   <!-- Thread list header -->
   <div 
-    class="px-4 lg:px-6 py-2 flex items-center justify-between shrink-0 bg-[var(--color-canvas-base)]"
-    onpointerdown={(e) => {
-      if (e.target === e.currentTarget) {
-        import('@tauri-apps/api/window').then(m => m.getCurrentWindow().startDragging());
-      }
-    }}
+    class="px-4 lg:pl-6 lg:pr-36 py-2 flex items-center justify-between shrink-0 bg-[var(--color-canvas-base)] cursor-default select-none relative"
   >
+    <!-- Transparent drag handle that stops before WindowControls -->
+    <div class="absolute inset-y-0 left-0 right-36" data-tauri-drag-region></div>
     <div class="flex items-center gap-2.5">
       <button 
         onclick={onOpenMobileSidebar}
@@ -245,11 +243,6 @@
       >
         <ListFilter class="w-3.5 h-3.5" />
       </button>
-
-      <!-- Desktop window controls (since app is borderless) -->
-      <div class="hidden sm:block ml-1">
-        <WindowControls />
-      </div>
     </div>
   </div>
 
@@ -343,9 +336,9 @@
 
         {#if showDateRangeDropdown}
           <div class="absolute left-0 top-full mt-1.5 w-32 bg-[#1a1919] border border-white/10 rounded-xl shadow-2xl z-50 py-1 font-sans text-xs">
-            {#each ['All', 'Today', 'Last 7 Days'] as range}
+            {#each (['All', 'Today', 'This Week', 'This Month'] as const) as range}
               <button
-                onclick={() => { activeDateRange = range as any; showDateRangeDropdown = false; }}
+                onclick={() => { activeDateRange = range; showDateRangeDropdown = false; }}
                 class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
               >
                 <span>{range}</span>

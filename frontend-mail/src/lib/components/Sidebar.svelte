@@ -114,7 +114,7 @@
     teal: { dot: 'bg-teal-500', text: 'text-teal-400' }
   };
 
-  let activeAccount = $derived(accounts.find(a => a.id === activeAccountId));
+  let activeAccount = $derived(accounts.find((a: Account) => a.id === activeAccountId));
 
   let labelsExpanded = $state(true);
   let categoriesExpanded = $state(false);
@@ -495,7 +495,7 @@
 
         <!-- Footer -->
         <div class="px-5 py-3 border-t border-neutral-800/60 bg-[#181818] flex justify-end">
-          <Button variant="primary" size="sm" onClick={() => isSettingsOpen = false}>Done</Button>
+          <button onclick={() => isSettingsOpen = false} class="px-4 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs cursor-pointer transition-colors">Done</button>
         </div>
       </div>
     </div>

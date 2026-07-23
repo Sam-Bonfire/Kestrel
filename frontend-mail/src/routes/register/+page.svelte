@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Spinner, ErrorBanner, register, login } from '@kestrel/shared';
+  import { register, login } from '@kestrel/shared';
 
   let email = $state('');
   let password = $state('');
@@ -37,8 +37,8 @@
     </div>
 
     {#if errorMsg}
-      <div class="mb-4">
-        <ErrorBanner message={errorMsg} />
+      <div class="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg text-center">
+        {errorMsg}
       </div>
     {/if}
 
@@ -83,14 +83,9 @@
         />
       </div>
 
-      <Button type="submit" variant="primary" size="md" disabled={loading} className="w-full justify-center">
-        {#if loading}
-          <Spinner size="sm" />
-          <span class="ml-2">Creating account...</span>
-        {:else}
-          Register Account
-        {/if}
-      </Button>
+      <button type="submit" disabled={loading} class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50 cursor-pointer">
+        {loading ? 'Creating account...' : 'Register Account'}
+      </button>
 
       <div class="mt-4 text-center text-xs text-[var(--color-text-secondary)]">
         Already have an account? <a href="/login" class="text-white hover:underline">Sign In</a>

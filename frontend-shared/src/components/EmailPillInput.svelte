@@ -39,7 +39,7 @@
   }
 
   function removeEmail(index: number) {
-    recipients = recipients.filter((_, i) => i !== index);
+    recipients = recipients.filter((_: string, i: number) => i !== index);
   }
 </script>
 

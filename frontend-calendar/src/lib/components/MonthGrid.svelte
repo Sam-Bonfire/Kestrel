@@ -32,7 +32,7 @@
         </div>
 
         <div class="flex-1 space-y-1 overflow-y-auto">
-          {#each events.filter(e => e.dayIndex === (i % 7)) as ev}
+          {#each events.filter((e: CalendarEvent & { dayIndex?: number }) => e.dayIndex === (i % 7)) as ev}
             <button
               onclick={() => onEventClick(ev)}
               class="w-full px-2 py-1 rounded text-[10px] font-medium text-white text-left truncate shadow-sm cursor-pointer"

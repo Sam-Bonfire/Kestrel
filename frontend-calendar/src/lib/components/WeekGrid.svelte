@@ -16,34 +16,50 @@
     priority?: string;
     isAllDay?: boolean;
     organizer?: string;
+    attendees?: { name: string; email: string; rsvp: 'yes' | 'no' | 'maybe' }[];
+    rsvpStatus?: 'yes' | 'no' | 'maybe';
   }
 
   let {
     events = [] as CalendarEvent[],
     selectedDate = new Date(),
-    viewMode = 'month',
-    onEventClick = (ev: CalendarEvent) => {}
+    viewMode = $bindable('month'),
+    showWeekends = true,
+    startHour = 8,
+    selectedEventId = null as string | null,
+    onEventClick = (ev: CalendarEvent) => {},
+    onEmptySlotClick = () => {},
+    onChangeViewMode = () => {}
   } = $props<{
     events?: CalendarEvent[];
     selectedDate?: Date;
-    viewMode?: 'month' | 'week' | 'day' | 'weekdays' | 'agenda';
+    viewMode?: string;
+    showWeekends?: boolean;
+    startHour?: number;
+    selectedEventId?: string | null;
     onEventClick?: (ev: CalendarEvent, e?: MouseEvent) => void;
-    onEmptySlotClick?: (dateStr: string, timeStr: string) => void;
-    onChangeViewMode?: (v: 'month' | 'week' | 'day' | 'weekdays' | 'agenda') => void;
+    onEmptySlotClick?: (dateStr: string, timeStr: string, e?: MouseEvent) => void;
+    onChangeViewMode?: (v: string) => void;
   }>();
 
-  // Preset hours for timeline (e.g. 8 AM to 8 PM)
-  const hours = Array.from({ length: 13 }, (_, i) => i + 8); // 8:00 to 20:00
+  // Full 24-hour timeline
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  
+  // Timezone string calculation (e.g. GMT-4)
+  let tzOffsetStr = $derived(() => {
+    const offset = -(new Date().getTimezoneOffset()) / 60;
+    return `GMT${offset >= 0 ? '+' : ''}${offset}`;
+  });
 
   // Color options configurations matching design tokens and presets
-  const COLOR_CLASSES: Record<string, { bg: string; border: string }> = {
-    blue: { bg: 'bg-blue-500/20 text-blue-200 border-l-[3px] border-l-blue-500', border: 'border-blue-400' },
-    purple: { bg: 'bg-purple-500/20 text-purple-200 border-l-[3px] border-l-purple-500', border: 'border-purple-400' },
-    green: { bg: 'bg-emerald-500/20 text-emerald-200 border-l-[3px] border-l-emerald-500', border: 'border-emerald-400' },
-    orange: { bg: 'bg-orange-500/20 text-orange-200 border-l-[3px] border-l-orange-500', border: 'border-orange-400' },
-    rose: { bg: 'bg-rose-500/20 text-rose-200 border-l-[3px] border-l-rose-500', border: 'border-rose-400' },
-    amber: { bg: 'bg-amber-500/20 text-amber-100 border-l-[3px] border-l-amber-500', border: 'border-amber-400' },
-    teal: { bg: 'bg-teal-500/20 text-teal-200 border-l-[3px] border-l-teal-500', border: 'border-teal-400' }
+  const COLOR_CLASSES: Record<string, { bg: string; border: string; hex: string }> = {
+    blue: { bg: 'bg-blue-500/20 text-blue-200 border-l-[3px] border-l-blue-500', border: 'border-blue-400', hex: '#3b82f6' },
+    purple: { bg: 'bg-purple-500/20 text-purple-200 border-l-[3px] border-l-purple-500', border: 'border-purple-400', hex: '#a855f7' },
+    green: { bg: 'bg-emerald-500/20 text-emerald-200 border-l-[3px] border-l-emerald-500', border: 'border-emerald-400', hex: '#10b981' },
+    orange: { bg: 'bg-orange-500/20 text-orange-200 border-l-[3px] border-l-orange-500', border: 'border-orange-400', hex: '#f97316' },
+    rose: { bg: 'bg-rose-500/20 text-rose-200 border-l-[3px] border-l-rose-500', border: 'border-rose-400', hex: '#f43f5e' },
+    amber: { bg: 'bg-amber-500/20 text-amber-200 border-l-[3px] border-l-amber-500', border: 'border-amber-400', hex: '#f59e0b' },
+    teal: { bg: 'bg-teal-500/20 text-teal-200 border-l-[3px] border-l-teal-500', border: 'border-teal-400', hex: '#14b8a6' },
   };
 
   // Helper to format ISO date string YYYY-MM-DD
@@ -64,8 +80,15 @@
   // Generate range of dates based on view mode
   let visibleDates = $derived(() => {
     const dates: Date[] = [];
+    const nDayMatch = viewMode.match(/^(\d+)-day$/);
+    
     if (viewMode === 'day') {
       dates.push(new Date(selectedDate));
+    } else if (nDayMatch) {
+      const days = parseInt(nDayMatch[1], 10);
+      for (let i = 0; i < days; i++) {
+        dates.push(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + i));
+      }
     } else if (viewMode === 'week') {
       const start = getStartOfWeek(new Date(selectedDate));
       for (let i = 0; i < 7; i++) {
@@ -86,20 +109,17 @@
         dates.push(new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i));
       }
     }
-    return dates;
+    
+    // Filter out weekends if required (0 = Sunday, 6 = Saturday)
+    return showWeekends ? dates : dates.filter(d => d.getDay() !== 0 && d.getDay() !== 6);
   });
-
-  // Filter events by YYYY-MM-DD string
-  function getEventsForDate(dateStr: string): CalendarEvent[] {
-    return events.filter(e => e.date === dateStr);
-  }
 
   // Time layout calculations
   function getEventTopOffset(startTime: string): number {
     const [h, m] = startTime.split(':').map(Number);
-    const minSinceEight = (h - 8) * 60 + m;
+    const minSinceMidnight = h * 60 + m;
     // 1 hour is 60px height, so 1 minute is 1px height
-    return minSinceEight;
+    return minSinceMidnight;
   }
 
   function getEventHeight(startTime: string, endTime: string): number {
@@ -145,36 +165,19 @@
     return layout;
   }
 
-  // Keyboard navigation shortcuts
-  import { onMount, onDestroy } from 'svelte';
-  onMount(() => {
-    const handleKeydown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-      
-      switch (e.key) {
-        case '1':
-        case 'd':
-          onChangeViewMode?.('day');
-          break;
-        case '5':
-        case 'weekdays':
-          onChangeViewMode?.('weekdays');
-          break;
-        case '7':
-        case 'w':
-          onChangeViewMode?.('week');
-          break;
-        case 'm':
-          onChangeViewMode?.('month');
-          break;
-        case 'a':
-          onChangeViewMode?.('agenda');
-          break;
-      }
-    };
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+  // Filter events by YYYY-MM-DD string
+  function getEventsForDate(dateStr: string): CalendarEvent[] {
+    return events.filter((e: CalendarEvent) => e.date === dateStr);
+  }
+
+  import { onMount } from 'svelte';
+  let scrollContainer: HTMLDivElement | null = $state(null);
+
+  $effect(() => {
+    // Auto-scroll timeline to startHour
+    if (scrollContainer && viewMode !== 'month' && viewMode !== 'agenda') {
+      scrollContainer.scrollTop = startHour * 60;
+    }
   });
 </script>
 
@@ -198,10 +201,10 @@
           {#each [...events].sort((a,b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)) as ev}
             {@const style = COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue}
             <button
-              onclick={() => onEventClick(ev)}
+              onclick={(e) => onEventClick(ev, e)}
               class="w-full flex gap-4 p-4 border border-[var(--color-border-hairline)] rounded-xl hover:border-white/20 transition-all text-left bg-[#131313]/20 cursor-pointer"
             >
-              <div class="w-2.5 shrink-0 rounded-full" style="background-color: {ev.color === 'green' ? '#0fa35c' : ev.color === 'rose' ? '#e03e3e' : '#2383e2'}"></div>
+              <div class="w-2.5 shrink-0 rounded-full" style="background-color: {(COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue).hex}"></div>
               <div class="space-y-1 min-w-0 flex-1">
                 <div class="flex items-baseline justify-between">
                   <span class="text-sm font-bold text-white truncate">{ev.title}</span>
@@ -257,9 +260,8 @@
           <div class="flex-1 space-y-1 overflow-y-auto pr-0.5">
             {#each getEventsForDate(dateStr) as ev}
               <button
-                onclick={() => onEventClick(ev)}
-                class="w-full px-2 py-0.5 rounded text-[10px] text-white text-left font-medium truncate shadow-sm cursor-pointer border border-transparent transition-transform hover:scale-[1.01]"
-                style="background-color: {ev.color === 'green' ? 'rgba(15, 163, 92, 0.2)' : ev.color === 'rose' ? 'rgba(224, 62, 62, 0.2)' : 'rgba(35, 131, 226, 0.2)'}; border-left: 2px solid {ev.color === 'green' ? '#0fa35c' : ev.color === 'rose' ? '#e03e3e' : '#2383e2'}; color: {ev.color === 'green' ? '#a2f1c8' : ev.color === 'rose' ? '#fca5a5' : '#93c5fd'}"
+                onclick={(e) => onEventClick(ev, e)}
+                class="w-full px-2 py-0.5 rounded text-[10px] text-left font-medium truncate shadow-sm cursor-pointer transition-transform hover:scale-[1.01] {(COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue).bg} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-10' : 'border-transparent'}"
               >
                 {ev.title}
               </button>
@@ -272,8 +274,10 @@
   {:else}
     <!-- Timeline Views (Week, Weekdays, Day) -->
     <div class="grid border-b border-[var(--color-border-hairline)] bg-[var(--color-canvas-card)] text-xs font-semibold text-[var(--color-text-secondary)] shrink-0 select-none"
-         style="grid-template-cols: 64px repeat({visibleDates().length}, minmax(0, 1fr));">
-      <div class="p-3 border-r border-[var(--color-border-hairline)] font-mono text-[10px]">TIME</div>
+         style="grid-template-columns: 64px repeat({visibleDates().length}, minmax(0, 1fr));">
+      <div class="p-3 border-r border-[var(--color-border-hairline)] font-mono text-[10px] flex flex-col items-center justify-center">
+        <span class="opacity-70">{tzOffsetStr()}</span>
+      </div>
       {#each visibleDates() as date}
         {@const isToday = date.toDateString() === new Date().toDateString()}
         <div class="p-3 text-center border-r border-[var(--color-border-hairline)] last:border-r-0 flex flex-col items-center">
@@ -291,7 +295,7 @@
     </div>
 
     <!-- Timeline scroll container -->
-    <div class="flex-1 overflow-y-auto relative bg-[var(--color-canvas-base)]">
+    <div bind:this={scrollContainer} class="flex-1 overflow-y-auto relative bg-[var(--color-canvas-base)]">
       
       <!-- Hour horizontal grid lines overlay -->
       <div class="absolute inset-0 pointer-events-none divide-y divide-[var(--color-border-hairline)]/20">
@@ -301,14 +305,14 @@
       </div>
 
       <!-- Time blocks columns -->
-      <div class="relative min-h-[780px] grid" 
+      <div class="relative min-h-[1440px] grid" 
            style="grid-template-columns: 64px repeat({visibleDates().length}, minmax(0, 1fr));">
         
         <!-- Y-Axis Hours list labels -->
         <div class="border-r border-[var(--color-border-hairline)] bg-[var(--color-canvas-card)]/10">
           {#each hours as hour}
             <div class="h-[60px] p-2 text-[10px] font-mono text-[var(--color-text-secondary)]/60 text-right">
-              {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+              {hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
             </div>
           {/each}
         </div>
@@ -320,12 +324,17 @@
           {@const layoutInfo = getTimedEventsLayout(dayEvents)}
           <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors"
                onclick={(e) => {
-                 // Calculate which hour slot was clicked based on Y offset
+                 // Fractional time selection (15 minute intervals)
                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                  const y = e.clientY - rect.top;
-                 const hour = 8 + Math.floor(y / 60);
-                 const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-                 onEmptySlotClick?.(dateStr, timeStr);
+                 
+                 // Calculate exact hour and nearest 15 minute fraction
+                 const exactHour = Math.floor(y / 60);
+                 const exactMinutes = y % 60;
+                 const roundedMinutes = Math.floor(exactMinutes / 15) * 15;
+                 
+                 const timeStr = `${exactHour.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+                 onEmptySlotClick?.(dateStr, timeStr, e);
                }}
                role="button"
                tabindex="0"
@@ -344,7 +353,7 @@
               <button
                 onclick={(e) => { e.stopPropagation(); onEventClick(ev, e); }}
                 class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-transform hover:scale-[1.02] cursor-pointer overflow-hidden
-                  {colStyle.bg} {colStyle.border}"
+                  {colStyle.bg} {colStyle.border} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'z-10'}"
                 style="top: {top}px; height: {height}px; left: calc({leftPct}% + 4px); width: calc({widthPct}% - 8px);"
               >
                 <div class="font-bold truncate text-white leading-tight">{ev.title}</div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Avatar, Button } from '@kestrel/shared';
+  import { Avatar } from '@kestrel/shared';
   import {
     X,
     ChevronUp,
@@ -146,21 +146,18 @@
       <!-- Header Toolbar -->
       <div 
         id="peek-header" 
-        class="flex px-4 py-2 bg-[var(--color-canvas-base)] items-center justify-between select-none shrink-0"
-        onpointerdown={(e) => {
-          if (e.target === e.currentTarget) {
-            import('@tauri-apps/api/window').then(m => m.getCurrentWindow().startDragging());
-          }
-        }}
+        class="flex px-4 py-2 bg-[var(--color-canvas-base)] items-center justify-between select-none shrink-0 cursor-default relative"
       >
+        <!-- Transparent drag handle that stops before WindowControls -->
+        <div class="absolute inset-y-0 left-0 right-36" data-tauri-drag-region></div>
         <!-- Left tools -->
         <div class="flex items-center gap-1">
-          <Button variant="ghost" size="sm" disabled={!hasPrev} onClick={() => onNavigate('prev')} title="Previous Email">
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer disabled:opacity-30" disabled={!hasPrev} onclick={() => onNavigate('prev')} title="Previous Email">
             <ChevronUp class="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" disabled={!hasNext} onClick={() => onNavigate('next')} title="Next Email">
+          </button>
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer disabled:opacity-30" disabled={!hasNext} onclick={() => onNavigate('next')} title="Next Email">
             <ChevronDown class="w-4 h-4" />
-          </Button>
+          </button>
         </div>
 
         <!-- AI Magic & Actions toolbar -->
@@ -173,28 +170,28 @@
             <span>AI Summary</span>
           </button>
           
-          <Button variant="ghost" size="sm" onClick={() => { onToggleUnread(email!.id); onClose(); }} title="Mark as Unread">
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => { onToggleUnread(email!.id); onClose(); }} title="Mark as Unread">
             <Mail class="w-4 h-4 text-[var(--color-text-secondary)]" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => { onArchive(email!.id); onClose(); }} title="Archive Email (e)">
+          </button>
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => { onArchive(email!.id); onClose(); }} title="Archive Email (e)">
             <Archive class="w-4 h-4 text-[var(--color-text-secondary)]" />
-          </Button>
-          <Button variant="danger" size="sm" onClick={() => { onDelete(email!.id); onClose(); }} title="Delete Email">
+          </button>
+          <button class="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer" onclick={() => { onDelete(email!.id); onClose(); }} title="Delete Email">
             <Trash2 class="w-4 h-4" />
-          </Button>
+          </button>
           
           <div class="w-px h-5 bg-[var(--color-border-hairline)] mx-1"></div>
 
-          <Button variant="ghost" size="sm" onClick={() => {}} title="Print">
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => window.print()} title="Print">
             <FileText class="w-4 h-4 text-[var(--color-text-secondary)]" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => {}} title="More actions">
+          </button>
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => {}} title="More actions">
             <MoreVertical class="w-4 h-4 text-[var(--color-text-secondary)]" />
-          </Button>
+          </button>
           <div class="w-px h-5 bg-[var(--color-border-hairline)] mx-1"></div>
-          <Button variant="ghost" size="sm" onClick={onClose} title="Close peek (Esc)">
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={onClose} title="Close peek (Esc)">
             <X class="w-4 h-4" />
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -231,13 +228,13 @@
                   bind:value={newLabelText}
                   class="bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded px-2.5 py-1 text-[11px] text-white outline-none font-mono focus:border-white/20 transition-all"
                 />
-                <Button variant="primary" size="sm">Add</Button>
-                <Button variant="ghost" size="sm" onClick={() => showAddLabelInput = false}><X class="w-3 h-3" /></Button>
+                <button type="submit" class="px-3 py-1 rounded bg-blue-500 text-white text-xs font-semibold hover:bg-blue-600 cursor-pointer">Add</button>
+                <button type="button" class="p-1 rounded hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white cursor-pointer" onclick={() => showAddLabelInput = false}><X class="w-3 h-3" /></button>
               </form>
             {:else}
-              <Button variant="ghost" size="sm" onClick={() => showAddLabelInput = true} title="Add Label">
+              <button type="button" class="p-1 rounded hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => showAddLabelInput = true} title="Add Label">
                 <Plus class="w-3.5 h-3.5" />
-              </Button>
+              </button>
             {/if}
           </div>
         </div>
@@ -305,7 +302,7 @@
           <!-- Sender Card -->
           <div class="flex items-center justify-between bg-[#131313] border border-[var(--color-border-hairline)] rounded-xl p-4 gap-4">
             <div class="flex items-center gap-3 min-w-0">
-              <Avatar name={email.sender} size="md" />
+              <Avatar name={email.sender} size={32} />
               <div class="space-y-0.5 min-w-0">
                 <div class="flex items-center gap-1.5 text-sm min-w-0">
                   <span class="font-semibold text-white truncate">{email.sender}</span>
@@ -447,7 +444,7 @@
                 <button onclick={() => replyText += '<u>text</u>'} class="p-1.5 rounded hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer" title="Underline"><span class="underline">U</span></button>
               </div>
               <div class="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => showReplyDraft = false}>Discard</Button>
+                <button onclick={() => showReplyDraft = false} class="px-3 py-1.5 text-xs text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer">Discard</button>
                 <button
                   onclick={handleSendReply}
                   class="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-white text-black hover:bg-neutral-200 rounded-lg transition-all active:scale-95 cursor-pointer"

@@ -1,19 +1,11 @@
-<script>
-  export let name = '';
-  export let src = '';
-  export let size = 32;
+<script lang="ts">
+  let { name = '', src = '', size = 32 } = $props<{
+    name?: string;
+    src?: string;
+    size?: number | string;
+  }>();
 
-  $: initials = getInitials(name);
-  $: numericSize = typeof size === 'number' ? size : size === 'sm' ? 24 : size === 'lg' ? 40 : 32;
-  $: fontSize = Math.round(numericSize * 0.38);
-
-  function getInitials(fullName) {
-    if (!fullName) return '?';
-    const parts = fullName.trim().split(/\s+/);
-    if (parts.length === 0 || !parts[0]) return '?';
-    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-  }
+  let numericSize = $derived(typeof size === 'number' ? size : size === 'sm' ? 24 : size === 'lg' ? 40 : 32);
 </script>
 
 {#if src}
@@ -34,11 +26,5 @@
     justify-content: center;
     flex-shrink: 0;
     user-select: none;
-  }
-  .avatar--fallback {
-    background: rgba(255, 255, 255, 0.1);
-    color: #a0a0a0;
-    font-weight: 600;
-    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
   }
 </style>

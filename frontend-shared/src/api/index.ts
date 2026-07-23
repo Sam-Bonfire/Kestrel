@@ -12,6 +12,7 @@ export {
   markAsRead,
   archiveMessage,
   trashMessage,
+  sendMessage,
   toggleStar,
   updateLabels,
   bulkAction,

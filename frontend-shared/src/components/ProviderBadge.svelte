@@ -1,12 +1,12 @@
-<script>
+<script lang="ts">
   import { colors } from '../tokens/index.js';
 
-  export let provider = 'gmail';
-  export let size = 'sm';
+  let { provider = 'gmail', size = 'sm' } = $props<{
+    provider?: string;
+    size?: 'sm' | 'md';
+  }>();
 
-  $: config = getConfig(provider);
-
-  function getConfig(id) {
+  function getConfig(id: string): { label: string; color: string; icon: string } {
     switch (id.toLowerCase()) {
       case 'gmail':
         return { label: 'Gmail', color: colors.accentGmail, icon: 'G' };
@@ -21,8 +21,9 @@
     }
   }
 
-  $: iconSize = size === 'sm' ? 18 : 24;
-  $: fontSize = size === 'sm' ? 10 : 12;
+  let config = $derived(getConfig(provider));
+  let iconSize = $derived(size === 'sm' ? 18 : 24);
+  let fontSize = $derived(size === 'sm' ? 10 : 12);
 </script>
 
 <span

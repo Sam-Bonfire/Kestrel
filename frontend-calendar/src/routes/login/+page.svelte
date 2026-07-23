@@ -40,9 +40,9 @@
         <label for="password" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] mb-2">Password</label>
         <input id="password" type="password" bind:value={password} required class="w-full px-4 py-2 bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg text-sm" />
       </div>
-      <Button type="submit" variant="primary" size="md" disabled={loading} className="w-full justify-center">
-        {#if loading} <Spinner size="sm" /><span class="ml-2">Signing in...</span> {:else} Sign In {/if}
-      </Button>
+      <button type="submit" disabled={loading} class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50 cursor-pointer">
+        {loading ? 'Signing in...' : 'Sign In'}
+      </button>
     </form>
   </div>
 </div>

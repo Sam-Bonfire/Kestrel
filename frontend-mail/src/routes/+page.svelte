@@ -4,8 +4,8 @@
   import CenterPeek from '$lib/components/CenterPeek.svelte';
   import ComposeModal from '$lib/components/ComposeModal.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
-  import { Login } from '@kestrel/shared/components';
-  import { authState } from '@kestrel/shared/stores';
+  import { Login, WindowControls } from '@kestrel/shared/components';
+  import { authState, logout } from '@kestrel/shared/stores';
   import { onMount } from 'svelte';
 
   // ── Accounts ────────────────────────────────────────────────────
@@ -55,7 +55,10 @@
           }));
           isLoading = false;
         }).catch(err => {
-          console.error(err);
+          console.error('Failed to load messages:', err);
+          if (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+            logout();
+          }
           isLoading = false;
         });
       });
@@ -84,8 +87,8 @@
     counts['spam'] = accEmails.filter(e => e.isUnread && e.isSpam).length;
     counts['trash'] = accEmails.filter(e => e.isUnread && e.isTrash).length;
 
-    allLabels.forEach(lbl => {
-      const cnt = accEmails.filter(e => !e.isTrash && e.isUnread && e.labels.some(l => l.toLowerCase() === lbl.toLowerCase())).length;
+    allLabels.forEach((lbl: string) => {
+      const cnt = accEmails.filter(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase())).length;
       counts[`label-${lbl}`] = cnt;
     });
 
@@ -108,7 +111,7 @@
         if (currentView === 'all-mail') return !e.isTrash;
         if (currentView.startsWith('label-')) {
           const lbl = currentView.replace('label-', '');
-          return e.labels.some(l => l.toLowerCase() === lbl.toLowerCase());
+          return e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase());
         }
         return true;
       })
@@ -188,17 +191,17 @@
   function renameLabel(oldVal: string, newVal: string) {
     allEmails = allEmails.map(e => ({
       ...e,
-      labels: e.labels.map(l => l === oldVal ? newVal : l)
+      labels: e.labels.map((l: string) => l === oldVal ? newVal : l)
     }));
-    customLabels = customLabels.map(l => l === oldVal ? newVal : l);
+    customLabels = customLabels.map((l: string) => l === oldVal ? newVal : l);
   }
 
   function deleteLabel(label: string) {
     allEmails = allEmails.map(e => ({
       ...e,
-      labels: e.labels.filter(l => l !== label)
+      labels: e.labels.filter((l: string) => l !== label)
     }));
-    customLabels = customLabels.filter(l => l !== label);
+    customLabels = customLabels.filter((l: string) => l !== label);
   }
 
   function createNewLabel(label: string) {
@@ -225,6 +228,69 @@
       }
       return e;
     });
+  }
+
+  async function handleSendCompose(draft: { to: string; subject: string; body: string }) {
+    isComposeOpen = false;
+    const newMsg = {
+      id: `sent-${Date.now()}`,
+      accountId: activeAccountId,
+      sender: 'Me',
+      senderEmail: 'me@kestrel.dev',
+      to: draft.to,
+      subject: draft.subject || '(no subject)',
+      body: draft.body,
+      timestamp: new Date().toISOString(),
+      isUnread: false,
+      isStarred: false,
+      isArchived: false,
+      isTrash: false,
+      isDraft: false,
+      isSpam: false,
+      hasAttachment: false,
+      labels: ['Sent'],
+      category: 'Primary'
+    };
+    allEmails = [newMsg, ...allEmails];
+    import('@kestrel/shared/api').then(api => api.sendMessage(draft));
+  }
+
+  async function handleSendReply(id: string, text: string) {
+    const parent = allEmails.find(e => e.id === id);
+    if (!parent) return;
+    const replyMsg = {
+      id: `reply-${Date.now()}`,
+      accountId: parent.accountId,
+      sender: 'Me',
+      senderEmail: 'me@kestrel.dev',
+      to: parent.senderEmail,
+      subject: `Re: ${parent.subject.replace(/^Re:\s*/i, '')}`,
+      body: text,
+      timestamp: new Date().toISOString(),
+      isUnread: false,
+      isStarred: false,
+      isArchived: false,
+      isTrash: false,
+      isDraft: false,
+      isSpam: false,
+      hasAttachment: false,
+      labels: ['Sent'],
+      category: 'Primary'
+    };
+    allEmails = [replyMsg, ...allEmails];
+    import('@kestrel/shared/api').then(api => api.sendMessage({
+      to: parent.senderEmail,
+      subject: replyMsg.subject,
+      body: text,
+      threadId: id
+    }));
+  }
+
+  function handleCommandSelect(cmd: string) {
+    if (cmd === 'compose') isComposeOpen = true;
+    else if (cmd === 'inbox') currentView = 'inbox';
+    else if (cmd === 'settings') isCommandOpen = false;
+    else if (cmd.startsWith('view-')) currentView = cmd.replace('view-', '');
   }
 
   // Bulk Actions
@@ -264,6 +330,7 @@
   <Login />
 {:else}
 <div class="flex h-screen w-screen overflow-hidden bg-[var(--color-canvas-base)] relative">
+  <WindowControls />
 
   <!-- Mobile Drawer Overlay -->
   {#if isMobileSidebarOpen}

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Button, Spinner, ErrorBanner } from '@kestrel/shared';
   import { getHealth } from '@kestrel/shared';
 
   let serverUrl = $state('http://127.0.0.1:8080');
@@ -33,8 +32,8 @@
     </div>
 
     {#if errorMsg}
-      <div class="mb-4">
-        <ErrorBanner message={errorMsg} />
+      <div class="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg text-center">
+        {errorMsg}
       </div>
     {/if}
 
@@ -59,14 +58,9 @@
         />
       </div>
 
-      <Button type="submit" variant="primary" size="md" disabled={loading} className="w-full justify-center">
-        {#if loading}
-          <Spinner size="sm" />
-          <span class="ml-2">Connecting...</span>
-        {:else}
-          Connect to Server
-        {/if}
-      </Button>
+      <button type="submit" disabled={loading} class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50 cursor-pointer">
+        {loading ? 'Connecting...' : 'Connect to Server'}
+      </button>
     </form>
   </div>
 </div>

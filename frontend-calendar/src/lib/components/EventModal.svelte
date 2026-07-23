@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Calendar as CalendarIcon, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check } from 'lucide-svelte';
+  import { X, Calendar as CalendarIcon, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link } from 'lucide-svelte';
 
   export interface CalendarEvent {
     id?: string;
@@ -22,12 +22,14 @@
     isOpen = false,
     onClose = () => {},
     onSave = (eventData: any) => {},
-    selectedDateStr = ''
+    selectedDateStr = '',
+    accounts = []
   } = $props<{
     isOpen?: boolean;
     onClose?: () => void;
     onSave?: (eventData: any) => void;
     selectedDateStr?: string;
+    accounts?: any[];
   }>();
 
   // Form states matching prototype
@@ -43,11 +45,17 @@
   let color = $state('blue');
   let rsvpStatus = $state<'yes' | 'no' | 'maybe' | 'none'>('none');
   let attendeesInput = $state('');
+  let isAllDay = $state(false);
+  let calendarId = $state('');
+  let organizer = $state('');
 
   // Hydrate date when modal opens
   $effect(() => {
     if (isOpen) {
       date = selectedDateStr || new Date().toISOString().split('T')[0];
+      if (!calendarId && accounts?.length > 0 && accounts[0].calendars?.length > 0) {
+        calendarId = accounts[0].calendars[0].id;
+      }
     }
   });
 
@@ -75,6 +83,9 @@
       status,
       category,
       color,
+      isAllDay,
+      calendarId,
+      organizer,
       rsvpStatus,
       attendees: attendeesInput.split(',').map(email => email.trim()).filter(Boolean)
     });
@@ -88,6 +99,8 @@
     category = 'Work';
     rsvpStatus = 'none';
     attendeesInput = '';
+    isAllDay = false;
+    organizer = '';
     onClose();
   }
 </script>
@@ -100,201 +113,159 @@
     onclick={onClose}
   >
     <div 
-      class="w-full max-w-xl bg-[#131313] border border-[var(--color-border-hairline)] rounded-xl shadow-2xl flex flex-col overflow-hidden text-xs text-[var(--color-text-primary)]"
+      class="w-full max-w-lg bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-2xl flex flex-col overflow-hidden text-sm text-[var(--color-text-primary)]"
       onclick={(e) => e.stopPropagation()}
     >
       <!-- Header -->
-      <div class="px-4 py-3.5 border-b border-[var(--color-border-hairline)] flex items-center justify-between bg-[#191919]">
-        <div class="flex items-center gap-2">
-          <CalendarIcon class="w-4 h-4 text-blue-400" />
-          <span class="font-bold text-white uppercase tracking-wider">Schedule Event</span>
-        </div>
-        <button onclick={onClose} class="p-1 rounded hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer">
-          <X class="w-4 h-4" />
+      <div class="px-3 py-2 flex items-center justify-between">
+        <button class="flex items-center gap-1.5 hover:bg-white/5 px-2 py-1.5 rounded cursor-pointer transition-colors">
+          <span class="font-bold text-white text-xs">Event</span>
+          <ChevronDown class="w-3.5 h-3.5 text-neutral-400" />
         </button>
+        <div class="flex items-center gap-1">
+          <button class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
+            <MoreHorizontal class="w-4 h-4" />
+          </button>
+          <button class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
+            <Square class="w-3 h-3" />
+          </button>
+          <button onclick={onClose} class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <!-- Scrollable form inputs -->
-      <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-        <!-- Title -->
-        <div class="space-y-1">
-          <label for="title" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Event Title</label>
+      <!-- Scrollable form area -->
+      <div class="p-6 pt-2 space-y-5 max-h-[80vh] overflow-y-auto">
+        
+        <!-- Title Input Block -->
+        <div>
           <input
             id="title"
             type="text"
-            placeholder="Review Spec Architecture..."
+            placeholder="Add title"
             bind:value={title}
-            class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] focus:border-white/20 rounded-lg p-2.5 outline-none text-white transition-colors"
+            class="w-full bg-transparent border-none outline-none text-white text-xl font-medium placeholder:text-neutral-500 pb-2 border-b border-transparent focus:border-blue-500 transition-colors"
             required
+            autocomplete="off"
           />
         </div>
 
-        <!-- Date & Time Row -->
-        <div class="grid grid-cols-3 gap-3">
-          <div class="space-y-1 relative">
-            <label for="date" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Date</label>
-            <input
-              id="date"
-              type="date"
-              bind:value={date}
-              style="color-scheme: dark;"
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] focus:border-white/20 focus:ring-1 focus:ring-white/20 rounded-lg p-2 outline-none text-white transition-all hover:bg-[var(--color-canvas-hover)] cursor-pointer"
-            />
+        <!-- Date & Time Block -->
+        <div class="space-y-3 border-b border-neutral-800 pb-4">
+          <div class="flex items-center gap-4">
+            <Clock class="w-4 h-4 text-neutral-400 shrink-0" />
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+              <input type="time" bind:value={startTime} disabled={isAllDay} class="bg-transparent hover:bg-white/5 p-1 rounded outline-none text-white font-medium text-xs border-none cursor-pointer w-20" style="color-scheme: dark;" />
+              <ArrowRight class="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+              <input type="time" bind:value={endTime} disabled={isAllDay} class="bg-transparent hover:bg-white/5 p-1 rounded outline-none text-white font-medium text-xs border-none cursor-pointer w-20" style="color-scheme: dark;" />
+              {#if !isAllDay}
+                <span class="text-neutral-500 text-xs font-medium">1h</span>
+              {/if}
+            </div>
           </div>
-          <div class="space-y-1 relative">
-            <label for="start" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Start Time</label>
-            <input
-              id="start"
-              type="time"
-              bind:value={startTime}
-              style="color-scheme: dark;"
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] focus:border-white/20 focus:ring-1 focus:ring-white/20 rounded-lg p-2 outline-none text-white transition-all hover:bg-[var(--color-canvas-hover)] cursor-pointer"
-            />
+
+          <div class="pl-8">
+            <input type="date" bind:value={date} class="bg-transparent hover:bg-white/5 p-1 rounded outline-none text-white font-medium text-xs border-none cursor-pointer" style="color-scheme: dark;" />
           </div>
-          <div class="space-y-1 relative">
-            <label for="end" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">End Time</label>
-            <input
-              id="end"
-              type="time"
-              bind:value={endTime}
-              style="color-scheme: dark;"
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] focus:border-white/20 focus:ring-1 focus:ring-white/20 rounded-lg p-2 outline-none text-white transition-all hover:bg-[var(--color-canvas-hover)] cursor-pointer"
-            />
+
+          <div class="pl-8 flex items-center justify-between">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <!-- Switch toggle -->
+              <div class="relative inline-block w-8 h-4">
+                <input type="checkbox" bind:checked={isAllDay} class="peer sr-only" />
+                <div class="w-full h-full bg-neutral-600 rounded-full peer-checked:bg-blue-400 transition-colors"></div>
+                <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+              </div>
+              <span class="text-sm font-semibold text-white">All-day</span>
+            </label>
+          </div>
+
+          <div class="pl-8 pt-1 flex items-center justify-between group cursor-pointer">
+            <div class="flex items-center gap-3">
+              <Globe class="w-4 h-4 text-neutral-500 shrink-0" />
+              <span class="text-xs font-semibold text-neutral-400 group-hover:text-white transition-colors">GMT+5:30 <span class="text-white">Calcutta</span></span>
+            </div>
+            <CornerUpLeft class="w-3.5 h-3.5 text-neutral-500" />
+          </div>
+
+          <div class="pl-8 flex items-center gap-3 group cursor-pointer">
+            <Repeat class="w-4 h-4 text-neutral-500 shrink-0" />
+            <span class="text-xs font-semibold text-neutral-400 group-hover:text-white transition-colors">Repeat</span>
           </div>
         </div>
 
-        <!-- Location -->
-        <div class="space-y-1">
-          <label for="location" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Location / Conference Link</label>
-          <input
-            id="location"
-            type="text"
-            placeholder="Gather Town Workspace or Zoom URL..."
-            bind:value={location}
-            class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg p-2.5 outline-none text-white transition-colors"
-          />
-        </div>
-
-        <!-- Description -->
-        <div class="space-y-1">
-          <label for="desc" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Description</label>
-          <textarea
-            id="desc"
-            placeholder="Provide context for this session..."
-            bind:value={description}
-            rows="3"
-            class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg p-2.5 outline-none text-white transition-colors resize-none"
-          ></textarea>
-        </div>
-
-        <!-- Categories & Priority Row -->
-        <div class="grid grid-cols-3 gap-3">
-          <div class="space-y-1">
-            <label for="category" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Category</label>
-            <select
-              id="category"
-              bind:value={category}
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg p-2 outline-none text-white"
-            >
-              <option value="Work">Work</option>
-              <option value="Personal">Personal</option>
-              <option value="Workspace">Workspace</option>
-              <option value="General">General</option>
-            </select>
+        <!-- Additions Block -->
+        <div class="space-y-3 border-b border-neutral-800 pb-4">
+          <div class="flex items-center gap-4 group cursor-pointer">
+            <User class="w-4 h-4 text-neutral-500 shrink-0" />
+            <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Participants and Rooms</span>
+          </div>
+          
+          <div class="flex items-center gap-4 group cursor-pointer">
+            <Video class="w-4 h-4 text-neutral-500 shrink-0" />
+            <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Conferencing</span>
           </div>
 
-          <div class="space-y-1">
-            <label for="priority" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Priority</label>
-            <select
-              id="priority"
-              bind:value={priority}
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg p-2 outline-none text-white"
-            >
-              <option value="High">🔴 High</option>
-              <option value="Medium">🟡 Medium</option>
-              <option value="Low">🔵 Low</option>
-              <option value="None">None</option>
-            </select>
-          </div>
-
-          <div class="space-y-1">
-            <label for="status" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Status</label>
-            <select
-              id="status"
-              bind:value={status}
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg p-2 outline-none text-white"
-            >
-              <option value="Scheduled">Scheduled</option>
-              <option value="Next Up">Next Up</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-            </select>
+          <div class="flex items-center gap-4 group">
+            <MapPin class="w-4 h-4 text-neutral-500 shrink-0" />
+            <input type="text" placeholder="Location" bind:value={location} class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-400" />
           </div>
         </div>
 
-        <!-- RSVP & Attendees -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="space-y-1">
-            <label for="rsvp" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">My RSVP Status</label>
-            <select
-              id="rsvp"
-              bind:value={rsvpStatus}
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg p-2 outline-none text-white"
-            >
-              <option value="none">Choose Response...</option>
-              <option value="yes">Yes, attending</option>
-              <option value="no">No, declining</option>
-              <option value="maybe">Maybe</option>
-            </select>
+        <!-- Links and Description Block -->
+        <div class="space-y-3 border-b border-neutral-800 pb-4">
+          <div class="flex items-center gap-4 group cursor-pointer">
+            <Link class="w-4 h-4 text-neutral-500 shrink-0" />
+            <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Add links and attachments</span>
           </div>
-
-          <div class="space-y-1">
-            <label for="attendees" class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Attendees (comma-separated)</label>
-            <input
-              id="attendees"
-              type="text"
-              placeholder="sam@kestrel.dev, alex@gmail.com"
-              bind:value={attendeesInput}
-              class="w-full bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg p-2.5 outline-none text-white transition-colors"
-            />
+          <div class="pl-8 pt-1">
+            <textarea
+              placeholder="Description"
+              bind:value={description}
+              rows="3"
+              class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-500 resize-none"
+            ></textarea>
           </div>
         </div>
 
-        <!-- Color Selector Dots -->
-        <div class="space-y-1.5 pt-1">
-          <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Display Theme Color</span>
-          <div class="flex items-center gap-2">
-            {#each COLOR_OPTIONS as col}
-              <button
-                onclick={() => color = col.name}
-                class="w-5 h-5 rounded-full {col.dot} relative cursor-pointer transition-transform hover:scale-110"
-                style="box-shadow: {color === col.name ? '0 0 6px rgba(255,255,255,0.6)' : 'none'}"
-                title={col.name}
-              >
-                {#if color === col.name}
-                  <span class="absolute inset-0 flex items-center justify-center">
-                    <span class="w-1 h-1 rounded-full bg-white/70"></span>
-                  </span>
-                {/if}
-              </button>
-            {/each}
+        <!-- Calendar & Visibility Block -->
+        <div class="space-y-4 pb-4">
+          <div class="flex items-center gap-4">
+            <div class="w-3.5 h-3.5 rounded bg-blue-400 border border-white/10 shrink-0"></div>
+            <div class="flex-1 min-w-0 flex items-center gap-3">
+              <select bind:value={calendarId} class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white cursor-pointer hover:bg-white/5 p-1 rounded truncate">
+                {#each (accounts || []) as acc}
+                  <optgroup label={acc.email} class="bg-[#131313] text-neutral-400">
+                    {#each acc.calendars as cal}
+                      <option value={cal.id} class="text-white bg-[#1a1a1a]">{cal.name}</option>
+                    {/each}
+                  </optgroup>
+                {/each}
+              </select>
+            </div>
+          </div>
+          
+          <div class="pl-8 flex items-center gap-6">
+            <span class="text-xs font-semibold text-white">Busy</span>
+            <span class="text-xs font-semibold text-white">Default visibility</span>
+          </div>
+
+          <div class="flex items-center gap-4 group cursor-pointer pt-1">
+            <Bell class="w-4 h-4 text-neutral-500 shrink-0" />
+            <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Reminders</span>
           </div>
         </div>
+
       </div>
 
-      <!-- Footer Buttons -->
-      <div class="px-6 py-3.5 border-t border-[var(--color-border-hairline)] flex items-center justify-end gap-2.5 bg-[#191919]">
-        <button 
-          onclick={onClose} 
-          class="px-3 py-1.5 rounded text-[11px] font-medium text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer"
-        >
-          Cancel
-        </button>
+      <!-- Footer Actions -->
+      <div class="px-6 py-4 flex items-center justify-end">
         <button 
           onclick={handleSave} 
-          class="px-4 py-1.5 rounded bg-white text-black text-[11px] font-semibold hover:bg-neutral-200 transition-colors cursor-pointer shadow-md"
+          class="px-5 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-md"
         >
-          Save Event
+          Save
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { authState } from '../stores/auth.svelte.js';
+import { authState, logout } from '../stores/auth.svelte.js';
 
 const API_BASE = 'http://127.0.0.1:8080/api/v1';
 
@@ -40,7 +40,7 @@ async function request<T>(
   path: string,
   opts: RequestOptions = {},
 ): Promise<T> {
-  const { token = authState.token, body, ...init } = opts;
+  const { token = authState.token ?? undefined, body, ...init } = opts;
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: buildHeaders(token),
@@ -53,6 +53,9 @@ async function request<T>(
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      logout();
+    }
     let parsed: unknown;
     try {
       parsed = await res.json();
@@ -112,6 +115,9 @@ export interface Message {
 
 export interface FullMessage extends Message {
   body: string;
+  body_html?: string;
+  body_text?: string;
+  recipients?: string[] | string;
   to: string[];
   cc: string[];
   attachments: Attachment[];
@@ -249,6 +255,16 @@ export async function trashMessage(
 ): Promise<void> {
   return request<void>('POST', `/messages/${messageId}/trash`, {
     token,
+  });
+}
+
+export async function sendMessage(
+  msg: { to: string; subject: string; body: string; threadId?: string },
+  token?: string,
+): Promise<{ id: string }> {
+  return request<{ id: string }>('POST', '/messages/send', {
+    token,
+    body: msg,
   });
 }
 
