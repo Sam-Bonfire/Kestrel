@@ -1,18 +1,36 @@
-export const authState = $state({
-    token: localStorage.getItem('kestrel_token'),
-    userId: localStorage.getItem('kestrel_user_id'),
+import { getMe } from '../api/client';
+
+export const authState = $state<{
+    userId: string | null;
+    isInitialized: boolean;
+    isAuthenticated: boolean;
+}>({
+    userId: null,
+    isInitialized: false,
     get isAuthenticated() {
-        return !!this.token;
+        return !!this.userId;
     }
 });
 
+export async function initAuth() {
+    try {
+        const { user_id } = await getMe();
+        authState.userId = user_id;
+    } catch {
+        authState.userId = null;
+    } finally {
+        authState.isInitialized = true;
+    }
+}
+
 export async function login(username: string, password: string) {
     try {
-        const res = await fetch('http://127.0.0.1:8080/api/v1/auth/token', {
+        const res = await fetch('http://localhost:8080/api/v1/auth/token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify({ username, password }),
         });
 
@@ -22,11 +40,8 @@ export async function login(username: string, password: string) {
 
         const data = await res.json();
         
-        localStorage.setItem('kestrel_token', data.token);
-        localStorage.setItem('kestrel_user_id', data.user_id);
-        
-        authState.token = data.token;
         authState.userId = data.user_id;
+        authState.isInitialized = true;
         
         return { success: true };
     } catch (e) {
@@ -35,8 +50,7 @@ export async function login(username: string, password: string) {
 }
 
 export function logout() {
-    localStorage.removeItem('kestrel_token');
-    localStorage.removeItem('kestrel_user_id');
-    authState.token = null;
+    // For cookies, we might need a /auth/logout endpoint to clear it, 
+    // but clearing state ensures the app drops them
     authState.userId = null;
 }

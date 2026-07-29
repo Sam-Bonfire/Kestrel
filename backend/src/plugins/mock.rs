@@ -36,8 +36,11 @@ impl ProviderBranding for MockProviderPlugin {
     }
 }
 
+use async_trait::async_trait;
+
+#[async_trait]
 impl MailProvider for MockProviderPlugin {
-    fn sync_mail(
+    async fn sync_mail(
         &self,
         _auth_token: &str,
         _cursor: Option<&str>,
@@ -48,7 +51,7 @@ impl MailProvider for MockProviderPlugin {
         })
     }
 
-    fn fetch_message_body(
+    async fn fetch_message_body(
         &self,
         _auth_token: &str,
         _external_id: &str,
@@ -59,7 +62,7 @@ impl MailProvider for MockProviderPlugin {
         })
     }
 
-    fn delete_message(
+    async fn delete_message(
         &self,
         _auth_token: &str,
         _external_id: &str,
@@ -68,15 +71,16 @@ impl MailProvider for MockProviderPlugin {
     }
 }
 
+#[async_trait]
 impl CalendarProvider for MockProviderPlugin {
-    fn fetch_calendars(
+    async fn fetch_calendars(
         &self,
         _auth_token: &str,
     ) -> Result<Vec<CalendarPayload>, PluginError> {
         Ok(vec![])
     }
 
-    fn fetch_events(
+    async fn fetch_events(
         &self,
         _auth_token: &str,
         _start_time: i64,
@@ -85,7 +89,7 @@ impl CalendarProvider for MockProviderPlugin {
         Ok(vec![])
     }
 
-    fn mutate_event(
+    async fn mutate_event(
         &self,
         _auth_token: &str,
         _action: &str,
@@ -94,7 +98,7 @@ impl CalendarProvider for MockProviderPlugin {
         Ok(())
     }
 
-    fn delete_event(
+    async fn delete_event(
         &self,
         _auth_token: &str,
         _external_id: &str,
@@ -115,28 +119,28 @@ mod tests {
         assert_eq!(branding.button_text, "Continue with Gmail");
     }
 
-    #[test]
-    fn test_mock_sync_mail() {
+    #[tokio::test]
+    async fn test_mock_sync_mail() {
         let mock = MockProviderPlugin::new("gmail", "Gmail");
-        let result = mock.sync_mail("token", None).unwrap();
+        let result = mock.sync_mail("token", None).await.unwrap();
         assert!(result.messages.is_empty());
     }
 
-    #[test]
-    fn test_mock_fetch_body() {
+    #[tokio::test]
+    async fn test_mock_fetch_body() {
         let mock = MockProviderPlugin::new("gmail", "Gmail");
-        let body = mock.fetch_message_body("token", "ext-123").unwrap();
+        let body = mock.fetch_message_body("token", "ext-123").await.unwrap();
         assert!(body.body_text.is_some());
         assert!(body.body_html.is_some());
     }
 
-    #[test]
-    fn test_mock_calendar() {
+    #[tokio::test]
+    async fn test_mock_calendar() {
         let mock = MockProviderPlugin::new("gmail", "Gmail");
-        let calendars = mock.fetch_calendars("token").unwrap();
+        let calendars = mock.fetch_calendars("token").await.unwrap();
         assert!(calendars.is_empty());
 
-        let events = mock.fetch_events("token", 0, 1000).unwrap();
+        let events = mock.fetch_events("token", 0, 1000).await.unwrap();
         assert!(events.is_empty());
     }
 

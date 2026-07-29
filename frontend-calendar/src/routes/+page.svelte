@@ -6,11 +6,16 @@
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
     Search, Settings, Menu, ChevronDown, X, CalendarDays
   } from 'lucide-svelte';
-  import { WindowControls } from '@kestrel/shared/components';
-  import { Login } from '@kestrel/shared/components';
+  import { AppShell } from '@kestrel/shared/components';
   import { authState } from '@kestrel/shared/stores';
 
   // State management
+  $effect(() => {
+    if (authState.isInitialized && !authState.isAuthenticated) {
+      import('$app/navigation').then(({ goto }) => goto('/login'));
+    }
+  });
+
   let selectedDate = $state(new Date());
   let viewMode = $state<string>('month');
   let selectedEvent = $state<any | null>(null);
@@ -86,8 +91,9 @@
 
   // Keyboard shortcuts
   function handleGlobalKeydown(e: KeyboardEvent) {
-    // Don't trigger if user is typing in an input
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    // Don't trigger if user is typing in an input or contentEditable element
+    const target = e.target as HTMLElement;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) return;
 
     const key = e.key.toLowerCase();
     
@@ -111,7 +117,10 @@
   let isSidebarOpenMobile = $state(false);
   
   import { onMount } from 'svelte';
+  import { initAuth } from '@kestrel/shared/stores';
+
   onMount(() => {
+    initAuth();
     // Load state from localStorage
     try {
       const savedAccounts = localStorage.getItem('kestrel_accounts');
@@ -132,6 +141,110 @@
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  });
+
+  $effect(() => {
+    if (authState.isAuthenticated) {
+      import('@kestrel/shared/api').then(({ getEvents }) => {
+        import('rrule').then(({ RRule }) => {
+          // Fetch events for the current month roughly
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+          const end = new Date(now.getFullYear(), now.getMonth() + 2, 1).toISOString();
+          getEvents(start, end).then(res => {
+            if (res && res.events && res.events.length > 0) {
+              const expandedEvents: any[] = [];
+              res.events.forEach((e: any) => {
+                const baseEvent = {
+                  id: e.id,
+                  title: e.title || 'Untitled Event',
+                  date: new Date(e.start_time * 1000).toISOString().split('T')[0],
+                  startTime: new Date(e.start_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                  endTime: new Date(e.end_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                  color: 'blue',
+                  location: e.location,
+                  description: e.description,
+                  calendarId: accounts[0]?.calendars[0]?.id || '1a',
+                  category: 'Work',
+                  priority: 'None',
+                  status: 'Scheduled',
+                  organizer: e.organizer_email || 'Unknown',
+                  attendees: e.attendees ? JSON.parse(e.attendees) : [],
+                  rsvpStatus: 'maybe'
+                };
+
+                if (e.rrule) {
+                  try {
+                    const rule = RRule.fromString(e.rrule);
+                    const occurrences = rule.between(new Date(start), new Date(end), true);
+                    occurrences.forEach((occ: Date, index: number) => {
+                      expandedEvents.push({
+                        ...baseEvent,
+                        id: `${e.id}-${index}`, // unique ID for the instance
+                        date: occ.toISOString().split('T')[0]
+                      });
+                    });
+                  } catch (err) {
+                    console.error('Failed to parse rrule for event:', e.id, err);
+                    expandedEvents.push(baseEvent);
+                  }
+                } else {
+                  expandedEvents.push(baseEvent);
+                }
+              });
+              events = expandedEvents;
+            }
+          }).catch(console.error);
+        });
+      });
+    }
+  });
+
+  let snoozedEvents = $state<Record<string, number>>({});
+
+  $effect(() => {
+    if (authState.isAuthenticated) {
+      import('@tauri-apps/plugin-notification').then(({ sendNotification, onAction }) => {
+        
+        onAction((event) => {
+          if (event.actionId === 'snooze' && event.notification.id) {
+            // Snooze for 10 minutes
+            snoozedEvents[event.notification.id] = Date.now() + 10 * 60 * 1000;
+          } else if (event.actionId === 'dismiss' && event.notification.id) {
+            // Dismiss permanently
+            snoozedEvents[event.notification.id] = Number.MAX_SAFE_INTEGER;
+          }
+        }).catch(err => console.warn("Notification action listener error:", err));
+
+        const checkUpcomingEvents = () => {
+          const now = new Date();
+          events.forEach(ev => {
+            const eventTime = new Date(`${ev.date}T${ev.startTime}:00`).getTime();
+            const timeUntil = eventTime - now.getTime();
+            
+            // Notify if event is exactly 10 minutes away, or if it was snoozed and the snooze time is up
+            const is10MinWarning = timeUntil > 9 * 60 * 1000 && timeUntil <= 10 * 60 * 1000;
+            const isSnoozeUp = snoozedEvents[ev.id] && now.getTime() > snoozedEvents[ev.id] && snoozedEvents[ev.id] !== Number.MAX_SAFE_INTEGER;
+            
+            if (is10MinWarning || isSnoozeUp) {
+              sendNotification({
+                id: ev.id,
+                title: `Upcoming: ${ev.title}`,
+                body: `Starts at ${ev.startTime} ${ev.location ? `in ${ev.location}` : ''}`,
+              });
+              if (isSnoozeUp) {
+                delete snoozedEvents[ev.id]; // clear snooze
+              } else {
+                snoozedEvents[ev.id] = Number.MAX_SAFE_INTEGER; // prevent duplicate 10m warnings
+              }
+            }
+          });
+        };
+
+        const interval = setInterval(checkUpcomingEvents, 60000);
+        return () => clearInterval(interval);
+      }).catch(() => {});
+    }
   });
 
   function handleTouchStart(e: TouchEvent) {
@@ -308,25 +421,49 @@
   });
 
   function handleSaveEvent(data: any) {
-    const newEvent: CalendarEvent = {
-      id: String(events.length + 1),
-      title: data.title,
-      description: data.description,
-      location: data.location,
-      date: data.date,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      isAllDay: data.isAllDay,
-      color: data.color,
-      calendarId: data.calendarId || accounts.flatMap(a => a.calendars).find(c => c.isDefault)?.id || accounts[0]?.calendars[0]?.id,
-      category: data.category,
-      priority: data.priority,
-      status: data.status,
-      organizer: data.organizer,
-      attendees: data.attendees,
-      rsvpStatus: data.rsvpStatus
-    };
-    events = [...events, newEvent];
+    import('@kestrel/shared/api').then(({ createEvent }) => {
+      // Map form data to backend payload
+      const startDateTime = new Date(`${data.date}T${data.startTime}:00`);
+      const endDateTime = new Date(`${data.date}T${data.endTime}:00`);
+      
+      const payload = {
+        title: data.title || 'Untitled Event',
+        description: data.description,
+        location: data.location,
+        start_time: Math.floor(startDateTime.getTime() / 1000),
+        end_time: Math.floor(endDateTime.getTime() / 1000),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        is_all_day: data.isAllDay || false,
+        organizer_email: data.organizer,
+        attendees: data.attendees ? JSON.stringify(data.attendees) : null
+      };
+
+      createEvent(payload as any).then((res: any) => {
+        const newEvent: CalendarEvent = {
+          id: res.id,
+          title: res.title || 'Untitled Event',
+          description: res.description,
+          location: res.location,
+          date: new Date(res.start_time * 1000).toISOString().split('T')[0],
+          startTime: new Date(res.start_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+          endTime: new Date(res.end_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+          isAllDay: res.is_all_day,
+          color: data.color || 'blue',
+          calendarId: data.calendarId || accounts[0]?.calendars[0]?.id || '1a',
+          category: data.category,
+          priority: data.priority,
+          status: 'Scheduled',
+          organizer: res.organizer_email || 'Unknown',
+          attendees: res.attendees ? JSON.parse(res.attendees) : [],
+          rsvpStatus: 'maybe'
+        };
+        events = [...events, newEvent];
+        showToast('Event created successfully', 'success');
+      }).catch(err => {
+        console.error('Failed to create event:', err);
+        showToast('Failed to create event', 'error');
+      });
+    });
   }
 
   // Navigate Date
@@ -342,47 +479,31 @@
   }
 </script>
 
-{#if !authState.isAuthenticated}
-  <Login />
-{:else}
-<div class="flex h-screen w-screen overflow-hidden bg-[var(--color-canvas-base)] relative">
-  <WindowControls />
-  <!-- Calendar Sidebar navigation -->
-  {#if !isMobileOrTablet || isSidebarOpenMobile}
-    <!-- Mobile Sidebar Backdrop overlay -->
-    {#if isMobileOrTablet && isSidebarOpenMobile}
-      <div 
-        class="fixed inset-0 bg-black/60 z-40 animate-fade-in" 
-        onclick={() => isSidebarOpenMobile = false}
-        role="presentation"
-      ></div>
-    {/if}
-    
-    <!-- Sidebar Container -->
-    <div class="{isMobileOrTablet ? 'fixed inset-y-0 left-0 z-50 animate-slide-right shadow-2xl' : ''}">
-      <CalendarSidebar
-        {selectedDate}
-        onDateSelect={(d) => { selectedDate = d; if (isMobileOrTablet) isSidebarOpenMobile = false; }}
-        onNewEventClick={() => {
-          const now = new Date();
-          now.setHours(now.getHours() + 1, 0, 0, 0);
-          const hh = String(now.getHours()).padStart(2, '0');
-          const mm = String(now.getMinutes()).padStart(2, '0');
-          openNewEventPanel(selectedDate.toISOString().split('T')[0], `${hh}:${mm}`);
-        }}
-        bind:accounts
-        onToggleCalendar={handleToggleCalendar}
-        events={filteredEvents}
-        {isMobileOrTablet}
-        {viewMode}
-        onViewModeChange={(mode) => {
-          viewMode = mode;
-          if (isMobileOrTablet) isSidebarOpenMobile = false;
-        }}
-      />
-    </div>
-  {/if}
+<AppShell bind:isMobileSidebarOpen={isSidebarOpenMobile}>
+  {#snippet sidebar()}
+    <CalendarSidebar
+      {selectedDate}
+      onDateSelect={(d) => { selectedDate = d; if (isMobileOrTablet) isSidebarOpenMobile = false; }}
+      onNewEventClick={() => {
+        const now = new Date();
+        now.setHours(now.getHours() + 1, 0, 0, 0);
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        openNewEventPanel(selectedDate.toISOString().split('T')[0], `${hh}:${mm}`);
+      }}
+      bind:accounts
+      onToggleCalendar={handleToggleCalendar}
+      events={filteredEvents}
+      {isMobileOrTablet}
+      {viewMode}
+      onViewModeChange={(mode) => {
+        viewMode = mode;
+        if (isMobileOrTablet) isSidebarOpenMobile = false;
+      }}
+    />
+  {/snippet}
 
+  {#snippet children()}
   <!-- Main View Canvas area -->
   <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}" 
        ontouchstart={handleTouchStart} 
@@ -414,7 +535,9 @@
           </button>
           
           {#if isHeaderMonthDropdownOpen}
-            <div class="fixed inset-0 z-40" onclick={() => isHeaderMonthDropdownOpen = false}></div>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="fixed inset-0 z-40" onclick={() => isHeaderMonthDropdownOpen = false} role="presentation"></div>
             <div class="fixed left-4 right-4 top-16 bg-[#131313] border border-neutral-800 rounded-xl shadow-2xl p-4 z-50 animate-fadeIn space-y-3 max-w-[320px] mx-auto">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-xs font-mono font-medium text-white">
@@ -519,7 +642,9 @@
             </button>
             
             {#if isViewDropdownOpen}
-              <div class="fixed inset-0 z-40" onclick={() => isViewDropdownOpen = false}></div>
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div class="fixed inset-0 z-40" onclick={() => isViewDropdownOpen = false} role="presentation"></div>
               <div class="absolute left-0 mt-1.5 w-52 bg-[#161616] border border-neutral-800 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans">
                 {#if dropdownSubmenu === 'none'}
                   <div class="flex flex-col">
@@ -606,23 +731,25 @@
                     
                     <div class="my-1 border-t border-[var(--color-border-hairline)]"></div>
                     
-                    <div class="px-3.5 py-2.5 flex items-center justify-between hover:bg-[var(--color-canvas-hover)] cursor-pointer" onclick={() => showWeekends = !showWeekends}>
+                    <button type="button" class="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-[var(--color-canvas-hover)] cursor-pointer text-left" onclick={() => showWeekends = !showWeekends}>
                       <span class="text-white">Show weekends</span>
-                      <button 
+                      <div 
                         class="w-7 h-4 rounded-full transition-colors relative cursor-pointer {showWeekends ? 'bg-[#d15b47]' : 'bg-neutral-700'}"
+                        aria-hidden="true"
                       >
                         <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all {showWeekends ? 'right-0.5' : 'left-0.5'}"></div>
-                      </button>
-                    </div>
+                      </div>
+                    </button>
                     
-                    <div class="px-3.5 py-2.5 flex items-center justify-between hover:bg-[var(--color-canvas-hover)] cursor-pointer" onclick={() => isDetailsDocked = !isDetailsDocked}>
+                    <button type="button" class="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-[var(--color-canvas-hover)] cursor-pointer text-left" onclick={() => isDetailsDocked = !isDetailsDocked}>
                       <span class="text-white">Dock Details panel</span>
-                      <button 
+                      <div 
                         class="w-7 h-4 rounded-full transition-colors relative cursor-pointer {isDetailsDocked ? 'bg-[#d15b47]' : 'bg-neutral-700'}"
+                        aria-hidden="true"
                       >
                         <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all {isDetailsDocked ? 'right-0.5' : 'left-0.5'}"></div>
-                      </button>
-                    </div>
+                      </div>
+                    </button>
                     
                     <div class="px-3.5 py-2 space-y-2">
                       <span class="text-white block">Start hour</span>
@@ -706,6 +833,7 @@
         <div class="flex items-center gap-3 mb-4">
           <div class="flex-1 flex items-center bg-[#1a1a1a] border border-[var(--color-border-hairline)] rounded-lg px-3 py-2">
             <Search class="w-4 h-4 text-[var(--color-text-secondary)] shrink-0" />
+            <!-- svelte-ignore a11y_autofocus -->
             <input
               type="text"
               placeholder="Search events..."
@@ -736,14 +864,28 @@
       {showWeekends}
       {startHour}
       selectedEventId={selectedEvent?.id}
-      onChangeViewMode={(v) => viewMode = v}
       onEventClick={(ev, e) => {
         selectedEvent = ev;
-        if (e) {
+        if (e && viewMode === 'month') {
           clickPosition = { x: e.clientX, y: e.clientY };
+        } else {
+          clickPosition = null;
+          isDetailsDocked = true;
         }
       }}
-      onEmptySlotClick={(dateStr, timeStr, e) => openNewEventPanel(dateStr, timeStr, e)}
+      onEmptySlotClick={openNewEventPanel}
+      onChangeViewMode={(m) => viewMode = m}
+      onEventUpdate={(id, updates) => {
+        import('@kestrel/shared/api').then(({ updateEvent }) => {
+          updateEvent(id, updates).then(() => {
+            events = events.map(ev => ev.id === id ? { ...ev, ...updates } : ev);
+            showToast('Event updated successfully', 'success');
+          }).catch(err => {
+            console.error('Failed to update event:', err);
+            showToast('Failed to update event', 'error');
+          });
+        });
+      }}
     />
   </div>
 
@@ -784,8 +926,9 @@
         <X class="w-3.5 h-3.5" />
       </button>
     </div>
+    </div>
   {/if}
-</div>
-{/if}
+  {/snippet}
+</AppShell>
 
 <svelte:window onkeydown={handleGlobalKeydown} />

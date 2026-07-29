@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS messages (
     has_attachments BOOLEAN NOT NULL DEFAULT FALSE,
     created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
     updated_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+    search_vector tsvector,
     UNIQUE(account_id, external_id)
 );
 
@@ -53,6 +54,11 @@ CREATE INDEX idx_messages_is_read ON messages(is_read);
 CREATE INDEX idx_messages_is_archived ON messages(is_archived);
 CREATE INDEX idx_messages_is_deleted ON messages(is_deleted);
 CREATE INDEX idx_messages_date_received ON messages(date_received);
+CREATE INDEX idx_messages_search_vector ON messages USING GIN(search_vector);
+
+CREATE TRIGGER messages_search_vector_update
+BEFORE INSERT OR UPDATE ON messages
+FOR EACH ROW EXECUTE FUNCTION tsvector_update_trigger(search_vector, 'pg_catalog.english', subject, snippet, sender_name, sender_email);
 
 CREATE TABLE IF NOT EXISTS calendars (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -86,6 +92,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     status VARCHAR(50),
     created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
     updated_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+    search_vector tsvector,
     UNIQUE(account_id, external_id)
 );
 
@@ -93,6 +100,11 @@ CREATE INDEX idx_calendar_events_account_id ON calendar_events(account_id);
 CREATE INDEX idx_calendar_events_calendar_id ON calendar_events(calendar_id);
 CREATE INDEX idx_calendar_events_start_time ON calendar_events(start_time);
 CREATE INDEX idx_calendar_events_end_time ON calendar_events(end_time);
+CREATE INDEX idx_calendar_events_search_vector ON calendar_events USING GIN(search_vector);
+
+CREATE TRIGGER calendar_events_search_vector_update
+BEFORE INSERT OR UPDATE ON calendar_events
+FOR EACH ROW EXECUTE FUNCTION tsvector_update_trigger(search_vector, 'pg_catalog.english', title, description, location);
 
 CREATE TABLE IF NOT EXISTS historical_revisions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -105,3 +117,13 @@ CREATE TABLE IF NOT EXISTS historical_revisions (
 );
 
 CREATE INDEX idx_historical_revisions_entity ON historical_revisions(entity_type, entity_id);
+
+CREATE TABLE IF NOT EXISTS offline_queue (
+    id SERIAL PRIMARY KEY,
+    action VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(50) NOT NULL,
+    resource_id VARCHAR(255) NOT NULL,
+    payload TEXT,
+    queued_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+    retry_count INTEGER NOT NULL DEFAULT 0
+);

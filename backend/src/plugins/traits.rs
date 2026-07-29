@@ -37,24 +37,27 @@ pub struct SyncResult {
     pub next_cursor: String,
 }
 
+use async_trait::async_trait;
+
 /// Mail provider interface - implemented by each mail WASM plugin.
+#[async_trait]
 pub trait MailProvider: Send + Sync {
     /// Fetch new/updated message headers since the last cursor position.
-    fn sync_mail(
+    async fn sync_mail(
         &self,
         auth_token: &str,
         cursor: Option<&str>,
     ) -> Result<SyncResult, PluginError>;
 
     /// Fetch the full body of a single message by its provider-side external ID.
-    fn fetch_message_body(
+    async fn fetch_message_body(
         &self,
         auth_token: &str,
         external_id: &str,
     ) -> Result<MessageBody, PluginError>;
 
     /// Soft-delete a message on the provider (moves to Trash).
-    fn delete_message(
+    async fn delete_message(
         &self,
         auth_token: &str,
         external_id: &str,
@@ -101,15 +104,16 @@ pub struct EventPayload {
 }
 
 /// Calendar provider interface - implemented by each calendar WASM plugin.
+#[async_trait]
 pub trait CalendarProvider: Send + Sync {
     /// Fetch all calendars available under this account.
-    fn fetch_calendars(
+    async fn fetch_calendars(
         &self,
         auth_token: &str,
     ) -> Result<Vec<CalendarPayload>, PluginError>;
 
     /// Fetch all events within a UTC timestamp range.
-    fn fetch_events(
+    async fn fetch_events(
         &self,
         auth_token: &str,
         start_time: i64,
@@ -117,7 +121,7 @@ pub trait CalendarProvider: Send + Sync {
     ) -> Result<Vec<EventPayload>, PluginError>;
 
     /// Create or update a calendar event.
-    fn mutate_event(
+    async fn mutate_event(
         &self,
         auth_token: &str,
         action: &str,
@@ -125,7 +129,7 @@ pub trait CalendarProvider: Send + Sync {
     ) -> Result<(), PluginError>;
 
     /// Soft-delete an event on the provider.
-    fn delete_event(
+    async fn delete_event(
         &self,
         auth_token: &str,
         external_id: &str,

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { slide } from 'svelte/transition';
   import { 
     Plus, ChevronLeft, ChevronRight, Settings, Eye, EyeOff, Check, ChevronDown,
     CalendarDays, Calendar as CalendarIcon, Clock, AlignLeft
@@ -151,7 +152,7 @@
           {@const hasEvent = events.some((e: any) => e.date === day.toISOString().split('T')[0])}
           <button
             onclick={() => { onDateSelect(day!); currentMonth = day!; }}
-            class="h-6 w-full rounded flex flex-col items-center justify-center transition-all cursor-pointer relative text-[11px]
+            class="h-6 w-full rounded flex flex-col items-center justify-center transition-all duration-200 cursor-pointer relative text-[11px] hover:scale-110 hover:shadow-sm hover:z-10
               {isToday 
                 ? 'bg-[var(--color-today-red)] text-white font-semibold shadow-sm' 
                 : isSelected 
@@ -223,7 +224,7 @@
 
           <!-- Calendars List nested -->
           {#if acc.isExpanded}
-            <div class="space-y-0.5 pl-2.5 animate-slideDown">
+            <div class="space-y-0.5 pl-2.5" transition:slide={{duration: 200}}>
               {#each acc.calendars as cal}
                 {@const hexColor = COLOR_HEX[cal.color] || '#3B82F6'}
                 <div class="w-full flex items-center justify-between py-1 px-1.5 rounded text-xs transition-colors hover:bg-[var(--color-canvas-hover)]/30">

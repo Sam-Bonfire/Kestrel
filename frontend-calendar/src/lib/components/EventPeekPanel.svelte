@@ -1,5 +1,7 @@
 <script lang="ts">
   import { X, Calendar as CalendarIcon, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
+  import { fade, fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
 
   export interface EventDetail {
     id?: string;
@@ -154,7 +156,8 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="fixed inset-0 z-40 {isMobileOrTablet ? 'bg-black/60 backdrop-blur-sm transition-opacity animate-fadeIn' : 'bg-transparent'}"
+      transition:fade={{ duration: 200 }}
+      class="fixed inset-0 z-40 {isMobileOrTablet ? 'bg-black/60 backdrop-blur-sm' : 'bg-transparent'}"
       onclick={onClose}
       onkeydown={(e) => { if (e.key === 'Escape') handleEscape(); }}
       tabindex="0"
@@ -165,7 +168,8 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
-    class="bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden font-sans shadow-2xl flex flex-col text-sm text-[var(--color-text-primary)] {isMobileOrTablet ? 'fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl max-h-[90vh] overflow-y-auto' : isDocked ? 'fixed inset-y-0 right-0 w-80 border-l z-50 rounded-none h-screen' : 'fixed z-50 max-h-[90vh] rounded-xl animate-fadeIn'}"
+    transition:fly={{ x: isDocked && !isMobileOrTablet ? 50 : 0, y: isMobileOrTablet || (!isDocked && !isMobileOrTablet) ? 30 : 0, duration: 300, easing: cubicOut }}
+    class="bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden font-sans shadow-2xl flex flex-col text-sm text-[var(--color-text-primary)] {isMobileOrTablet ? 'fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl max-h-[90vh] overflow-y-auto' : isDocked ? 'fixed inset-y-0 right-0 w-80 border-l z-50 rounded-none h-screen' : 'fixed z-50 max-h-[90vh] rounded-xl'}"
     style={popoverStyle}
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => { 

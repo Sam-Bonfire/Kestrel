@@ -3,8 +3,9 @@ export {
   getHealth,
   register,
   createToken,
-  getLoginUrl,
+  loginWithProvider,
   getCallbackUrl,
+  getMe,
   deleteAccount,
   getProviders,
   getMessages,
@@ -27,6 +28,9 @@ export {
   updateEvent,
   deleteEvent,
 } from './client.js';
+
+export * from './client.js';
+export { queryClient } from './query.js';
 
 export type {
   HealthResponse,

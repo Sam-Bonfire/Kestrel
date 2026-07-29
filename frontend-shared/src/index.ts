@@ -16,14 +16,17 @@ export {
 
 export type { DesignTokens } from './tokens/index.js';
 
+export { default as SettingsModal } from './components/SettingsModal.svelte';
+
 // ── API client ──────────────────────────────────────────────────
 export {
   ApiError,
   getHealth,
   register,
   createToken,
-  getLoginUrl,
+  loginWithProvider,
   getCallbackUrl,
+  getMe,
   deleteAccount,
   getProviders,
   getMessages,
@@ -59,6 +62,10 @@ export type {
 } from './api/index.js';
 
 // ── Auth store & Settings store ─────────────────────────────────
+export {
+  initAuth,
+} from './stores/auth.svelte.js';
+
 export {
   authState,
   login,

@@ -8,6 +8,7 @@ use api::router::{AppState, create_router};
 use api::rate_limit::RateLimiter;
 use api::sync::{SyncEvent, start_sync_daemon};
 use config::Config;
+use core::offline_worker::start_offline_worker;
 use db::pool::{init_pool, run_migrations};
 use plugins::manager::PluginManager;
 use plugins::mock::MockProviderPlugin;
@@ -74,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (sync_tx, _) = broadcast::channel::<SyncEvent>(256);
 
     let state = AppState {
-        db,
+        db: db.clone(),
         jwt_secret: config.jwt_secret,
         plugin_manager,
         sync_tx: sync_tx.clone(),
@@ -84,6 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start background sync daemon
     start_sync_daemon(state.clone(), sync_tx);
+    start_offline_worker(db.clone());
 
     let router = create_router(state);
 

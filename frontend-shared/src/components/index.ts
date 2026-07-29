@@ -1,6 +1,7 @@
 export { default as Button } from './Button.svelte';
 export { default as Spinner } from './Spinner.svelte';
 export { default as Avatar } from './Avatar.svelte';
+export { default as AppShell } from './AppShell.svelte';
 export { default as ErrorBanner } from './ErrorBanner.svelte';
 export { default as LabelPill } from './LabelPill.svelte';
 export { default as ProviderBadge } from './ProviderBadge.svelte';

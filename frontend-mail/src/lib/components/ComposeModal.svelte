@@ -1,5 +1,7 @@
 <script lang="ts">
   import { X, Send, Paperclip, Bold, Italic, List, Link } from 'lucide-svelte';
+  import { fade, fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import { EmailPillInput } from '@kestrel/shared/components';
 
   let {
@@ -56,8 +58,8 @@
 
 {#if isOpen}
   <input type="file" bind:this={fileInput} onchange={handleAttach} class="hidden" />
-  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-    <div class="w-full max-w-2xl bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-xl shadow-2xl flex flex-col overflow-hidden font-sans">
+  <div transition:fade={{ duration: 200 }} class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div transition:fly={{ y: 50, duration: 400, easing: cubicOut }} class="w-full max-w-2xl bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-xl shadow-2xl flex flex-col overflow-hidden font-sans">
       <!-- Header -->
       <div class="px-4 py-3 border-b border-[var(--color-border-hairline)] flex items-center justify-between bg-[var(--color-canvas-card)]">
         <span class="text-xs font-medium text-[var(--color-text-secondary)] tracking-wide">New Message</span>

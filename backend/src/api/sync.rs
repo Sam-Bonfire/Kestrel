@@ -192,7 +192,7 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
 
 // --- Internal helpers ---
 
-async fn list_user_accounts(
+pub async fn list_user_accounts(
     state: &AppState,
     user_id: Uuid,
 ) -> Result<Vec<crate::core::models::Account>, KestrelError> {
@@ -238,30 +238,87 @@ async fn get_all_accounts_with_tokens(
 async fn sync_account_messages(
     state: &AppState,
     account: &crate::core::models::Account,
-    _token: &str,
+    token: &str,
 ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
-    // With mock plugins, sync returns empty results.
-    // When real WASM plugins are loaded, this will call plugin.sync_mail().
-    //
-    // For now, this is a no-op that returns 0 synced messages.
-    // The real implementation will:
-    // 1. Get the plugin for this account's provider
-    // 2. Get the last sync cursor for this account
-    // 3. Call plugin.sync_mail(token, cursor)
-    // 4. For each returned message, apply LWW conflict resolution:
-    //    - If message doesn't exist locally, insert it
-    //    - If message exists and remote.updated_at > local.updated_at, update it
-    //    - Otherwise, skip (local is newer or same)
-    // 5. Return the new cursor
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = match plugin_manager.find_by_provider(&account.provider) {
+        Some(p) => p,
+        None => {
+            tracing::warn!("No plugin loaded for provider {}", account.provider);
+            return Ok(0);
+        }
+    };
 
-    let _ = state;
-    let _ = account;
+    let mail_provider = plugin.as_mail_provider();
+    
+    // For now, always do a full sync without cursor until we add cursor storage
+    let cursor = None;
 
-    tracing::debug!(
-        "Sync for account {} ({}) — mock plugin returns empty",
-        account.id.0,
-        account.provider
-    );
+    let result = mail_provider.sync_mail(token, cursor).await?;
+    let mut synced_count = 0;
 
-    Ok(0)
+    let repo: Box<dyn crate::core::repository::MessageRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone())),
+    };
+
+    for payload in result.messages {
+        let existing = repo.find_by_external_id(account.id.0, &payload.external_id).await?;
+        
+        let should_upsert = match &existing {
+            Some(msg) => {
+                // Last-Write-Wins (LWW): if remote is newer, update. 
+                // Since payload doesn't have updated_at, we assume sync_mail only returns NEW or UPDATED emails
+                // We use date_received as a proxy for now, or just assume it's newer if it was yielded.
+                // Ideally we'd use an updated_at from the provider payload.
+                payload.date_received >= msg.date_received
+            }
+            None => true,
+        };
+
+        if should_upsert {
+            let mut message = match existing {
+                Some(mut m) => {
+                    m.subject = payload.subject;
+                    m.sender_name = payload.sender_name;
+                    m.sender_email = payload.sender_email;
+                    m.recipients = payload.recipients;
+                    m.date_sent = payload.date_sent;
+                    m.date_received = payload.date_received;
+                    m.snippet = payload.snippet;
+                    m.labels = payload.labels;
+                    m.is_read = payload.is_read;
+                    m.updated_at = chrono::Utc::now().timestamp();
+                    m
+                },
+                None => crate::core::models::Message {
+                    id: crate::core::types::DbUuid(uuid::Uuid::new_v4()),
+                    account_id: account.id.clone(),
+                    external_id: payload.external_id,
+                    thread_id: payload.thread_id,
+                    subject: payload.subject,
+                    sender_name: payload.sender_name,
+                    sender_email: payload.sender_email,
+                    recipients: payload.recipients,
+                    date_sent: payload.date_sent,
+                    date_received: payload.date_received,
+                    snippet: payload.snippet,
+                    body_text: None,
+                    body_html: None,
+                    labels: payload.labels,
+                    is_read: payload.is_read,
+                    is_archived: false,
+                    is_deleted: false,
+                    has_attachments: false,
+                    created_at: chrono::Utc::now().timestamp(),
+                    updated_at: chrono::Utc::now().timestamp(),
+                }
+            };
+            
+            repo.upsert(&message).await?;
+            synced_count += 1;
+        }
+    }
+
+    Ok(synced_count)
 }

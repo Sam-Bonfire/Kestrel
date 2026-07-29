@@ -91,3 +91,10 @@ pub trait EventRepository: Send + Sync {
     async fn soft_delete(&self, id: Uuid) -> Result<(), sqlx::Error>;
     async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error>;
 }
+
+#[async_trait]
+pub trait LabelRepository: Send + Sync {
+    async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<crate::core::models::Label>, sqlx::Error>;
+    async fn upsert(&self, label: &crate::core::models::Label) -> Result<(), sqlx::Error>;
+    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error>;
+}

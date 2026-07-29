@@ -44,6 +44,7 @@
 
 {#if isTauri}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div 
     class="fixed top-0 right-0 h-8 flex items-center z-[99999] select-none"
     onpointerdown={(e) => e.stopPropagation()}

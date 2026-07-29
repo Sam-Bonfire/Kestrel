@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Clock, MapPin, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare } from 'lucide-svelte';
+  import { scale } from 'svelte/transition';
 
   export interface CalendarEvent {
     id: string;
@@ -29,7 +30,8 @@
     selectedEventId = null as string | null,
     onEventClick = (ev: CalendarEvent) => {},
     onEmptySlotClick = () => {},
-    onChangeViewMode = () => {}
+    onChangeViewMode = () => {},
+    onEventUpdate = (id: string, updates: Partial<CalendarEvent>) => {}
   } = $props<{
     events?: CalendarEvent[];
     selectedDate?: Date;
@@ -40,6 +42,7 @@
     onEventClick?: (ev: CalendarEvent, e?: MouseEvent) => void;
     onEmptySlotClick?: (dateStr: string, timeStr: string, e?: MouseEvent) => void;
     onChangeViewMode?: (v: string) => void;
+    onEventUpdate?: (id: string, updates: Partial<CalendarEvent>) => void;
   }>();
 
   // Full 24-hour timeline
@@ -260,8 +263,9 @@
           <div class="flex-1 space-y-1 overflow-y-auto pr-0.5">
             {#each getEventsForDate(dateStr) as ev}
               <button
+                in:scale={{ duration: 200, start: 0.95 }}
                 onclick={(e) => onEventClick(ev, e)}
-                class="w-full px-2 py-0.5 rounded text-[10px] text-left font-medium truncate shadow-sm cursor-pointer transition-transform hover:scale-[1.01] {(COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue).bg} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-10' : 'border-transparent'}"
+                class="w-full px-2 py-0.5 rounded text-[10px] text-left font-medium truncate shadow-sm cursor-pointer transition-all hover:scale-[1.03] hover:shadow-lg hover:z-20 {(COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue).bg} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-10' : 'border-transparent'}"
               >
                 {ev.title}
               </button>
@@ -323,6 +327,37 @@
           {@const dayEvents = getEventsForDate(dateStr)}
           {@const layoutInfo = getTimedEventsLayout(dayEvents)}
           <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors"
+               ondragover={(e) => { e.preventDefault(); e.dataTransfer!.dropEffect = 'move'; }}
+               ondrop={(e) => {
+                 e.preventDefault();
+                 const id = e.dataTransfer?.getData('text/plain');
+                 if (!id) return;
+                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                 const y = e.clientY - rect.top;
+                 const exactHour = Math.floor(y / 60);
+                 const roundedMinutes = Math.floor((y % 60) / 15) * 15;
+                 const newStartTime = `${exactHour.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+                 
+                 // Get old event to calculate duration and new end time
+                 const ev = events.find(e => e.id === id);
+                 if (ev) {
+                   const [sh, sm] = ev.startTime.split(':').map(Number);
+                   const [eh, em] = ev.endTime.split(':').map(Number);
+                   const duration = (eh * 60 + em) - (sh * 60 + sm);
+                   
+                   const newStartMins = exactHour * 60 + roundedMinutes;
+                   const newEndMins = newStartMins + duration;
+                   const newEndHour = Math.floor(newEndMins / 60);
+                   const newEndMinute = newEndMins % 60;
+                   const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${newEndMinute.toString().padStart(2, '0')}`;
+                   
+                   onEventUpdate(id, {
+                     date: dateStr,
+                     startTime: newStartTime,
+                     endTime: newEndTime
+                   });
+                 }
+               }}
                onclick={(e) => {
                  // Fractional time selection (15 minute intervals)
                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -351,15 +386,21 @@
               {@const leftPct = layout ? (100 / layout.maxCol) * layout.col : 0}
               
               <button
+                in:scale={{ duration: 200, start: 0.95 }}
+                draggable="true"
+                ondragstart={(e) => {
+                  e.dataTransfer!.setData('text/plain', ev.id);
+                  e.dataTransfer!.effectAllowed = 'move';
+                }}
                 onclick={(e) => { e.stopPropagation(); onEventClick(ev, e); }}
-                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-transform hover:scale-[1.02] cursor-pointer overflow-hidden
-                  {colStyle.bg} {colStyle.border} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'z-10'}"
+                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-move overflow-hidden
+                  {colStyle.bg} {colStyle.border} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}"
                 style="top: {top}px; height: {height}px; left: calc({leftPct}% + 4px); width: calc({widthPct}% - 8px);"
               >
-                <div class="font-bold truncate text-white leading-tight">{ev.title}</div>
-                <div class="text-[10px] opacity-75 font-mono mt-0.5">{ev.startTime} - {ev.endTime}</div>
+                <div class="font-bold truncate text-white leading-tight pointer-events-none">{ev.title}</div>
+                <div class="text-[10px] opacity-75 font-mono mt-0.5 pointer-events-none">{ev.startTime} - {ev.endTime}</div>
                 {#if ev.location && height > 50}
-                  <div class="text-[9px] opacity-80 truncate flex items-center gap-1 mt-1">
+                  <div class="text-[9px] opacity-80 truncate flex items-center gap-1 mt-1 pointer-events-none">
                     <MapPin class="w-3 h-3 text-current shrink-0" />
                     <span class="truncate">{ev.location}</span>
                   </div>

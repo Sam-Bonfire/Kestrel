@@ -13,6 +13,17 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Label {
+    pub id: DbUuid,
+    pub account_id: DbUuid,
+    pub name: String,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Account {
     pub id: DbUuid,
     pub user_id: DbUuid,
@@ -94,4 +105,15 @@ pub struct HistoricalRevision {
     pub payload_json: String,
     pub superseded_at: i64,
     pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct OfflineQueueItem {
+    pub id: i32,
+    pub action: String,
+    pub resource_type: String,
+    pub resource_id: String,
+    pub payload: Option<String>,
+    pub queued_at: i64,
+    pub retry_count: i32,
 }

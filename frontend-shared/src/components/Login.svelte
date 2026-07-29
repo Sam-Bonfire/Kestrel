@@ -1,10 +1,42 @@
 <script lang="ts">
-  import { login } from '../stores/auth.svelte.js';
+  import { login, authState } from '../stores/auth.svelte.js';
+
+  import { onMount } from 'svelte';
 
   let username = $state('');
   let password = $state('');
   let loading = $state(false);
   let error = $state('');
+
+  onMount(() => {
+    if (typeof window !== 'undefined') {
+      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
+        onOpenUrl(async (urls) => {
+          for (const url of urls) {
+            if (url.startsWith('kestrel://')) {
+              try {
+                const urlObj = new URL(url);
+                const token = urlObj.searchParams.get('token');
+                const userId = urlObj.searchParams.get('user_id');
+                if (token && userId) {
+                  localStorage.setItem('kestrel_token', token);
+                  localStorage.setItem('kestrel_user_id', userId);
+                  authState.token = token;
+                  authState.userId = userId;
+                }
+              } catch(e) {
+                console.error("Failed to parse deep link", e);
+              }
+            }
+          }
+        }).catch(err => {
+          console.error("Failed to register deep link handler", err);
+        });
+      }).catch(err => {
+        console.log('Deep link plugin not available', err);
+      });
+    }
+  });
 
   async function handleLogin(e: Event) {
     e.preventDefault();

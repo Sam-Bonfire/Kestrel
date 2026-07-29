@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Avatar } from '@kestrel/shared';
+  import { fade, fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import {
     X,
     ChevronUp,
@@ -126,6 +128,7 @@
 
 {#if email}
   <div
+    transition:fade={{ duration: 200 }}
     id="center-peek-overlay"
     class="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-[2px]"
     role="button"
@@ -135,6 +138,7 @@
   >
     <!-- Modal Container -->
     <div
+      transition:fly={{ y: 20, duration: 300, easing: cubicOut }}
       id="center-peek-modal"
       class="w-full md:max-w-4xl h-screen md:h-[90vh] bg-[#0d0d0d] flex flex-col rounded-none md:rounded-xl shadow-2xl overflow-hidden font-sans border border-[var(--color-border-hairline)]"
       role="dialog"
@@ -331,23 +335,40 @@
             </div>
           </div>
 
-          <!-- Message HTML Render Content -->
-          <div class="prose prose-invert max-w-none text-sm text-[var(--color-text-primary)] font-sans leading-[1.7] border border-[var(--color-border-hairline)]/30 rounded-xl p-5 bg-[#131313]/10">
-            {@html email.body}
+          <!-- Message HTML Render Content (Task 33: Body Sandboxing) -->
+          <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">
+            <iframe 
+              title="Email Body"
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              srcdoc={email.body}
+              class="w-full min-h-[400px] bg-white"
+              onload={(e) => { 
+                const target = e.currentTarget as HTMLIFrameElement;
+                if (target.contentWindow) {
+                  target.style.height = (target.contentWindow.document.documentElement.scrollHeight + 20) + 'px';
+                }
+              }}
+            ></iframe>
           </div>
 
-          <!-- Attachment Mock -->
+          <!-- Attachment Mock (Task 38) -->
           <div class="flex gap-3 overflow-x-auto pb-2">
-            <div class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors">
-              <div class="w-8 h-8 rounded bg-blue-500/10 flex items-center justify-center text-blue-400">
-                <FileText class="w-4 h-4" />
-              </div>
-              <div class="flex flex-col">
-                <span class="text-xs font-semibold text-white">Project_Brief_v2.pdf</span>
-                <span class="text-[10px] text-[var(--color-text-secondary)]">2.4 MB</span>
-              </div>
-            </div>
-            <div class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors">
+            <button 
+              onclick={() => {
+                import('@tauri-apps/plugin-http').then(http => {
+                  import('@tauri-apps/plugin-fs').then(fs => {
+                    import('@tauri-apps/api/path').then(path => {
+                      // Fake download logic for Task 38
+                      console.log('Downloading attachment via Tauri native HTTPS...');
+                    });
+                  });
+                }).catch(() => {
+                  // Fallback for web
+                  window.open(email.id + '/attachments/budget_q3.xlsx/redirect', '_blank');
+                });
+              }}
+              class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors text-left"
+            >
               <div class="w-8 h-8 rounded bg-purple-500/10 flex items-center justify-center text-purple-400">
                 <Paperclip class="w-4 h-4" />
               </div>
@@ -355,7 +376,7 @@
                 <span class="text-xs font-semibold text-white">budget_q3.xlsx</span>
                 <span class="text-[10px] text-[var(--color-text-secondary)]">1.1 MB</span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 

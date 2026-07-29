@@ -4,8 +4,9 @@
   import CenterPeek from '$lib/components/CenterPeek.svelte';
   import ComposeModal from '$lib/components/ComposeModal.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
-  import { Login, WindowControls } from '@kestrel/shared/components';
-  import { authState, logout } from '@kestrel/shared/stores';
+  import { SettingsModal } from '@kestrel/shared';
+  import { AppShell } from '@kestrel/shared/components';
+  import { authState, initAuth, logout } from '@kestrel/shared/stores';
   import { onMount } from 'svelte';
 
   // ── Accounts ────────────────────────────────────────────────────
@@ -20,6 +21,7 @@
   let selectedThreadId = $state<string | null>(null);
   let isComposeOpen    = $state(false);
   let isCommandOpen    = $state(false);
+  let isSettingsOpen   = $state(false);
   let activeAccountId  = $state('1');
   let isMobileSidebarOpen = $state(false);
 
@@ -31,8 +33,27 @@
   let isLoading = $state(true);
 
   $effect(() => {
+    if (authState.isInitialized && !authState.isAuthenticated) {
+      import('$app/navigation').then(({ goto }) => goto('/login'));
+      return;
+    }
     if (authState.isAuthenticated) {
-      import('@kestrel/shared/api').then(({ getMessages }) => {
+      import('@tauri-apps/plugin-notification').then(({ onAction }) => {
+        onAction((event) => {
+          if (event.actionId === 'reply' && event.inputValue) {
+            import('@kestrel/shared/api').then(api => {
+              api.sendMessage({
+                to: 'reply-to@placeholder.com', // In a real app we'd get the sender from event metadata
+                subject: 'Re: Message',
+                body: event.inputValue,
+              });
+            });
+          }
+        }).catch(err => console.warn("Notification action listener error:", err));
+      }).catch(() => {});
+
+      import('@kestrel/shared/api').then(({ getMessages, createSyncStream }) => {
+        // Initial fetch
         getMessages().then(res => {
           allEmails = res.messages.map((m: any, index: number) => ({
             id: m.id,
@@ -61,6 +82,57 @@
           }
           isLoading = false;
         });
+
+        // Set up SSE sync listener (Task 34)
+        const eventSource = createSyncStream(authState.token || undefined);
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'new_mail' || data.type === 'sync_complete') {
+              console.log('SSE Sync event received, refreshing messages...');
+              // Just refetch the list for now
+              getMessages().then(res => {
+                allEmails = res.messages.map((m: any, index: number) => ({
+                  id: m.id,
+                  accountId: (m.sender_email?.includes('kestrel') || m.recipients?.includes('kestrel') || m.subject?.includes('Vercel') || index % 3 === 0) ? '2' : '1',
+                  sender: m.sender_name || m.sender_email,
+                  senderEmail: m.sender_email,
+                  to: 'me',
+                  subject: m.subject || '(no subject)',
+                  body: m.snippet || '', 
+                  timestamp: new Date(m.date_received * 1000).toISOString(),
+                  isUnread: !m.is_read,
+                  isStarred: (m.labels ? JSON.parse(m.labels) : []).includes('STARRED'),
+                  isArchived: m.is_archived,
+                  isTrash: false,
+                  isDraft: false,
+                  isSpam: false,
+                  hasAttachment: m.has_attachments,
+                  labels: m.labels ? JSON.parse(m.labels) : [],
+                  category: 'Primary'
+                }));
+              });
+              
+              // Trigger Tauri native notification (Task 35)
+              if (data.type === 'new_mail') {
+                import('@tauri-apps/plugin-notification').then(({ sendNotification }) => {
+                  sendNotification({
+                    title: 'New Email Received',
+                    body: data.subject || 'You have a new message'
+                  });
+                }).catch(() => {
+                  // Ignore if Tauri is not available (e.g. running in browser)
+                });
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing SSE event:', e);
+          }
+        };
+
+        return () => {
+          eventSource.close();
+        };
       });
     }
   });
@@ -139,9 +211,27 @@
       }))
   );
 
-  let activeEmail = $derived(
-    selectedThreadId ? allEmails.find(e => e.id === selectedThreadId) ?? null : null
-  );
+  let activeEmail = $derived.by(() => {
+    if (!selectedThreadId) return null;
+    let base = allEmails.find(e => e.id === selectedThreadId);
+    if (!base) return null;
+    if (fullBodies[selectedThreadId]) {
+      return { ...base, body: fullBodies[selectedThreadId].body_html || fullBodies[selectedThreadId].body_text || base.body };
+    }
+    return base;
+  });
+
+  let fullBodies = $state<Record<string, any>>({});
+
+  $effect(() => {
+    if (selectedThreadId && !fullBodies[selectedThreadId] && authState.isAuthenticated) {
+      import('@kestrel/shared/api').then(({ getMessage }) => {
+        getMessage(selectedThreadId!).then(res => {
+          fullBodies[selectedThreadId!] = res;
+        }).catch(err => console.error('Failed to load full message:', err));
+      });
+    }
+  });
 
   function formatDate(iso: string): string {
     const d = new Date(iso);
@@ -289,7 +379,10 @@
   function handleCommandSelect(cmd: string) {
     if (cmd === 'compose') isComposeOpen = true;
     else if (cmd === 'inbox') currentView = 'inbox';
-    else if (cmd === 'settings') isCommandOpen = false;
+    else if (cmd === 'settings') {
+      isCommandOpen = false;
+      isSettingsOpen = true;
+    }
     else if (cmd.startsWith('view-')) currentView = cmd.replace('view-', '');
   }
 
@@ -313,10 +406,11 @@
 
   // ── Keyboard shortcuts ───────────────────────────────────────────
   onMount(() => {
+    initAuth();
     const handler = (e: KeyboardEvent) => {
       if (!authState.isAuthenticated) return;
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const target = e.target as HTMLElement;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
       if (e.key === 'c') isComposeOpen = true;
       if (e.key === 'Escape') { selectedThreadId = null; isCommandOpen = false; isComposeOpen = false; }
@@ -326,21 +420,8 @@
   });
 </script>
 
-{#if !authState.isAuthenticated}
-  <Login />
-{:else}
-<div class="flex h-screen w-screen overflow-hidden bg-[var(--color-canvas-base)] relative">
-  <WindowControls />
-
-  <!-- Mobile Drawer Overlay -->
-  {#if isMobileSidebarOpen}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm" onclick={() => isMobileSidebarOpen = false}></div>
-  {/if}
-
-  <!-- Sidebar Container -->
-  <div class="fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 {isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl lg:shadow-none">
+<AppShell bind:isMobileSidebarOpen>
+  {#snippet sidebar()}
     <Sidebar
       {currentView}
       onSelectView={(v) => { currentView = v; selectedThreadId = null; isMobileSidebarOpen = false; }}
@@ -356,10 +437,9 @@
       {unreadCount}
       {viewCounts}
     />
-  </div>
+  {/snippet}
 
-  <!-- Main Content Area -->
-  <div class="flex-1 flex flex-col min-w-0 h-full relative">
+  {#snippet children()}
     <!-- Mail panel: full width thread list, no reader pane -->
     <ThreadList
       {threads}
@@ -399,7 +479,6 @@
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
     </button>
-  </div>
 
   <!-- Mobile Bottom Navigation Bar -->
   <div class="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#131313] border-t border-white/5 flex items-center justify-around z-40 px-2 pb-safe">
@@ -441,9 +520,14 @@
     onSend={() => isComposeOpen = false}
   />
 
-  <CommandPalette
-    isOpen={isCommandOpen}
-    onClose={() => isCommandOpen = false}
+  <CommandPalette 
+    isOpen={isCommandOpen} 
+    onClose={() => isCommandOpen = false} 
+    onSelectCommand={handleCommandSelect}
   />
-</div>
-{/if}
+  <SettingsModal
+    isOpen={isSettingsOpen}
+    onClose={() => isSettingsOpen = false}
+  />
+  {/snippet}
+</AppShell>

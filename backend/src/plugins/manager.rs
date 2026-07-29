@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 use tracing::{info, warn};
+use std::sync::Arc;
 
 use super::traits::{
     BrandingPayload, CalendarProvider, MailProvider, ProviderBranding, ProviderPlugin,
 };
+use super::wasm_runtime::WasmEngine;
 
 /// Represents a loaded plugin and its capabilities.
 pub struct LoadedPlugin {
@@ -42,6 +44,7 @@ impl LoadedPlugin {
 pub struct PluginManager {
     plugins: Vec<LoadedPlugin>,
     plugins_dir: Option<PathBuf>,
+    wasm_engine: Arc<WasmEngine>,
 }
 
 impl PluginManager {
@@ -50,6 +53,7 @@ impl PluginManager {
         Self {
             plugins: Vec::new(),
             plugins_dir: None,
+            wasm_engine: Arc::new(WasmEngine::new().expect("Failed to initialize Wasmtime engine")),
         }
     }
 
@@ -67,8 +71,6 @@ impl PluginManager {
     }
 
     /// Discover and load all available plugins from the plugins directory.
-    /// Currently looks for `.wasm` files and logs them. Full WASM loading
-    /// via Wasmtime will be implemented when plugin binaries are available.
     pub async fn load_all(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let dir = match &self.plugins_dir {
             Some(d) => d.clone(),
@@ -92,15 +94,29 @@ impl PluginManager {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("wasm") {
                 info!("Discovered plugin WASM: {}", path.display());
-                // TODO: Load via Wasmtime component model when plugin binaries are built
-                // For now, log the discovery — actual WASM loading requires the
-                // wasmtime component model and generated host bindings.
-                //
-                // Future implementation:
-                // let engine = Engine::default();
-                // let component = Component::from_file(&engine, &path)?;
-                // let mut store = Store::new(&engine, ctx);
-                // let (plugin, _instance) = KestrelPlugin::instantiate(&mut store, &component, &linker)?;
+                
+                // Read the component
+                match wasmtime::component::Component::from_file(&self.wasm_engine.engine, &path) {
+                    Ok(component) => {
+                        // Extract plugin ID from filename (e.g., "google.wasm" -> "google")
+                        let id = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+                        
+                        // Instantiate asynchronously
+                        // Since load_all is async, we can do this!
+                        match super::wasm_plugin::WasmPlugin::new(id.clone(), self.wasm_engine.clone(), component).await {
+                            Ok(plugin) => {
+                                info!("WASM Plugin '{}' loaded successfully.", id);
+                                self.register(Box::new(plugin));
+                            }
+                            Err(e) => {
+                                warn!("Failed to initialize WASM plugin {}: {}", path.display(), e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to compile WASM component {}: {}", path.display(), e);
+                    }
+                }
             }
         }
 

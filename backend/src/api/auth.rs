@@ -131,6 +131,19 @@ pub async fn auth_middleware(
 }
 
 fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
+    // 1. Try Cookie header
+    if let Some(cookie) = req.headers().get(axum::http::header::COOKIE) {
+        if let Ok(cookie_str) = cookie.to_str() {
+            for part in cookie_str.split(';') {
+                let part = part.trim();
+                if let Some(token) = part.strip_prefix("kestrel_token=") {
+                    return Some(token.to_string());
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to Authorization header
     req.headers()
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -241,7 +254,7 @@ fn is_unique_violation(e: &dyn sqlx::error::DatabaseError) -> bool {
 pub async fn token(
     State(state): State<AppState>,
     Json(body): Json<TokenRequest>,
-) -> Result<Json<TokenResponse>, KestrelError> {
+) -> Result<Response, KestrelError> {
     let user = find_user_by_username(&state, &body.username).await?;
     let user = user.ok_or(KestrelError::Unauthorized)?;
 
@@ -256,9 +269,32 @@ pub async fn token(
 
     let jwt = encode_jwt(&user.id.to_string(), &state.jwt_secret)?;
 
-    Ok(Json(TokenResponse {
-        token: jwt,
-        user_id: user.id.to_string(),
+    let cookie = format!("kestrel_token={}; HttpOnly; Path=/; SameSite=Lax", jwt);
+
+    let response = axum::response::Response::builder()
+        .header(axum::http::header::SET_COOKIE, cookie)
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(axum::body::Body::from(serde_json::to_string(&TokenResponse {
+            token: jwt,
+            user_id: user.id.to_string(),
+        }).unwrap()))
+        .map_err(|e| KestrelError::Internal(Box::new(e)))?;
+
+    Ok(response)
+}
+
+// --- GET /api/v1/auth/me ---
+
+#[derive(Serialize)]
+pub struct MeResponse {
+    pub user_id: String,
+}
+
+pub async fn me(
+    auth_user: axum::Extension<AuthUser>,
+) -> Result<Json<MeResponse>, KestrelError> {
+    Ok(Json(MeResponse {
+        user_id: auth_user.user_id.to_string(),
     }))
 }
 

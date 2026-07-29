@@ -1,6 +1,6 @@
 import { authState, logout } from '../stores/auth.svelte.js';
 
-const API_BASE = 'http://127.0.0.1:8080/api/v1';
+const API_BASE = 'http://localhost:8080/api/v1';
 
 /**
  * Typed API client for the Kestrel backend.
@@ -25,13 +25,10 @@ interface RequestOptions extends Omit<RequestInit, 'method' | 'body'> {
 
 // ── Internal helpers ─────────────────────────────────────────────
 
-function buildHeaders(token?: string): HeadersInit {
+function buildHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
   return headers;
 }
 
@@ -40,36 +37,46 @@ async function request<T>(
   path: string,
   opts: RequestOptions = {},
 ): Promise<T> {
-  const { token = authState.token ?? undefined, body, ...init } = opts;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: buildHeaders(token),
-    body: body != null ? JSON.stringify(body) : undefined,
-    ...init,
-  });
+  const { token, body, ...init } = opts;
+  
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: buildHeaders(),
+      credentials: 'include',
+      body: body != null ? JSON.stringify(body) : undefined,
+      ...init,
+    });
 
-  if (res.status === 204) {
-    return undefined as T;
-  }
-
-  if (!res.ok) {
-    if (res.status === 401) {
-      logout();
+    if (res.status === 204) {
+      return undefined as T;
     }
-    let parsed: unknown;
-    try {
-      parsed = await res.json();
-    } catch {
-      parsed = null;
-    }
-    throw new ApiError(
-      res.status,
-      `${method} ${path} failed: ${res.statusText}`,
-      parsed,
-    );
-  }
 
-  return res.json() as Promise<T>;
+    if (!res.ok) {
+      if (res.status === 401) {
+        logout();
+      }
+      let parsed: unknown;
+      try {
+        parsed = await res.json();
+      } catch {
+        parsed = null;
+      }
+      throw new ApiError(
+        res.status,
+        `${method} ${path} failed: ${res.statusText}`,
+        parsed,
+      );
+    }
+
+    return res.json() as Promise<T>;
+  } catch (err: any) {
+    // If it's a network error (TypeError on fetch)
+    if (err instanceof TypeError) {
+      throw new ApiError(0, 'Network error');
+    }
+    throw err;
+  }
 }
 
 // ── Types ───────────────────────────────────────────────────────
@@ -185,8 +192,12 @@ export async function createToken(
   });
 }
 
-export function getLoginUrl(provider: string): string {
-  return `${API_BASE}/auth/login?provider=${encodeURIComponent(provider)}`;
+export async function getMe(): Promise<{ user_id: string }> {
+  return request<{ user_id: string }>('GET', '/auth/me');
+}
+
+export async function loginWithProvider(provider: string) {
+  window.location.href = `${API_BASE}/auth/login?provider=${encodeURIComponent(provider)}`;
 }
 
 export function getCallbackUrl(): string {
@@ -331,7 +342,7 @@ export function createSyncStream(token?: string): EventSource {
   if (token) {
     url.searchParams.set('token', token);
   }
-  return new EventSource(url.toString());
+  return new EventSource(url.toString(), { withCredentials: true });
 }
 
 export async function triggerSync(token?: string): Promise<void> {

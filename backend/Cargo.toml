@@ -37,3 +37,7 @@ rand = "0.8"
 # Async streams
 futures = "0.3"
 tokio-stream = "0.1"
+wasmtime = "22.0.0"
+wasmtime-wasi = "22.0.0"
+reqwest = { version = "0.13.4", features = ["json"] }
+base64 = "0.23.0"

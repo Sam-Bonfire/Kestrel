@@ -44,7 +44,7 @@
     type LabelMeta
   } from '@kestrel/shared';
   import { onMount } from 'svelte';
-  import { slide } from 'svelte/transition';
+  import { slide, scale, fade } from 'svelte/transition';
 
   export interface Account {
     id: string;
@@ -325,7 +325,7 @@
         {#each folders as folder}
           <button
             onclick={() => onSelectView(folder.id)}
-            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out
+            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out hover:translate-x-1
               {currentView === folder.id
                 ? 'bg-[var(--color-canvas-hover)] text-white'
                 : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]/60'}"
@@ -335,7 +335,7 @@
               <span>{folder.label}</span>
             </div>
             {#if (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) > 0}
-              <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border-hairline)]/40">
+              <span in:scale={{ duration: 200, start: 0.8 }} class="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border-hairline)]/40 shadow-sm">
                 {viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : unreadCount)}
               </span>
             {/if}
@@ -390,7 +390,7 @@
             onclick={() => onSelectView(`label-${item.name}`)}
             oncontextmenu={(e) => handleLabelContextMenu(item.name, e)}
             draggable="true"
-            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out group
+            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out group hover:translate-x-1
               {currentView === `label-${item.name}`
                 ? 'bg-[var(--color-canvas-hover)] text-white'
                 : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]/60'}"

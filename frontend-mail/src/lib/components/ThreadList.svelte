@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fade, slide, fly } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
   import { 
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
     ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check,
@@ -431,12 +433,14 @@
         </div>
       </div>
     {:else}
-      {#each filteredList as thread, i}
+      {#each filteredList as thread, i (thread.id)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
-          class="group relative flex flex-col sm:flex-row sm:items-center bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 rounded-lg cursor-pointer transition-colors border border-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas-base)] focus:outline-none
-            {selectedThreadId === thread.id ? 'bg-[var(--color-canvas-hover)]/60 border-white/5' : ''}
+          in:fly={{ y: 20, duration: 300, delay: Math.min(i * 30, 300), easing: (t) => t * (2 - t) }}
+          animate:flip={{ duration: 300 }}
+          class="group relative flex flex-col sm:flex-row sm:items-center bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 hover:-translate-y-px hover:shadow-md hover:z-10 rounded-lg cursor-pointer transition-all duration-200 border border-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas-base)] focus:outline-none
+            {selectedThreadId === thread.id ? 'bg-[var(--color-canvas-hover)]/60 border-white/5 shadow-sm -translate-y-px z-10' : ''}
             {$mailDenseMode ? 'py-2 sm:py-1 px-3 sm:px-3 min-h-[50px] sm:min-h-[32px]' : 'py-3 sm:py-2.5 px-4 min-h-[64px] sm:min-h-[44px]'}"
           onclick={() => { selectedIndex = i; onSelectThread(thread.id); }}
           oncontextmenu={(e) => handleThreadContextMenu(thread.id, e)}
