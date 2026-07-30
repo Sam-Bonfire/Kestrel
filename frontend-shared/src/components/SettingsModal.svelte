@@ -1,8 +1,11 @@
 <script lang="ts">
   import { X } from 'lucide-svelte';
+  import { fade, scale } from 'svelte/transition';
 
-  export let isOpen = false;
-  export let onClose = () => {};
+  let { isOpen = false, onClose = () => {} } = $props<{
+    isOpen?: boolean;
+    onClose?: () => void;
+  }>();
 
   // For Task 47: Shortcut Rebinding
   // This is a simple settings panel for Shortcuts

@@ -226,4 +226,46 @@ impl MessageRepository for PostgresMessageRepository {
         .fetch_all(&self.pool)
         .await
     }
+
+    async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE messages SET \
+             labels = (CASE WHEN labels IS NULL THEN '[]'::jsonb ELSE labels::jsonb END) || '\"Muted\"'::jsonb, \
+             is_archived = true, \
+             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT \
+             WHERE thread_id = $1"
+        )
+        .bind(thread_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn report_phishing(&self, id: Uuid) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE messages SET \
+             is_deleted = true, \
+             labels = (CASE WHEN labels IS NULL THEN '[]'::jsonb ELSE labels::jsonb END) || '\"Phishing\"'::jsonb, \
+             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT \
+             WHERE id = $1"
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn trash_by_sender(&self, user_id: Uuid, email: &str) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE messages SET \
+             is_deleted = true, \
+             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT \
+             WHERE sender_email = $1 AND account_id IN (SELECT id FROM accounts WHERE user_id = $2)"
+        )
+        .bind(email)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }

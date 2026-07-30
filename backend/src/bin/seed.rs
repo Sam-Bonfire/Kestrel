@@ -4,6 +4,9 @@ use std::env;
 use std::fs;
 use uuid::Uuid;
 use chrono::DateTime;
+use argon2::password_hash::rand_core::OsRng;
+use argon2::password_hash::{PasswordHasher, SaltString};
+use argon2::Argon2;
 
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
@@ -46,6 +49,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
     
+    let salt = SaltString::generate(&mut OsRng);
+    let hash = Argon2::default()
+        .hash_password(b"password", &salt)
+        .expect("Failed to hash password")
+        .to_string();
+    
     sqlx::query(
         r#"
         INSERT INTO users (id, username, password_hash, created_at, updated_at)
@@ -55,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .bind(&user_id)
     .bind("demo_user")
-    .bind("mock_hash_not_used_in_seed")
+    .bind(&hash)
     .bind(now)
     .bind(now)
     .execute(&pool)

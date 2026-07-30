@@ -8,26 +8,36 @@
     ChevronDown,
     Star,
     Archive,
+    ArchiveRestore,
     Trash2,
     Mail,
+    MailOpen,
     Reply,
     ReplyAll,
     Forward,
     Plus,
     CornerUpLeft,
     Send,
-    Sparkles,
-    Check,
     Clock,
     FileText,
-    MoreVertical,
     Tag,
-    Paperclip
+    Paperclip,
+    AlertOctagon,
+    MoreVertical,
+    Folder,
+    Check,
+    BellOff,
+    ShieldAlert,
+    UserX,
+    CalendarPlus,
+    Filter,
+    Download
   } from 'lucide-svelte';
   import { 
     labelCustomizations, 
     getLabelStyle,
-    EmailPillInput
+    EmailPillInput,
+    Dropdown
   } from '@kestrel/shared';
 
   export interface Email {
@@ -59,7 +69,18 @@
     onAddLabel = (id: string, label: string) => {},
     onRemoveLabel = (id: string, label: string) => {},
     onSendReply = (emailId: string, replyBody: string) => {},
-    historicalMessages = [] as { sender: string; body: string; timestamp: string }[]
+    onSnooze = (id: string, until: string) => {},
+    onMoveTo = (id: string, folder: string) => {},
+    onReportSpam = (id: string) => {},
+    onMute = (id: string) => {},
+    onReportPhishing = (id: string) => {},
+    onBlockSender = (emailAddress: string) => {},
+    onCreateEvent = (id: string) => {},
+    onFilterMessages = (emailAddress: string) => {},
+    onDownloadMessage = (id: string) => {},
+    historicalMessages = [] as { sender: string; body: string; timestamp: string }[],
+    allLabels = [] as string[],
+    initialReplyMode = null
   } = $props<{
     email?: Email | null;
     onClose?: () => void;
@@ -73,7 +94,18 @@
     onAddLabel?: (id: string, label: string) => void;
     onRemoveLabel?: (id: string, label: string) => void;
     onSendReply?: (emailId: string, replyBody: string) => void;
+    onSnooze?: (id: string, until: string) => void;
+    onMoveTo?: (id: string, folder: string) => void;
+    onReportSpam?: (id: string) => void;
+    onMute?: (id: string) => void;
+    onReportPhishing?: (id: string) => void;
+    onBlockSender?: (emailAddress: string) => void;
+    onCreateEvent?: (id: string) => void;
+    onFilterMessages?: (emailAddress: string) => void;
+    onDownloadMessage?: (id: string) => void;
     historicalMessages?: { sender: string; body: string; timestamp: string }[];
+    allLabels?: string[];
+    initialReplyMode?: 'reply' | 'reply_all' | 'forward' | null;
   }>();
 
   // UI state variables
@@ -83,12 +115,16 @@
   let replyText = $state('');
   let newLabelText = $state('');
   let showAddLabelInput = $state(false);
+  let labelSearchQuery = $state('');
+  let moveSearchQuery = $state('');
 
-  // AI Summary panel state
-  let isAiSummaryLoading = $state(false);
-  let aiSummaryText = $state<string | null>(null);
-  let showAiSummary = $state(false);
-  
+  let activeMenu = $state<'snooze' | 'label' | 'more' | 'move' | null>(null);
+
+  // Dynamic more options
+  const moreOptions = [
+    { id: 'print', icon: FileText, label: 'Print', action: () => window.print() }
+  ];
+
   let showHistory = $state(false);
 
   function handleSendReply() {
@@ -109,21 +145,13 @@
     }
   }
 
-  function handleTriggerAiSummary() {
-    if (showAiSummary) {
-      showAiSummary = false;
-      return;
+  $effect(() => {
+    if (initialReplyMode && !showReplyDraft) {
+      showReplyDraft = true;
+      replyType = initialReplyMode;
     }
+  });
 
-    isAiSummaryLoading = true;
-    showAiSummary = true;
-    aiSummaryText = null;
-
-    setTimeout(() => {
-      isAiSummaryLoading = false;
-      aiSummaryText = "Kestrel AI Summary:\n• Action required: Review and upgrade vulnerable node package dependencies immediately.\n• Primary focus: High vulnerability issue found in frontend/backend libraries.\n• Owner: Alex Rivera.";
-    }, 1200);
-  }
 </script>
 
 {#if email}
@@ -140,7 +168,7 @@
     <div
       transition:fly={{ y: 20, duration: 300, easing: cubicOut }}
       id="center-peek-modal"
-      class="w-full md:max-w-4xl h-screen md:h-[90vh] bg-[#0d0d0d] flex flex-col rounded-none md:rounded-xl shadow-2xl overflow-hidden font-sans border border-[var(--color-border-hairline)]"
+      class="w-full md:max-w-4xl h-screen md:h-auto md:max-h-[90vh] md:min-h-[50vh] bg-[#0d0d0d] flex flex-col rounded-none md:rounded-xl shadow-2xl overflow-hidden font-sans border border-[var(--color-border-hairline)]"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -155,7 +183,7 @@
         <!-- Transparent drag handle that stops before WindowControls -->
         <div class="absolute inset-y-0 left-0 right-36" data-tauri-drag-region></div>
         <!-- Left tools -->
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 relative z-10">
           <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer disabled:opacity-30" disabled={!hasPrev} onclick={() => onNavigate('prev')} title="Previous Email">
             <ChevronUp class="w-4 h-4" />
           </button>
@@ -164,35 +192,18 @@
           </button>
         </div>
 
-        <!-- AI Magic & Actions toolbar -->
-        <div class="flex items-center gap-1.5">
-          <button
-            onclick={handleTriggerAiSummary}
-            class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/10 transition-colors cursor-pointer mr-2"
-          >
-            <Sparkles class="w-3.5 h-3.5 text-blue-400" />
-            <span>AI Summary</span>
-          </button>
-          
-          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => { onToggleUnread(email!.id); onClose(); }} title="Mark as Unread">
-            <Mail class="w-4 h-4 text-[var(--color-text-secondary)]" />
-          </button>
-          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => { onArchive(email!.id); onClose(); }} title="Archive Email (e)">
-            <Archive class="w-4 h-4 text-[var(--color-text-secondary)]" />
-          </button>
-          <button class="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer" onclick={() => { onDelete(email!.id); onClose(); }} title="Delete Email">
-            <Trash2 class="w-4 h-4" />
-          </button>
-          
+        <!-- Actions toolbar -->
+        <!-- Actions toolbar (Desktop only) -->
+        <div class="hidden md:flex items-center gap-1.5 relative z-10">
+          {@render actionButtons()}
           <div class="w-px h-5 bg-[var(--color-border-hairline)] mx-1"></div>
-
-          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => window.print()} title="Print">
-            <FileText class="w-4 h-4 text-[var(--color-text-secondary)]" />
+          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={onClose} title="Close peek (Esc)">
+            <X class="w-4 h-4" />
           </button>
-          <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => {}} title="More actions">
-            <MoreVertical class="w-4 h-4 text-[var(--color-text-secondary)]" />
-          </button>
-          <div class="w-px h-5 bg-[var(--color-border-hairline)] mx-1"></div>
+        </div>
+        
+        <!-- Close button (Mobile only) -->
+        <div class="flex md:hidden items-center gap-1.5 relative z-10">
           <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={onClose} title="Close peek (Esc)">
             <X class="w-4 h-4" />
           </button>
@@ -243,31 +254,6 @@
           </div>
         </div>
 
-        <!-- AI Summary expanded card -->
-        {#if showAiSummary}
-          <div class="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl space-y-2 animate-slideDown">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2 text-xs font-semibold text-blue-400">
-                <Sparkles class="w-3.5 h-3.5" />
-                <span>Kestrel AI Assistant</span>
-              </div>
-              <button onclick={() => showAiSummary = false} class="text-[var(--color-text-secondary)] hover:text-white transition-colors">
-                <X class="w-3.5 h-3.5" />
-              </button>
-            </div>
-            
-            {#if isAiSummaryLoading}
-              <div class="flex items-center gap-2 py-2 text-xs text-[var(--color-text-secondary)]">
-                <span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping"></span>
-                <span>Generating digest summary...</span>
-              </div>
-            {:else}
-              <pre class="text-xs text-[var(--color-text-primary)] font-sans whitespace-pre-wrap leading-relaxed">
-                {aiSummaryText}
-              </pre>
-            {/if}
-          </div>
-        {/if}
 
         <!-- Message Thread Stack using shared Reusable Avatar component -->
         {#if historicalMessages && historicalMessages.length > 0}
@@ -341,10 +327,12 @@
               title="Email Body"
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               srcdoc={email.body}
-              class="w-full min-h-[400px] bg-white"
+              class="w-full min-h-[20vh] bg-white"
               onload={(e) => { 
                 const target = e.currentTarget as HTMLIFrameElement;
                 if (target.contentWindow) {
+                  // Reset height so scrollHeight shrinks if the new content is smaller
+                  target.style.height = '0px';
                   target.style.height = (target.contentWindow.document.documentElement.scrollHeight + 20) + 'px';
                 }
               }}
@@ -479,6 +467,139 @@
         {/if}
 
       </div>
+
+      <!-- Mobile Bottom Actions Bar -->
+      <div class="md:hidden border-t border-[var(--color-border-hairline)] bg-[var(--color-canvas-base)] px-4 py-2 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-1.5 w-full justify-between">
+          {@render actionButtons()}
+        </div>
+      </div>
     </div>
   </div>
 {/if}
+
+<svelte:window onclick={() => activeMenu = null} />
+
+{#snippet actionButtons()}
+  <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => { onToggleUnread(email!.id); }} title={email!.isUnread ? "Mark as Read" : "Mark as Unread"}>
+    {#if email!.isUnread}
+      <MailOpen class="w-4 h-4 text-[var(--color-text-secondary)]" />
+    {:else}
+      <Mail class="w-4 h-4 text-[var(--color-text-secondary)]" />
+    {/if}
+  </button>
+  
+  <Dropdown 
+    isOpen={activeMenu === 'snooze'}
+    onClose={() => activeMenu = null}
+  >
+    {#snippet trigger()}
+      <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={(e) => { e.stopPropagation(); activeMenu = activeMenu === 'snooze' ? null : 'snooze'; }} title="Snooze">
+        <Clock class="w-4 h-4 text-[var(--color-text-secondary)]" />
+      </button>
+    {/snippet}
+    {#snippet content()}
+      <button class="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-primary)] transition-colors cursor-pointer" onclick={() => { onSnooze!(email!.id, 'later_today'); activeMenu = null; }}>Later Today</button>
+      <button class="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-primary)] transition-colors cursor-pointer" onclick={() => { onSnooze!(email!.id, 'tomorrow'); activeMenu = null; }}>Tomorrow</button>
+      <button class="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-primary)] transition-colors cursor-pointer" onclick={() => { onSnooze!(email!.id, 'next_week'); activeMenu = null; }}>Next Week</button>
+    {/snippet}
+  </Dropdown>
+
+  <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={() => { onArchive(email!.id); }} title={email!.isArchived ? "Unarchive Email (e)" : "Archive Email (e)"}>
+    {#if email!.isArchived}
+      <ArchiveRestore class="w-4 h-4 text-[var(--color-text-secondary)]" />
+    {:else}
+      <Archive class="w-4 h-4 text-[var(--color-text-secondary)]" />
+    {/if}
+  </button>
+  
+  <button class="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer" onclick={() => { onDelete(email!.id); }} title="Delete Email">
+    <Trash2 class="w-4 h-4" />
+  </button>
+  
+  <button class="p-1.5 rounded-lg hover:bg-orange-500/20 text-orange-400 transition-colors cursor-pointer" onclick={() => { onReportSpam!(email!.id); }} title="Report Spam">
+    <AlertOctagon class="w-4 h-4" />
+  </button>
+
+  <Dropdown 
+    isOpen={activeMenu === 'move'}
+    onClose={() => activeMenu = null}
+  >
+    {#snippet trigger()}
+      <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={(e) => { e.stopPropagation(); activeMenu = activeMenu === 'move' ? null : 'move'; }} title="Move To">
+        <Folder class="w-4 h-4 text-[var(--color-text-secondary)]" />
+      </button>
+    {/snippet}
+    {#snippet content()}
+      <div class="px-2 py-1.5 border-b border-[var(--color-border-hairline)] sticky top-0 bg-[var(--color-canvas-modal)]">
+        <input type="text" bind:value={moveSearchQuery} placeholder="Move to..." class="w-full bg-transparent border-none outline-none text-sm text-white px-2 py-1 placeholder-[var(--color-text-secondary)]" />
+      </div>
+      <div class="overflow-y-auto flex-1 py-1">
+        {#each allLabels.filter((l: string) => l.toLowerCase().includes(moveSearchQuery.toLowerCase())) as label}
+          <button class="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-primary)] transition-colors cursor-pointer" onclick={() => { onMoveTo!(email!.id, label); activeMenu = null; }}>{label}</button>
+        {/each}
+      </div>
+    {/snippet}
+  </Dropdown>
+  
+  <Dropdown 
+    isOpen={activeMenu === 'label'}
+    onClose={() => activeMenu = null}
+  >
+    {#snippet trigger()}
+      <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={(e) => { e.stopPropagation(); activeMenu = activeMenu === 'label' ? null : 'label'; }} title="Labels">
+        <Tag class="w-4 h-4 text-[var(--color-text-secondary)]" />
+      </button>
+    {/snippet}
+    {#snippet content()}
+      <div class="px-2 py-1.5 border-b border-[var(--color-border-hairline)] sticky top-0 bg-[var(--color-canvas-modal)]">
+        <input type="text" bind:value={labelSearchQuery} placeholder="Search labels..." class="w-full bg-transparent border-none outline-none text-sm text-white px-2 py-1 placeholder-[var(--color-text-secondary)]" />
+      </div>
+      <div class="overflow-y-auto flex-1 py-1">
+        {#each allLabels.filter((l: string) => l.toLowerCase().includes(labelSearchQuery.toLowerCase())) as label}
+          <button class="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-primary)] transition-colors cursor-pointer flex items-center justify-between" onclick={() => { onAddLabel!(email!.id, label); activeMenu = null; }}>
+            <span>{label}</span>
+            {#if email!.labels.includes(label)}<Check class="w-3.5 h-3.5 text-blue-400" />{/if}
+          </button>
+        {/each}
+        {#if labelSearchQuery.trim() !== '' && !allLabels.some((l: string) => l.toLowerCase() === labelSearchQuery.toLowerCase())}
+          <button class="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-blue-400 transition-colors cursor-pointer" onclick={() => { onAddLabel!(email!.id, labelSearchQuery.trim()); activeMenu = null; }}>
+            + Create "{labelSearchQuery.trim()}"
+          </button>
+        {/if}
+      </div>
+    {/snippet}
+  </Dropdown>
+
+  <div class="w-px h-5 bg-[var(--color-border-hairline)] mx-1 hidden md:block"></div>
+
+  <Dropdown 
+    isOpen={activeMenu === 'more'}
+    onClose={() => activeMenu = null}
+  >
+    {#snippet trigger()}
+      <button class="p-1.5 rounded-lg hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer" onclick={(e) => { e.stopPropagation(); activeMenu = activeMenu === 'more' ? null : 'more'; }} title="More Options">
+        <MoreVertical class="w-4 h-4 text-[var(--color-text-secondary)]" />
+      </button>
+    {/snippet}
+    {#snippet content()}
+      <div class="py-1">
+        {#each [
+          { id: 'print', icon: FileText, label: 'Print', action: () => window.print() },
+          { id: 'mute', icon: BellOff, label: 'Mute Conversation', action: () => onMute!(email!.id) },
+          { id: 'phishing', icon: ShieldAlert, label: 'Report Phishing', action: () => onReportPhishing!(email!.id) },
+          { id: 'block', icon: UserX, label: 'Block Sender', action: () => onBlockSender!(email!.senderEmail) },
+          { id: 'event', icon: CalendarPlus, label: 'Create Event', action: () => onCreateEvent!(email!.id) },
+          { id: 'filter', icon: Filter, label: 'Filter messages like these', action: () => onFilterMessages!(email!.senderEmail) },
+          { id: 'download', icon: Download, label: 'Download message', action: () => onDownloadMessage!(email!.id) }
+        ] as option}
+          {@const OptionIcon = option.icon}
+          <button class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-primary)] transition-colors cursor-pointer" onclick={() => { option.action(); activeMenu = null; }}>
+            <OptionIcon class="w-4 h-4 text-[var(--color-text-secondary)]" />
+            {option.label}
+          </button>
+        {/each}
+      </div>
+    {/snippet}
+  </Dropdown>
+{/snippet}

@@ -55,6 +55,15 @@ pub trait MessageRepository: Send + Sync {
         thread_id: &str,
         limit: i64,
     ) -> Result<Vec<Message>, sqlx::Error>;
+    async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error>;
+    async fn report_phishing(&self, id: Uuid) -> Result<(), sqlx::Error>;
+    async fn trash_by_sender(&self, user_id: Uuid, email: &str) -> Result<(), sqlx::Error>;
+}
+
+#[async_trait]
+pub trait FilterRepository: Send + Sync {
+    async fn block_sender(&self, user_id: Uuid, email: &str) -> Result<(), sqlx::Error>;
+    async fn get_blocked_senders(&self, user_id: Uuid) -> Result<Vec<String>, sqlx::Error>;
 }
 
 #[async_trait]

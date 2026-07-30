@@ -12,6 +12,7 @@ export {
   getMessage,
   markAsRead,
   archiveMessage,
+  snoozeMessage,
   trashMessage,
   sendMessage,
   toggleStar,

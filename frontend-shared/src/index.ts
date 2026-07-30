@@ -98,6 +98,7 @@ export {
   Login,
   WindowControls,
   EmailPillInput,
+  Dropdown,
 } from './components/index.js';
 
 // ── Utils ───────────────────────────────────────────────────────

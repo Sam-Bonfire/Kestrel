@@ -190,12 +190,7 @@
             <Trash2 class="w-4 h-4" />
           </button>
         {/if}
-        <button class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
-          <MoreHorizontal class="w-4 h-4" />
-        </button>
-        <button class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
-          <Square class="w-3 h-3" />
-        </button>
+
         <button onclick={onClose} class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
           <X class="w-4 h-4" />
         </button>
@@ -267,9 +262,9 @@
 
       <!-- Additions Block -->
       <div class="space-y-3">
-        <div class="flex items-center gap-4 group cursor-pointer">
+        <div class="flex items-center gap-4 group">
           <User class="w-4 h-4 text-neutral-500 shrink-0" />
-          <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">Participants and Rooms</span>
+          <input type="text" placeholder="Add guests (comma separated emails)" bind:value={attendeesInput} class="w-full bg-transparent border-none outline-none text-xs text-white placeholder:text-neutral-400" />
         </div>
         
         <div class="flex items-center gap-4 group cursor-pointer">
@@ -321,9 +316,14 @@
           <span class="text-xs text-white">Default visibility</span>
         </div>
 
-        <div class="flex items-center gap-4 group cursor-pointer pt-1">
+        <div class="flex items-center gap-4 group pt-1">
           <Bell class="w-4 h-4 text-neutral-500 shrink-0" />
-          <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">Reminders</span>
+          <select class="w-full bg-transparent border-none outline-none text-xs text-white cursor-pointer hover:bg-white/5 p-1 rounded">
+            <option value="10m">10 minutes before</option>
+            <option value="30m">30 minutes before</option>
+            <option value="1h">1 hour before</option>
+            <option value="none">No reminder</option>
+          </select>
         </div>
       </div>
 

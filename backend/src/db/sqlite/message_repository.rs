@@ -203,4 +203,60 @@ impl MessageRepository for SqliteMessageRepository {
         .fetch_all(&self.pool)
         .await
     }
+
+    async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {
+        // Find current labels for the thread to append 'Muted'
+        // For simplicity in SQLite we will just force append "Muted" if not present
+        // and set is_archived = true.
+        sqlx::query(
+            "UPDATE messages SET \
+             labels = CASE \
+                WHEN labels IS NULL OR labels = '' THEN 'Muted' \
+                WHEN labels NOT LIKE '%Muted%' THEN labels || ',Muted' \
+                ELSE labels \
+             END, \
+             is_archived = 1, \
+             updated_at = unixepoch() \
+             WHERE thread_id = ?"
+        )
+        .bind(thread_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn report_phishing(&self, id: Uuid) -> Result<(), sqlx::Error> {
+        // Move to trash and add Phishing label
+        sqlx::query(
+            "UPDATE messages SET \
+             is_deleted = 1, \
+             labels = CASE \
+                WHEN labels IS NULL OR labels = '' THEN 'Phishing' \
+                WHEN labels NOT LIKE '%Phishing%' THEN labels || ',Phishing' \
+                ELSE labels \
+             END, \
+             updated_at = unixepoch() \
+             WHERE id = ?"
+        )
+        .bind(id.to_string())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn trash_by_sender(&self, user_id: Uuid, email: &str) -> Result<(), sqlx::Error> {
+        // Find accounts for this user to ensure we only touch their messages
+        // But since we don't have user_id on messages, we join with accounts
+        sqlx::query(
+            "UPDATE messages SET \
+             is_deleted = 1, \
+             updated_at = unixepoch() \
+             WHERE sender_email = ? AND account_id IN (SELECT id FROM accounts WHERE user_id = ?)"
+        )
+        .bind(email)
+        .bind(user_id.to_string())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }

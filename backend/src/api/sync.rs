@@ -262,6 +262,14 @@ async fn sync_account_messages(
         crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone())),
     };
 
+    let filter_repo: Box<dyn crate::core::repository::FilterRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::filter_repository::SqliteFilterRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::filter_repository::PostgresFilterRepository::new(pool.clone())),
+    };
+
+    let blocked_senders = filter_repo.get_blocked_senders(account.user_id.0).await.unwrap_or_default();
+    let blocked_set: std::collections::HashSet<String> = blocked_senders.into_iter().collect();
+
     for payload in result.messages {
         let existing = repo.find_by_external_id(account.id.0, &payload.external_id).await?;
         
@@ -286,32 +294,36 @@ async fn sync_account_messages(
                     m.date_sent = payload.date_sent;
                     m.date_received = payload.date_received;
                     m.snippet = payload.snippet;
+                    m.is_deleted = m.is_deleted || blocked_set.contains(&m.sender_email);
+                    m.updated_at = chrono::Utc::now().timestamp();
                     m.labels = payload.labels;
                     m.is_read = payload.is_read;
-                    m.updated_at = chrono::Utc::now().timestamp();
                     m
                 },
-                None => crate::core::models::Message {
-                    id: crate::core::types::DbUuid(uuid::Uuid::new_v4()),
-                    account_id: account.id.clone(),
-                    external_id: payload.external_id,
-                    thread_id: payload.thread_id,
-                    subject: payload.subject,
-                    sender_name: payload.sender_name,
-                    sender_email: payload.sender_email,
-                    recipients: payload.recipients,
-                    date_sent: payload.date_sent,
-                    date_received: payload.date_received,
-                    snippet: payload.snippet,
-                    body_text: None,
-                    body_html: None,
-                    labels: payload.labels,
-                    is_read: payload.is_read,
-                    is_archived: false,
-                    is_deleted: false,
-                    has_attachments: false,
-                    created_at: chrono::Utc::now().timestamp(),
-                    updated_at: chrono::Utc::now().timestamp(),
+                None => {
+                    let is_deleted = blocked_set.contains(&payload.sender_email);
+                    crate::core::models::Message {
+                        id: crate::core::types::DbUuid(uuid::Uuid::new_v4()),
+                        account_id: account.id.clone(),
+                        external_id: payload.external_id,
+                        thread_id: payload.thread_id,
+                        subject: payload.subject,
+                        sender_name: payload.sender_name,
+                        sender_email: payload.sender_email,
+                        recipients: payload.recipients,
+                        date_sent: payload.date_sent,
+                        date_received: payload.date_received,
+                        snippet: payload.snippet,
+                        body_text: None,
+                        body_html: None,
+                        labels: payload.labels,
+                        is_read: payload.is_read,
+                        is_archived: false,
+                        is_deleted,
+                        has_attachments: false,
+                        created_at: chrono::Utc::now().timestamp(),
+                        updated_at: chrono::Utc::now().timestamp(),
+                    }
                 }
             };
             

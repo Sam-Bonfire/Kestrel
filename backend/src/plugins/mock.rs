@@ -69,6 +69,32 @@ impl MailProvider for MockProviderPlugin {
     ) -> Result<(), PluginError> {
         Ok(())
     }
+
+    async fn archive_message(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+    ) -> Result<(), PluginError> {
+        Ok(())
+    }
+
+    async fn update_message_labels(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+        _labels: Vec<String>,
+    ) -> Result<(), PluginError> {
+        Ok(())
+    }
+
+    async fn mark_as_read(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+        _is_read: bool,
+    ) -> Result<(), PluginError> {
+        Ok(())
+    }
 }
 
 #[async_trait]

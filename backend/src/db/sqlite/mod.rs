@@ -4,3 +4,4 @@ pub mod message_repository;
 pub mod calendar_repository;
 pub mod event_repository;
 pub mod label_repository;
+pub mod filter_repository;

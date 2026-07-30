@@ -123,12 +123,7 @@
           <ChevronDown class="w-3.5 h-3.5 text-neutral-400" />
         </button>
         <div class="flex items-center gap-1">
-          <button class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
-            <MoreHorizontal class="w-4 h-4" />
-          </button>
-          <button class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
-            <Square class="w-3 h-3" />
-          </button>
+
           <button onclick={onClose} class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
             <X class="w-4 h-4" />
           </button>

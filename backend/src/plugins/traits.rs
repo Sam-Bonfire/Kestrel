@@ -62,6 +62,29 @@ pub trait MailProvider: Send + Sync {
         auth_token: &str,
         external_id: &str,
     ) -> Result<(), PluginError>;
+
+    /// Archive a message on the provider.
+    async fn archive_message(
+        &self,
+        auth_token: &str,
+        external_id: &str,
+    ) -> Result<(), PluginError>;
+
+    /// Update labels on the provider.
+    async fn update_message_labels(
+        &self,
+        auth_token: &str,
+        external_id: &str,
+        labels: Vec<String>,
+    ) -> Result<(), PluginError>;
+
+    /// Mark a message as read or unread on the provider.
+    async fn mark_as_read(
+        &self,
+        auth_token: &str,
+        external_id: &str,
+        is_read: bool,
+    ) -> Result<(), PluginError>;
 }
 
 // ─────────────────────────────────────────────

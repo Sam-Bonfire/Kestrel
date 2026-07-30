@@ -8,3 +8,4 @@ export { default as ProviderBadge } from './ProviderBadge.svelte';
 export { default as Login } from './Login.svelte';
 export { default as WindowControls } from './WindowControls.svelte';
 export { default as EmailPillInput } from './EmailPillInput.svelte';
+export { default as Dropdown } from './Dropdown.svelte';

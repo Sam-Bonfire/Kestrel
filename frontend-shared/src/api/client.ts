@@ -260,6 +260,45 @@ export async function archiveMessage(
   });
 }
 
+export async function snoozeMessage(
+  messageId: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', `/messages/${messageId}/snooze`, {
+    token,
+  });
+}
+
+export async function muteMessage(
+  messageId: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', `/messages/${messageId}/mute`, { token });
+}
+
+export async function reportPhishing(
+  messageId: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', `/messages/${messageId}/report-phishing`, {
+    token,
+  });
+}
+
+export async function blockSender(
+  email: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', '/senders/block', {
+    token,
+    body: { email },
+  });
+}
+
+export function getEmlDownloadUrl(messageId: string): string {
+  return `${API_BASE}/messages/${messageId}/raw`;
+}
+
 export async function trashMessage(
   messageId: string,
   token?: string,

@@ -148,6 +148,32 @@ impl MailProvider for WasmPlugin {
             Err(e) => Err(PluginError(e)),
         }
     }
+
+    async fn archive_message(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+    ) -> Result<(), PluginError> {
+        Err(PluginError("Not implemented for WASM yet".to_string()))
+    }
+
+    async fn update_message_labels(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+        _labels: Vec<String>,
+    ) -> Result<(), PluginError> {
+        Err(PluginError("Not implemented for WASM yet".to_string()))
+    }
+
+    async fn mark_as_read(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+        _is_read: bool,
+    ) -> Result<(), PluginError> {
+        Err(PluginError("Not implemented for WASM yet".to_string()))
+    }
 }
 
 #[async_trait]

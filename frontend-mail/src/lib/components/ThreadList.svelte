@@ -5,13 +5,15 @@
   import { 
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
     ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check,
-    Clock, AlertTriangle, Sparkles, Tag, Plus, X, Folder, ChevronRight
+    Clock, AlertTriangle, Sparkles, Tag, Plus, X, Folder, ChevronRight,
+    Reply, ReplyAll, Forward, BellOff, AlertOctagon
   } from 'lucide-svelte';
   import { WindowControls } from '@kestrel/shared/components';
   import { 
     mailDenseMode, 
     labelCustomizations, 
-    getLabelStyle 
+    getLabelStyle,
+    Dropdown
   } from '@kestrel/shared';
 
   export interface EmailThread {
@@ -36,12 +38,19 @@
     onToggleStar = (id: string) => {},
     onArchive = (id: string) => {},
     onDelete = (id: string) => {},
+    onSnooze = (id: string) => {},
     onToggleUnread = (id: string) => {},
     onBulkArchive = (ids: string[]) => {},
     onBulkDelete = (ids: string[]) => {},
     onBulkToggleUnread = (ids: string[], isUnread: boolean) => {},
     onBulkToggleStar = (ids: string[], isStarred: boolean) => {},
     onApplyLabel = (id: string, label: string) => {},
+    onMoveTo = (id: string, label: string) => {},
+    onReply = (id: string) => {},
+    onReplyAll = (id: string) => {},
+    onForward = (id: string) => {},
+    onMute = (id: string) => {},
+    onReportSpam = (id: string) => {},
     allLabels = [] as string[],
     onOpenMobileSidebar = () => {}
   } = $props<{
@@ -52,12 +61,19 @@
     onToggleStar?: (id: string) => void;
     onArchive?: (id: string) => void;
     onDelete?: (id: string) => void;
+    onSnooze?: (id: string) => void;
     onToggleUnread?: (id: string) => void;
     onBulkArchive?: (ids: string[]) => void;
     onBulkDelete?: (ids: string[]) => void;
     onBulkToggleUnread?: (ids: string[], isUnread: boolean) => void;
     onBulkToggleStar?: (ids: string[], isStarred: boolean) => void;
     onApplyLabel?: (id: string, label: string) => void;
+    onMoveTo?: (id: string, label: string) => void;
+    onReply?: (id: string) => void;
+    onReplyAll?: (id: string) => void;
+    onForward?: (id: string) => void;
+    onMute?: (id: string) => void;
+    onReportSpam?: (id: string) => void;
     allLabels?: string[];
     onOpenMobileSidebar?: () => void;
   }>();
@@ -71,6 +87,7 @@
   // Context Menu state
   let threadContextMenu = $state<{ x: number; y: number; threadId: string } | null>(null);
   let showLabelDropdown = $state(false);
+  let showMoveToDropdown = $state(false);
 
   // Filter Toolbar Toggle
   let showFiltersBar = $state(false);
@@ -254,66 +271,72 @@
       <!-- Category filter custom dropdown -->
       <div class="relative flex items-center gap-1.5 bg-[var(--color-canvas-card)] px-2.5 py-1 rounded-lg border border-[var(--color-border-hairline)] select-none">
         <span class="text-[var(--color-text-secondary)] font-mono text-[10px]">Category:</span>
-        <button
-          onclick={(e) => { e.stopPropagation(); showCategoryFilterDropdown = !showCategoryFilterDropdown; showLabelFilterDropdown = false; }}
-          class="flex items-center gap-1 text-xs text-white cursor-pointer select-none bg-transparent border-none outline-none"
-        >
-          <span>{activeCategory === 'All' ? 'All Categories' : activeCategory}</span>
-          <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
-        </button>
-
-        {#if showCategoryFilterDropdown}
-          <div class="absolute left-0 top-full mt-1.5 w-44 bg-[#1a1919] border border-white/10 rounded-xl shadow-2xl z-50 py-1 font-sans text-xs">
-            {#each ['All', 'Primary', 'Updates', 'Social', 'Forums'] as cat}
-              <button
-                onclick={() => { activeCategory = cat as any; showCategoryFilterDropdown = false; }}
-                class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
-              >
-                <span>{cat === 'All' ? 'All Categories' : cat}</span>
-                {#if activeCategory === cat}
-                  <Check class="w-3 h-3 text-blue-400" />
-                {/if}
-              </button>
-            {/each}
-          </div>
-        {/if}
+        <Dropdown isOpen={showCategoryFilterDropdown} onClose={() => showCategoryFilterDropdown = false}>
+          {#snippet trigger()}
+            <button
+              onclick={(e) => { e.stopPropagation(); showCategoryFilterDropdown = !showCategoryFilterDropdown; showLabelFilterDropdown = false; }}
+              class="flex items-center gap-1 text-xs text-white cursor-pointer select-none bg-transparent border-none outline-none"
+            >
+              <span>{activeCategory === 'All' ? 'All Categories' : activeCategory}</span>
+              <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
+            </button>
+          {/snippet}
+          {#snippet content()}
+            <div class="w-44 py-1 font-sans text-xs">
+              {#each ['All', 'Primary', 'Updates', 'Social', 'Forums'] as cat}
+                <button
+                  onclick={() => { activeCategory = cat as any; showCategoryFilterDropdown = false; }}
+                  class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
+                >
+                  <span>{cat === 'All' ? 'All Categories' : cat}</span>
+                  {#if activeCategory === cat}
+                    <Check class="w-3 h-3 text-blue-400" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/snippet}
+        </Dropdown>
       </div>
 
       <!-- Label filter custom dropdown -->
       <div class="relative flex items-center gap-1.5 bg-[var(--color-canvas-card)] px-2.5 py-1 rounded-lg border border-[var(--color-border-hairline)] select-none">
         <span class="text-[var(--color-text-secondary)] font-mono text-[10px]">Label:</span>
-        <button
-          onclick={(e) => { e.stopPropagation(); showLabelFilterDropdown = !showLabelFilterDropdown; showCategoryFilterDropdown = false; }}
-          class="flex items-center gap-1 text-xs text-white cursor-pointer select-none bg-transparent border-none outline-none"
-        >
-          <span>{activeLabelFilter === 'All' ? 'All Labels' : activeLabelFilter.split('/').pop()}</span>
-          <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
-        </button>
-
-        {#if showLabelFilterDropdown}
-          <div class="absolute left-0 top-full mt-1.5 w-48 bg-[#1a1919] border border-white/10 rounded-xl shadow-2xl z-50 py-1 font-sans text-xs max-h-48 overflow-y-auto">
+        <Dropdown isOpen={showLabelFilterDropdown} onClose={() => showLabelFilterDropdown = false}>
+          {#snippet trigger()}
             <button
-              onclick={() => { activeLabelFilter = 'All'; showLabelFilterDropdown = false; }}
-              class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
+              onclick={(e) => { e.stopPropagation(); showLabelFilterDropdown = !showLabelFilterDropdown; showCategoryFilterDropdown = false; showDateRangeDropdown = false; }}
+              class="flex items-center gap-1 text-xs text-white cursor-pointer select-none bg-transparent border-none outline-none"
             >
-              <span>All Labels</span>
-              {#if activeLabelFilter === 'All'}
-                <Check class="w-3 h-3 text-blue-400" />
-              {/if}
+              <span>{activeLabelFilter === 'All' ? 'All Labels' : activeLabelFilter.split('/').pop()}</span>
+              <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
             </button>
-            {#each allLabels as label}
+          {/snippet}
+          {#snippet content()}
+            <div class="w-48 py-1 font-sans text-xs">
               <button
-                onclick={() => { activeLabelFilter = label; showLabelFilterDropdown = false; }}
+                onclick={() => { activeLabelFilter = 'All'; showLabelFilterDropdown = false; }}
                 class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
               >
-                <span>{label.split('/').pop()}</span>
-                {#if activeLabelFilter === label}
+                <span>All Labels</span>
+                {#if activeLabelFilter === 'All'}
                   <Check class="w-3 h-3 text-blue-400" />
                 {/if}
               </button>
-            {/each}
-          </div>
-        {/if}
+              {#each allLabels as label}
+                <button
+                  onclick={() => { activeLabelFilter = label; showLabelFilterDropdown = false; }}
+                  class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
+                >
+                  <span class="truncate pr-2">{label.split('/').pop()}</span>
+                  {#if activeLabelFilter === label}
+                    <Check class="w-3 h-3 text-blue-400 shrink-0" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/snippet}
+        </Dropdown>
       </div>
 
       <!-- Unread toggle pill -->
@@ -325,32 +348,35 @@
         Is unread
       </button>
 
-      <!-- Date Range Filter -->
-      <div class="relative flex items-center gap-1.5 bg-[var(--color-canvas-card)] px-2.5 py-1 rounded-lg border border-[var(--color-border-hairline)] select-none">
+      <!-- Date filter custom dropdown -->
+      <div class="relative flex items-center gap-1.5 bg-[var(--color-canvas-card)] px-2.5 py-1 rounded-lg border border-[var(--color-border-hairline)] select-none ml-auto">
         <span class="text-[var(--color-text-secondary)] font-mono text-[10px]">Date:</span>
-        <button
-          onclick={(e) => { e.stopPropagation(); showDateRangeDropdown = !showDateRangeDropdown; showCategoryFilterDropdown = false; showLabelFilterDropdown = false; }}
-          class="flex items-center gap-1 text-xs text-white cursor-pointer select-none bg-transparent border-none outline-none"
-        >
-          <span>{activeDateRange}</span>
-          <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
-        </button>
-
-        {#if showDateRangeDropdown}
-          <div class="absolute left-0 top-full mt-1.5 w-32 bg-[#1a1919] border border-white/10 rounded-xl shadow-2xl z-50 py-1 font-sans text-xs">
-            {#each (['All', 'Today', 'This Week', 'This Month'] as const) as range}
-              <button
-                onclick={() => { activeDateRange = range; showDateRangeDropdown = false; }}
-                class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
-              >
-                <span>{range}</span>
-                {#if activeDateRange === range}
-                  <Check class="w-3 h-3 text-blue-400" />
-                {/if}
-              </button>
-            {/each}
-          </div>
-        {/if}
+        <Dropdown isOpen={showDateRangeDropdown} onClose={() => showDateRangeDropdown = false}>
+          {#snippet trigger()}
+            <button
+              onclick={(e) => { e.stopPropagation(); showDateRangeDropdown = !showDateRangeDropdown; showCategoryFilterDropdown = false; showLabelFilterDropdown = false; }}
+              class="flex items-center gap-1 text-xs text-white cursor-pointer select-none bg-transparent border-none outline-none"
+            >
+              <span>{activeDateRange}</span>
+              <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
+            </button>
+          {/snippet}
+          {#snippet content()}
+            <div class="w-32 py-1 font-sans text-xs">
+              {#each (['All', 'Today', 'This Week', 'This Month'] as const) as range}
+                <button
+                  onclick={() => { activeDateRange = range; showDateRangeDropdown = false; }}
+                  class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
+                >
+                  <span>{range}</span>
+                  {#if activeDateRange === range}
+                    <Check class="w-3 h-3 text-blue-400" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/snippet}
+        </Dropdown>
       </div>
 
       <!-- Has Attachments toggle pill -->
@@ -555,7 +581,7 @@
 
               <!-- Clock (Snooze) -->
               <button
-                onclick={(e) => { e.stopPropagation(); alert("Snoozed thread until tomorrow."); }}
+                onclick={(e) => { e.stopPropagation(); onSnooze(thread.id); }}
                 title="Snooze"
                 class="p-1 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
               >
@@ -597,6 +623,27 @@
       <span>Open Thread</span>
     </button>
     <button 
+      onclick={() => { onReply(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors"
+    >
+      <Reply class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
+      <span>Reply</span>
+    </button>
+    <button 
+      onclick={() => { onReplyAll(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors"
+    >
+      <ReplyAll class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
+      <span>Reply All</span>
+    </button>
+    <button 
+      onclick={() => { onForward(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors border-b border-white/5 pb-2 mb-1"
+    >
+      <Forward class="w-3.5 h-3.5 text-purple-400" />
+      <span>Forward</span>
+    </button>
+    <button 
       onclick={() => { onToggleUnread(threadContextMenu!.threadId); threadContextMenu = null; }}
       class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors"
     >
@@ -617,9 +664,23 @@
       <Archive class="w-3.5 h-3.5 text-violet-400" />
       <span>Archive</span>
     </button>
+    <button 
+      onclick={() => { onSnooze(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors"
+    >
+      <Clock class="w-3.5 h-3.5 text-blue-400" />
+      <span>Snooze</span>
+    </button>
+    <button 
+      onclick={() => { onMute(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors border-b border-white/5 pb-2 mb-1"
+    >
+      <BellOff class="w-3.5 h-3.5 text-red-300" />
+      <span>Mute</span>
+    </button>
 
     <!-- Labels sub-trigger -->
-    <div class="relative border-t border-white/5 mt-1">
+    <div class="relative mt-1">
       <button 
         onclick={() => showLabelDropdown = !showLabelDropdown}
         class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center justify-between cursor-pointer transition-colors"
@@ -648,6 +709,46 @@
         </div>
       {/if}
     </div>
+
+    <!-- Move To sub-trigger -->
+    <div class="relative border-b border-white/5 pb-2 mb-1 mt-1">
+      <button 
+        onclick={() => showMoveToDropdown = !showMoveToDropdown}
+        class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center justify-between cursor-pointer transition-colors"
+      >
+        <div class="flex items-center gap-2">
+          <Folder class="w-3.5 h-3.5 text-yellow-400" />
+          <span>Move To</span>
+        </div>
+        <ChevronRight class="w-3 h-3 text-[var(--color-text-secondary)] transition-transform {showMoveToDropdown ? 'rotate-90' : ''}" />
+      </button>
+
+      {#if showMoveToDropdown}
+        <div class="absolute left-full top-0 ml-1 bg-[#1a1919] border border-white/10 rounded-xl shadow-xl w-44 py-1 max-h-40 overflow-y-auto">
+          {#each allLabels as label}
+            <button
+              onclick={() => {
+                onMoveTo(threadContextMenu!.threadId, label);
+                threadContextMenu = null;
+                showMoveToDropdown = false;
+              }}
+              class="w-full px-3 py-1.5 text-left text-[11px] hover:bg-canvas-hover transition-colors truncate"
+            >
+              {label.split('/').pop()}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <button 
+      onclick={() => { onReportSpam(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-orange-500/10 text-orange-400 flex items-center gap-2 cursor-pointer transition-colors mt-1"
+    >
+      <AlertOctagon class="w-3.5 h-3.5" />
+      <span>Report Spam</span>
+    </button>
+
 
     <button 
       onclick={() => { onDelete(threadContextMenu!.threadId); threadContextMenu = null; }}

@@ -41,7 +41,8 @@
     labelCustomizations,
     getLabelStyle,
     getFlattenedLabels,
-    type LabelMeta
+    type LabelMeta,
+    Dropdown
   } from '@kestrel/shared';
   import { onMount } from 'svelte';
   import { slide, scale, fade } from 'svelte/transition';
@@ -256,37 +257,40 @@
         {(activeAccount?.name || 'K')[0].toUpperCase()}
       </div>
       <div class="flex flex-col flex-1 relative">
-        <button
-          onclick={(e) => { e.stopPropagation(); showAccountDropdown = !showAccountDropdown; }}
-          class="flex items-center gap-1.5 text-xs font-semibold text-white cursor-pointer hover:text-neutral-200 transition-colors w-full text-left justify-between pr-2"
-        >
-          <span class="truncate">{activeAccount?.name || ''}</span>
-          <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0 transition-transform {showAccountDropdown ? 'rotate-180' : ''}" />
-        </button>
+        <Dropdown isOpen={showAccountDropdown} onClose={() => showAccountDropdown = false}>
+          {#snippet trigger()}
+            <button
+              onclick={(e) => { e.stopPropagation(); showAccountDropdown = !showAccountDropdown; }}
+              class="flex items-center gap-1.5 text-xs font-semibold text-white cursor-pointer hover:text-neutral-200 transition-colors w-full text-left justify-between pr-2"
+            >
+              <span class="truncate">{activeAccount?.name || ''}</span>
+              <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0 transition-transform {showAccountDropdown ? 'rotate-180' : ''}" />
+            </button>
+          {/snippet}
+          {#snippet content()}
+            <div class="w-48 py-1 font-sans text-xs">
+              {#each accounts as acc}
+                <button
+                  onclick={() => {
+                    activeAccountId = acc.id;
+                    showAccountDropdown = false;
+                  }}
+                  class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer"
+                >
+                  <div class="w-2 h-2 rounded-full" style="background-color: {acc.color}"></div>
+                  <div class="flex flex-col min-w-0">
+                    <span class="font-semibold truncate">{acc.name}</span>
+                    <span class="text-[9px] text-[var(--color-text-secondary)] truncate">{acc.email}</span>
+                  </div>
+                  {#if acc.id === activeAccountId}
+                    <Check class="w-3 h-3 text-blue-400 ml-auto" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/snippet}
+        </Dropdown>
         <span class="text-[10px] text-[var(--color-text-secondary)] truncate">{activeAccount?.email || ''}</span>
-
-        {#if showAccountDropdown}
-          <div class="absolute left-0 top-full mt-1.5 w-48 bg-[#1a1919] border border-white/10 rounded-xl shadow-2xl z-50 py-1 font-sans text-xs">
-            {#each accounts as acc}
-              <button
-                onclick={() => {
-                  activeAccountId = acc.id;
-                  showAccountDropdown = false;
-                }}
-                class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer"
-              >
-                <div class="w-2 h-2 rounded-full" style="background-color: {acc.color}"></div>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-semibold truncate">{acc.name}</span>
-                  <span class="text-[9px] text-[var(--color-text-secondary)] truncate">{acc.email}</span>
-                </div>
-                {#if acc.id === activeAccountId}
-                  <Check class="w-3 h-3 text-blue-400 ml-auto" />
-                {/if}
-              </button>
-            {/each}
-          </div>
-        {/if}
       </div>
     </div>
     
@@ -626,9 +630,9 @@
 
       {#if showNestingDropdown}
         <div class="p-2 border-b border-white/5 flex flex-col gap-1 max-h-40 overflow-y-auto">
-          <button onclick={() => { editParent = ''; showNestingDropdown = false; saveLabelCustomization(false); }} class="text-left text-xs px-2 py-2 leading-relaxed hover:bg-white/10 rounded border-none bg-transparent {editParent === '' ? 'text-blue-400' : 'text-white'}">Top level</button>
+          <button onclick={() => { editParent = ''; showNestingDropdown = false; saveLabelCustomization(false); }} class="w-full block shrink-0 text-left text-xs px-2 py-1.5 hover:bg-white/10 rounded border-none bg-transparent {editParent === '' ? 'text-blue-400' : 'text-white'}">Top level</button>
           {#each flattenedLabels.filter(l => l.name !== contextMenu?.label && !l.name.startsWith((contextMenu?.label || '') + '/')) as l}
-            <button onclick={() => { editParent = l.name; showNestingDropdown = false; saveLabelCustomization(false); }} class="text-left text-xs px-2 py-2 leading-relaxed hover:bg-white/10 rounded truncate border-none bg-transparent {editParent === l.name ? 'text-blue-400' : 'text-white'}">
+            <button onclick={() => { editParent = l.name; showNestingDropdown = false; saveLabelCustomization(false); }} class="w-full block shrink-0 text-left text-xs px-2 py-1.5 hover:bg-white/10 rounded truncate border-none bg-transparent {editParent === l.name ? 'text-blue-400' : 'text-white'}">
               {l.name}
             </button>
           {/each}

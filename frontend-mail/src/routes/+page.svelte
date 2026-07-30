@@ -7,7 +7,7 @@
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell } from '@kestrel/shared/components';
   import { authState, initAuth, logout } from '@kestrel/shared/stores';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
   // ── Accounts ────────────────────────────────────────────────────
   const accounts = [
@@ -24,6 +24,7 @@
   let isSettingsOpen   = $state(false);
   let activeAccountId  = $state('1');
   let isMobileSidebarOpen = $state(false);
+  let initialReplyMode = $state<'reply'|'reply_all'|'forward'|null>(null);
 
   // Custom labels created dynamically by user
   let customLabels = $state<string[]>([]);
@@ -39,11 +40,11 @@
     }
     if (authState.isAuthenticated) {
       import('@tauri-apps/plugin-notification').then(({ onAction }) => {
-        onAction((event) => {
+        onAction((event: any) => {
           if (event.actionId === 'reply' && event.inputValue) {
             import('@kestrel/shared/api').then(api => {
               api.sendMessage({
-                to: 'reply-to@placeholder.com', // In a real app we'd get the sender from event metadata
+                to: event.notification.body.split('\n')[0] || 'unknown',
                 subject: 'Re: Message',
                 body: event.inputValue,
               });
@@ -84,7 +85,7 @@
         });
 
         // Set up SSE sync listener (Task 34)
-        const eventSource = createSyncStream(authState.token || undefined);
+        const eventSource = createSyncStream(localStorage.getItem('kestrel_token') || undefined);
         eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
@@ -224,12 +225,25 @@
   let fullBodies = $state<Record<string, any>>({});
 
   $effect(() => {
-    if (selectedThreadId && !fullBodies[selectedThreadId] && authState.isAuthenticated) {
-      import('@kestrel/shared/api').then(({ getMessage }) => {
-        getMessage(selectedThreadId!).then(res => {
-          fullBodies[selectedThreadId!] = res;
-        }).catch(err => console.error('Failed to load full message:', err));
-      });
+    if (selectedThreadId && authState.isAuthenticated) {
+      // Mark as read automatically when opened
+      const email = untrack(() => allEmails.find(e => e.id === selectedThreadId));
+      if (email && email.isUnread) {
+        import('@kestrel/shared/api').then(api => {
+          api.markAsRead(selectedThreadId!).catch(err => console.error(err));
+        });
+        untrack(() => {
+          allEmails = allEmails.map(e => e.id === selectedThreadId ? { ...e, isUnread: false } : e);
+        });
+      }
+
+      if (!fullBodies[selectedThreadId]) {
+        import('@kestrel/shared/api').then(({ getMessage }) => {
+          getMessage(selectedThreadId!).then(res => {
+            fullBodies[selectedThreadId!] = res;
+          }).catch(err => console.error('Failed to load full message:', err));
+        });
+      }
     }
   });
 
@@ -260,15 +274,34 @@
         // Note: The backend doesn't have a markAsUnread endpoint yet, only markAsRead, but we can do it via bulk if needed or ignore for now.
     });
   }
+  function advanceSelectionAndModify(id: string, modification: any) {
+    const idx = threads.findIndex(t => t.id === id);
+    let nextId = selectedThreadId;
+    if (selectedThreadId === id && idx !== -1) {
+      const nextIdx = idx < threads.length - 1 ? idx + 1 : idx - 1;
+      nextId = nextIdx >= 0 ? threads[nextIdx].id : null;
+    }
+    allEmails = allEmails.map(e => e.id === id ? { ...e, ...modification } : e);
+    selectedThreadId = nextId;
+  }
+
   function archive(id: string) {
-    import('@kestrel/shared/api').then(({ archiveMessage }) => archiveMessage(id));
-    allEmails = allEmails.map(e => e.id === id ? { ...e, isArchived: true } : e);
-    if (selectedThreadId === id) selectedThreadId = null;
+    const email = allEmails.find(e => e.id === id);
+    if (!email) return;
+    const newState = !email.isArchived;
+    import('@kestrel/shared/api').then(({ archiveMessage }) => archiveMessage(id).catch(err => console.error(err)));
+    advanceSelectionAndModify(id, { isArchived: newState });
   }
   function trash(id: string) {
-    import('@kestrel/shared/api').then(({ trashMessage }) => trashMessage(id));
-    allEmails = allEmails.map(e => e.id === id ? { ...e, isTrash: true } : e);
-    if (selectedThreadId === id) selectedThreadId = null;
+    import('@kestrel/shared/api').then(({ trashMessage }) => trashMessage(id).catch(err => console.error(err)));
+    advanceSelectionAndModify(id, { isTrash: true });
+  }
+  function snooze(id: string, until?: string) {
+    import('@kestrel/shared/api').then(({ snoozeMessage }) => snoozeMessage(id).catch(err => console.error(err)));
+    advanceSelectionAndModify(id, { isArchived: true }); // Mocking snooze as archive for UI purposes
+  }
+  function reportSpam(id: string) {
+    advanceSelectionAndModify(id, { isSpam: true, isTrash: true });
   }
   function navigatePeek(dir: 'prev' | 'next') {
     const idx = threads.findIndex(t => t.id === selectedThreadId);
@@ -320,6 +353,76 @@
     });
   }
 
+  function moveTo(threadId: string, folderOrLabel: string) {
+    allEmails = allEmails.map(e => {
+      if (e.id === threadId) {
+        const newLabels = [folderOrLabel];
+        import('@kestrel/shared/api').then(api => api.updateLabels(threadId, newLabels));
+        return { ...e, labels: newLabels, isArchived: true };
+      }
+      return e;
+    });
+  }
+
+  // Handlers for new email features
+  function muteThread(id: string) {
+    import('@kestrel/shared/api').then(api => api.muteMessage(id));
+    applyLabel(id, 'Muted');
+    archive(id);
+  }
+  function reportPhishing(id: string) {
+    import('@kestrel/shared/api').then(api => api.reportPhishing(id));
+    reportSpam(id);
+  }
+  function blockSender(emailAddress: string) {
+    import('@kestrel/shared/api').then(api => api.blockSender(emailAddress));
+  }
+  function createEventFromEmail(id: string) {
+    const parent = allEmails.find(e => e.id === id);
+    if (!parent) return;
+    const bodyText = (fullBodies[id] && (fullBodies[id].body_text || fullBodies[id].body_html)) || parent.body;
+    
+    const params = new URLSearchParams();
+    params.set('title', parent.subject || 'New Event from Email');
+    params.set('description', bodyText.substring(0, 500)); // Truncate if needed
+    
+    // In Tauri, use the deep link to launch the calendar.
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
+        // We simulate a deep link internally or rely on OS handler
+        // A simple way is to use window.location.href or a hidden anchor
+        // Wait, window.open with a custom scheme works in most OS to trigger deep links.
+        window.open(`kestrel://calendar/new?${params.toString()}`, '_self');
+      }).catch(err => console.error(err));
+    } else {
+      const url = new URL(window.location.origin + '/calendar');
+      url.search = params.toString();
+      window.open(url.toString(), '_blank');
+    }
+  }
+  function filterMessages(emailAddress: string) {
+    // In a real app this would open the settings/filters modal prefilled with the sender
+    searchQuery = `from:${emailAddress}`;
+  }
+  function downloadMessage(id: string) {
+    import('@kestrel/shared/api').then(api => {
+      const url = api.getEmlDownloadUrl(id);
+      window.open(url, '_blank');
+    });
+  }
+
+  function initiateReply(id: string) {
+    initialReplyMode = 'reply';
+    selectedThreadId = id;
+  }
+  function initiateReplyAll(id: string) {
+    initialReplyMode = 'reply_all';
+    selectedThreadId = id;
+  }
+  function initiateForward(id: string) {
+    initialReplyMode = 'forward';
+    selectedThreadId = id;
+  }
   async function handleSendCompose(draft: { to: string; subject: string; body: string }) {
     isComposeOpen = false;
     const newMsg = {
@@ -463,12 +566,19 @@
       onToggleStar={toggleStar}
       onArchive={archive}
       onDelete={trash}
+      onSnooze={snooze}
       onToggleUnread={toggleUnread}
       onBulkArchive={bulkArchive}
       onBulkDelete={bulkDelete}
       onBulkToggleUnread={bulkToggleUnread}
       onBulkToggleStar={bulkToggleStar}
       onApplyLabel={applyLabel}
+      onMoveTo={moveTo}
+      onReply={initiateReply}
+      onReplyAll={initiateReplyAll}
+      onForward={initiateForward}
+      onMute={muteThread}
+      onReportSpam={reportSpam}
       onOpenMobileSidebar={() => isMobileSidebarOpen = true}
     />
     
@@ -500,17 +610,28 @@
   {#if activeEmail}
     <CenterPeek
       email={activeEmail}
-      onClose={() => selectedThreadId = null}
+      initialReplyMode={initialReplyMode}
+      onClose={() => { selectedThreadId = null; initialReplyMode = null; }}
       onNavigate={navigatePeek}
       hasPrev={threads.findIndex(t => t.id === selectedThreadId) > 0}
       hasNext={threads.findIndex(t => t.id === selectedThreadId) < threads.length - 1}
       onArchive={archive}
       onDelete={trash}
+      onSnooze={snooze}
       onToggleStar={toggleStar}
       onToggleUnread={toggleUnread}
       onAddLabel={applyLabel}
       onRemoveLabel={removeLabel}
-      onSendReply={(id, text) => alert(`Reply sent: "${text}"`)}
+      onMoveTo={moveTo}
+      onSendReply={handleSendReply}
+      allLabels={allLabels}
+      onReportSpam={reportSpam}
+      onMute={muteThread}
+      onReportPhishing={reportPhishing}
+      onBlockSender={blockSender}
+      onCreateEvent={createEventFromEmail}
+      onFilterMessages={filterMessages}
+      onDownloadMessage={downloadMessage}
     />
   {/if}
 

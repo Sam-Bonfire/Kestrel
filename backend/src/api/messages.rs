@@ -6,8 +6,9 @@ use uuid::Uuid;
 
 use super::auth::AuthUser;
 use super::router::AppState;
+use crate::core::models::Message;
+use crate::core::repository::{AccountRepository, MessageRepository, FilterRepository};
 use crate::core::error::KestrelError;
-use crate::core::repository::MessageRepository;
 use crate::db::pool::DbPool;
 use crate::db::sqlite::message_repository::SqliteMessageRepository;
 use crate::db::postgres::message_repository::PostgresMessageRepository;
@@ -283,6 +284,17 @@ pub async fn archive_message(
     AuthUser { user_id }: AuthUser,
     Path(message_id): Path<Uuid>,
 ) -> Result<StatusCode, KestrelError> {
+    verify_message_ownership(&state, user_id, message_id).await?;
+    set_message_archived(&state, message_id, true).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn snooze_message(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(message_id): Path<Uuid>,
+) -> Result<StatusCode, KestrelError> {
+    // Basic implementation for snooze
     verify_message_ownership(&state, user_id, message_id).await?;
     set_message_archived(&state, message_id, true).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -593,4 +605,104 @@ pub async fn send_message(
     Ok(Json(SendMessageResponse {
         id: format!("sent-{}", uuid::Uuid::new_v4()),
     }))
+}
+
+pub async fn mute_thread(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(message_id): Path<Uuid>,
+) -> Result<StatusCode, KestrelError> {
+    let msg = find_message_from_db(&state, message_id)
+        .await?
+        .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
+        
+    let owns = verify_account_ownership(&state, user_id, msg.account_id.0).await?;
+    if !owns {
+        return Err(KestrelError::NotFound("Message not found".to_string()));
+    }
+    
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            let repo = SqliteMessageRepository::new(pool.clone());
+            repo.set_thread_muted(&msg.thread_id).await?;
+        }
+        DbPool::Postgres(pool) => {
+            let repo = PostgresMessageRepository::new(pool.clone());
+            repo.set_thread_muted(&msg.thread_id).await?;
+        }
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn report_phishing(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(message_id): Path<Uuid>,
+) -> Result<StatusCode, KestrelError> {
+    verify_message_ownership(&state, user_id, message_id).await?;
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            let repo = SqliteMessageRepository::new(pool.clone());
+            repo.report_phishing(message_id).await?;
+        }
+        DbPool::Postgres(pool) => {
+            let repo = PostgresMessageRepository::new(pool.clone());
+            repo.report_phishing(message_id).await?;
+        }
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn get_raw_eml(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(message_id): Path<Uuid>,
+) -> Result<axum::response::Response, KestrelError> {
+    let msg = find_message_from_db(&state, message_id)
+        .await?
+        .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
+        
+    let owns = verify_account_ownership(&state, user_id, msg.account_id.0).await?;
+    if !owns {
+        return Err(KestrelError::NotFound("Message not found".to_string()));
+    }
+    
+    let eml_content = format!("To: {}\nFrom: {}\nSubject: {}\n\n{}", msg.recipients, msg.sender_email, msg.subject.unwrap_or_default(), msg.body_text.unwrap_or_default());
+    
+    Ok(axum::response::Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, "message/rfc822")
+        .header(axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"message-{}.eml\"", message_id))
+        .body(axum::body::Body::from(eml_content))
+        .unwrap())
+}
+
+#[derive(serde::Deserialize)]
+pub struct BlockSenderRequest {
+    pub email: String,
+}
+
+pub async fn block_sender(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    axum::Json(payload): axum::Json<BlockSenderRequest>,
+) -> Result<StatusCode, KestrelError> {
+    tracing::info!("User {} blocked sender {}", user_id, payload.email);
+
+    match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            let filter_repo = crate::db::sqlite::filter_repository::SqliteFilterRepository::new(pool.clone());
+            filter_repo.block_sender(user_id, &payload.email).await?;
+            let msg_repo = crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone());
+            msg_repo.trash_by_sender(user_id, &payload.email).await?;
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            let filter_repo = crate::db::postgres::filter_repository::PostgresFilterRepository::new(pool.clone());
+            filter_repo.block_sender(user_id, &payload.email).await?;
+            let msg_repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone());
+            msg_repo.trash_by_sender(user_id, &payload.email).await?;
+        }
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }

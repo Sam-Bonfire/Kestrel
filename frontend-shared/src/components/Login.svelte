@@ -21,7 +21,6 @@
                 if (token && userId) {
                   localStorage.setItem('kestrel_token', token);
                   localStorage.setItem('kestrel_user_id', userId);
-                  authState.token = token;
                   authState.userId = userId;
                 }
               } catch(e) {
