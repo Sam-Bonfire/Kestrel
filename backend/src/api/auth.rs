@@ -319,33 +319,58 @@ async fn find_user_by_username(
 // --- K-026: GET /api/v1/auth/login?provider=x ---
 
 pub async fn login(Query(params): Query<LoginParams>) -> Result<Response, KestrelError> {
-    let _base_url = std::env::var("KESTREL_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let base_url = std::env::var("KESTREL_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:1420".to_string());
 
-    // Future: build OAuth2 authorization URL and redirect
-    // let redirect_uri = format!("{}/api/v1/auth/callback", base_url);
-    // let auth_url = format!(
-    //     "https://{}/oauth/authorize?client_id=...&redirect_uri=...&response_type=code",
-    //     params.provider
-    // );
+    let auth_url = match params.provider.as_str() {
+        "gmail" => {
+            let client_id = std::env::var("GMAIL_CLIENT_ID").unwrap_or_default();
+            if client_id.is_empty() {
+                return Err(KestrelError::Internal(Box::new(SimpleError("GMAIL_CLIENT_ID not set".to_string()))));
+            }
+            let redirect_uri = format!("{}/api/v1/auth/callback/gmail", base_url);
+            let scopes = "https://mail.google.com/ https://www.googleapis.com/auth/calendar";
+            format!(
+                "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&prompt=consent",
+                client_id,
+                urlencoding::encode(&redirect_uri),
+                urlencoding::encode(scopes)
+            )
+        }
+        "outlook" => {
+            let client_id = std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default();
+            if client_id.is_empty() {
+                return Err(KestrelError::Internal(Box::new(SimpleError("OUTLOOK_CLIENT_ID not set".to_string()))));
+            }
+            let redirect_uri = format!("{}/api/v1/auth/callback/outlook", base_url);
+            let scopes = "offline_access Mail.ReadWrite Mail.Send Calendars.ReadWrite";
+            format!(
+                "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id={}&redirect_uri={}&response_type=code&scope={}",
+                client_id,
+                urlencoding::encode(&redirect_uri),
+                urlencoding::encode(scopes)
+            )
+        }
+        _ => return Err(KestrelError::BadRequest("Unknown provider".to_string())),
+    };
 
-    Err(KestrelError::NotImplemented(format!(
-        "OAuth login with provider '{}' is not yet implemented. \
-         OAuth applications are not registered yet.",
-        params.provider
-    )))
+    Ok(axum::response::Redirect::to(&auth_url).into_response())
 }
 
-// --- K-027: GET /api/v1/auth/callback ---
+// --- K-027: GET /api/v1/auth/callback/:provider ---
 
 pub async fn callback(
-    Query(_params): Query<CallbackParams>,
+    axum::extract::Path(provider): axum::extract::Path<String>,
+    Query(params): Query<CallbackParams>,
 ) -> Result<Response, KestrelError> {
-    // Future: exchange authorization code for access/refresh tokens,
-    // then create or update the linked account.
-    Err(KestrelError::NotImplemented(
-        "OAuth callback handling is not yet implemented. \
-         OAuth applications are not registered yet."
-            .to_string(),
-    ))
+    let code = params.code.ok_or_else(|| KestrelError::BadRequest("Missing code".to_string()))?;
+    
+    tracing::info!("Received OAuth callback for {} with code: {}", provider, code);
+
+    // TODO: Exchange code for access_token and refresh_token, then create/update Account in DB.
+    // For now, redirect back to frontend.
+    let frontend_url = std::env::var("KESTREL_FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:1420".to_string());
+    
+    Ok(axum::response::Redirect::to(&frontend_url).into_response())
 }

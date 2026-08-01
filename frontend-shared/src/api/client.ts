@@ -299,6 +299,27 @@ export function getEmlDownloadUrl(messageId: string): string {
   return `${API_BASE}/messages/${messageId}/raw`;
 }
 
+export interface SendMessageRequest {
+  to: string;
+  subject: string;
+  body: string;
+  thread_id?: string;
+}
+
+export interface SendMessageResponse {
+  id: string;
+}
+
+export async function sendMessage(
+  payload: SendMessageRequest,
+  token?: string,
+): Promise<SendMessageResponse> {
+  return request<SendMessageResponse>('POST', '/messages/send', {
+    token,
+    body: payload,
+  });
+}
+
 export async function trashMessage(
   messageId: string,
   token?: string,
@@ -308,15 +329,6 @@ export async function trashMessage(
   });
 }
 
-export async function sendMessage(
-  msg: { to: string; subject: string; body: string; threadId?: string },
-  token?: string,
-): Promise<{ id: string }> {
-  return request<{ id: string }>('POST', '/messages/send', {
-    token,
-    body: msg,
-  });
-}
 
 export async function toggleStar(id: string, is_starred: boolean, token?: string): Promise<void> {
   await request('POST', `/messages/${id}/star`, {

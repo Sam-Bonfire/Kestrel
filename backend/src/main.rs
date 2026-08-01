@@ -56,13 +56,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = init_pool(&config.database_url).await?;
     run_migrations(&db).await?;
 
+    use plugins::gmail::GmailProviderPlugin;
+    use plugins::outlook::OutlookProviderPlugin;
+
     // Initialize plugin manager
     let mut plugin_manager = PluginManager::new();
 
-    // Register built-in/mock plugins for now.
-    // In production, these will be loaded from WASM files via Wasmtime.
-    plugin_manager.register(Box::new(MockProviderPlugin::new("gmail", "Gmail")));
-    plugin_manager.register(Box::new(MockProviderPlugin::new("outlook", "Outlook")));
+    if let (Some(client_id), Some(client_secret)) = (config.gmail_client_id, config.gmail_client_secret) {
+        plugin_manager.register(Box::new(GmailProviderPlugin::new(client_id, client_secret)));
+    } else {
+        tracing::warn!("GMAIL_CLIENT_ID or GMAIL_CLIENT_SECRET not set, falling back to MockProviderPlugin for Gmail");
+        plugin_manager.register(Box::new(MockProviderPlugin::new("gmail", "Gmail")));
+    }
+
+    if let (Some(client_id), Some(client_secret)) = (config.outlook_client_id, config.outlook_client_secret) {
+        plugin_manager.register(Box::new(OutlookProviderPlugin::new(client_id, client_secret)));
+    } else {
+        tracing::warn!("OUTLOOK_CLIENT_ID or OUTLOOK_CLIENT_SECRET not set, falling back to MockProviderPlugin for Outlook");
+        plugin_manager.register(Box::new(MockProviderPlugin::new("outlook", "Outlook")));
+    }
 
     // Attempt to load WASM plugins from the plugins directory
     if let Err(e) = plugin_manager.load_all().await {

@@ -52,8 +52,10 @@
     isStarred: boolean;
     isArchived: boolean;
     isTrash: boolean;
+    isTrash: boolean;
     labels: string[];
     avatar?: string;
+    attachments?: { filename: string; size: number }[];
   }
 
   let {
@@ -339,33 +341,35 @@
             ></iframe>
           </div>
 
-          <!-- Attachment Mock (Task 38) -->
-          <div class="flex gap-3 overflow-x-auto pb-2">
-            <button 
-              onclick={() => {
-                import('@tauri-apps/plugin-http').then(http => {
-                  import('@tauri-apps/plugin-fs').then(fs => {
-                    import('@tauri-apps/api/path').then(path => {
-                      // Fake download logic for Task 38
-                      console.log('Downloading attachment via Tauri native HTTPS...');
+          <!-- Attachments -->
+          {#if email.attachments && email.attachments.length > 0}
+            <div class="flex gap-3 overflow-x-auto pb-2">
+              {#each email.attachments as attachment}
+                <button 
+                  onclick={() => {
+                    import('@tauri-apps/plugin-http').then(http => {
+                      import('@tauri-apps/plugin-fs').then(fs => {
+                        import('@tauri-apps/api/path').then(path => {
+                          console.log(`Downloading ${attachment.filename} via Tauri native HTTPS...`);
+                        });
+                      });
+                    }).catch(() => {
+                      window.open(`/api/v1/messages/${email.id}/attachments/${attachment.filename}`, '_blank');
                     });
-                  });
-                }).catch(() => {
-                  // Fallback for web
-                  window.open(email.id + '/attachments/budget_q3.xlsx/redirect', '_blank');
-                });
-              }}
-              class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors text-left"
-            >
-              <div class="w-8 h-8 rounded bg-purple-500/10 flex items-center justify-center text-purple-400">
-                <Paperclip class="w-4 h-4" />
-              </div>
-              <div class="flex flex-col">
-                <span class="text-xs font-semibold text-white">budget_q3.xlsx</span>
-                <span class="text-[10px] text-[var(--color-text-secondary)]">1.1 MB</span>
-              </div>
-            </button>
-          </div>
+                  }}
+                  class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors text-left"
+                >
+                  <div class="w-8 h-8 rounded bg-purple-500/10 flex items-center justify-center text-purple-400">
+                    <Paperclip class="w-4 h-4" />
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-xs font-semibold text-white">{attachment.filename}</span>
+                    <span class="text-[10px] text-[var(--color-text-secondary)]">{(attachment.size / 1024 / 1024).toFixed(1)} MB</span>
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
 
 

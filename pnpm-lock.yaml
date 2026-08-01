@@ -26,6 +26,12 @@ importers:
       '@tauri-apps/plugin-deep-link':
         specifier: ^2.4.9
         version: 2.4.9
+      '@tauri-apps/plugin-fs':
+        specifier: ^2.5.1
+        version: 2.5.1
+      '@tauri-apps/plugin-http':
+        specifier: ^2.5.9
+        version: 2.5.9
       '@tauri-apps/plugin-notification':
         specifier: ^2.3.3
         version: 2.3.3
@@ -148,6 +154,12 @@ importers:
       '@tauri-apps/plugin-deep-link':
         specifier: ^2.4.9
         version: 2.4.9
+      '@tauri-apps/plugin-fs':
+        specifier: ^2.5.1
+        version: 2.5.1
+      '@tauri-apps/plugin-http':
+        specifier: ^2.5.9
+        version: 2.5.9
       idb-keyval:
         specifier: ^6.3.0
         version: 6.3.0

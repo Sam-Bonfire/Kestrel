@@ -128,13 +128,6 @@
         if (hasAttachmentFilterOnly && !t.hasAttachment) return false;
         return true;
       })
-      .filter((t: EmailThread) => {
-        if (activeDateRange === 'All') return true;
-        // Mock date filtering logic
-        const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        if (activeDateRange === 'Today') return t.date === today || t.date.includes(':'); // Times usually mean today
-        return true; // Simple stub for last 7 days
-      })
   );
 
   let unreadCount = $derived(filteredList.filter((t: EmailThread) => t.isUnread).length);

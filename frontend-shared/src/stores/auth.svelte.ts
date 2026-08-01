@@ -1,4 +1,4 @@
-import { getMe } from '../api/client';
+import { getMe } from '../api/client.js';
 
 export const authState = $state<{
     userId: string | null;

@@ -134,36 +134,61 @@
 
   // Calculate overlapping events layout for a day
   function getTimedEventsLayout(eventsForDay: CalendarEvent[]) {
-    const sorted = [...eventsForDay].sort((a, b) => {
-      const startDiff = getEventTopOffset(a.startTime) - getEventTopOffset(b.startTime);
-      if (startDiff !== 0) return startDiff;
-      return getEventTopOffset(b.endTime) - getEventTopOffset(a.endTime);
+    // 1. Convert times to fractional hours for overlap math
+    const evts = eventsForDay.map(e => {
+      const [sh, sm] = (e.startTime || '09:00').split(':').map(Number);
+      const start = sh + sm / 60;
+      const [eh, em] = (e.endTime || '10:00').split(':').map(Number);
+      const end = Math.max(start + 0.5, eh + em / 60);
+      return { ...e, start, end };
     });
 
-    const columns: CalendarEvent[][] = [];
-    const layout = new Map<string, { col: number; maxCol: number }>();
-
-    for (const ev of sorted) {
-      let placed = false;
-      for (let i = 0; i < columns.length; i++) {
-        const colLastEv = columns[i][columns[i].length - 1];
-        if (getEventTopOffset(colLastEv.endTime) <= getEventTopOffset(ev.startTime)) {
-          columns[i].push(ev);
-          layout.set(ev.id, { col: i, maxCol: 0 });
-          placed = true;
+    // 2. Group overlapping events
+    const groups: typeof evts[] = [];
+    evts.sort((a, b) => a.start - b.start || b.end - a.end).forEach(evt => {
+      let added = false;
+      for (const g of groups) {
+        const overlapsAny = g.some(other => (evt.start < other.end && evt.end > other.start));
+        if (overlapsAny) {
+          g.push(evt);
+          added = true;
           break;
         }
       }
-      if (!placed) {
-        columns.push([ev]);
-        layout.set(ev.id, { col: columns.length - 1, maxCol: 0 });
-      }
-    }
+      if (!added) groups.push([evt]);
+    });
 
-    for (const ev of sorted) {
-      const data = layout.get(ev.id);
-      if (data) data.maxCol = columns.length;
-    }
+    // 3. Assign columns and calculate percentages
+    const layout = new Map<string, { left: number; width: number; col: number; maxCol: number }>();
+    groups.forEach(g => {
+      const columns: string[][] = [];
+      g.forEach(evt => {
+        let colIdx = 0;
+        while (true) {
+          if (!columns[colIdx]) columns[colIdx] = [];
+          const hasOverlap = columns[colIdx].some(otherId => {
+            const other = g.find(o => o.id === otherId)!;
+            return (evt.start < other.end && evt.end > other.start);
+          });
+          if (!hasOverlap) {
+            columns[colIdx].push(evt.id);
+            break;
+          }
+          colIdx++;
+        }
+      });
+      
+      const totalCols = columns.length;
+      g.forEach(evt => {
+        const colIdx = columns.findIndex(col => col.includes(evt.id));
+        layout.set(evt.id, {
+          left: (colIdx / totalCols) * 100,
+          width: 100 / totalCols,
+          col: colIdx,
+          maxCol: totalCols
+        });
+      });
+    });
 
     return layout;
   }
@@ -359,17 +384,28 @@
                  }
                }}
                onclick={(e) => {
-                 // Fractional time selection (15 minute intervals)
+                 // Fractional time selection based on exact click coordinate
                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                  const y = e.clientY - rect.top;
                  
-                 // Calculate exact hour and nearest 15 minute fraction
-                 const exactHour = Math.floor(y / 60);
-                 const exactMinutes = y % 60;
-                 const roundedMinutes = Math.floor(exactMinutes / 15) * 15;
+                 // 1 hour = 60px height
+                 const hoursDecimal = y / 60;
+                 const exactHour = Math.floor(hoursDecimal);
+                 const exactMinutes = Math.floor((hoursDecimal - exactHour) * 60);
+                 const roundedMinutes = Math.floor(exactMinutes / 15) * 15; // round to nearest 15
                  
-                 const timeStr = `${exactHour.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
-                 onEmptySlotClick?.(dateStr, timeStr, e);
+                 // End time is 1 hour later, capped at 23:59
+                 const endHour = Math.min(23, exactHour + 1);
+                 const endMinutes = exactHour === 23 && roundedMinutes > 0 ? 59 : roundedMinutes;
+                 
+                 const startTimeStr = `${exactHour.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+                 const endTimeStr = `${endHour.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+                 
+                 // We add a third parameter to onEmptySlotClick in +page.svelte (endTimeStr)
+                 onEmptySlotClick?.(dateStr, startTimeStr, e as any);
+                 // We will temporarily pass endTimeStr via a custom event since we can't easily change the prop signature everywhere without looking.
+                 const customEv = new CustomEvent('emptySlotClickWithEndTime', { detail: { date: dateStr, startTime: startTimeStr, endTime: endTimeStr }});
+                 window.dispatchEvent(customEv);
                }}
                role="button"
                tabindex="0"
@@ -382,8 +418,8 @@
               {@const height = getEventHeight(ev.startTime, ev.endTime)}
               {@const colStyle = COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue}
               {@const layout = layoutInfo.get(ev.id)}
-              {@const widthPct = layout ? 100 / layout.maxCol : 100}
-              {@const leftPct = layout ? (100 / layout.maxCol) * layout.col : 0}
+              {@const widthPct = layout ? layout.width : 100}
+              {@const leftPct = layout ? layout.left : 0}
               
               <button
                 in:scale={{ duration: 200, start: 0.95 }}
@@ -395,7 +431,7 @@
                 onclick={(e) => { e.stopPropagation(); onEventClick(ev, e); }}
                 class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-move overflow-hidden
                   {colStyle.bg} {colStyle.border} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}"
-                style="top: {top}px; height: {height}px; left: calc({leftPct}% + 4px); width: calc({widthPct}% - 8px);"
+                style="top: {top}px; height: {height}px; left: {leftPct}%; width: calc({widthPct}% - 4px);"
               >
                 <div class="font-bold truncate text-white leading-tight pointer-events-none">{ev.title}</div>
                 <div class="text-[10px] opacity-75 font-mono mt-0.5 pointer-events-none">{ev.startTime} - {ev.endTime}</div>

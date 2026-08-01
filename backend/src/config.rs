@@ -5,55 +5,35 @@ pub struct Config {
     pub database_url: String,
     pub jwt_secret: String,
     pub bind_addr: String,
+    pub gmail_client_id: Option<String>,
+    pub gmail_client_secret: Option<String>,
+    pub outlook_client_id: Option<String>,
+    pub outlook_client_secret: Option<String>,
 }
 
 impl Config {
     pub fn from_env() -> Self {
-        Self::load_secretspec();
-
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| format!("sqlite:{}/data/kestrel.db", manifest_dir));
         let jwt_secret = Self::resolve_jwt_secret();
         let bind_addr =
             std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+        
+        let gmail_client_id = std::env::var("GMAIL_CLIENT_ID").ok();
+        let gmail_client_secret = std::env::var("GMAIL_CLIENT_SECRET").ok();
+        let outlook_client_id = std::env::var("OUTLOOK_CLIENT_ID").ok();
+        let outlook_client_secret = std::env::var("OUTLOOK_CLIENT_SECRET").ok();
 
         Config {
             database_url,
             jwt_secret,
             bind_addr,
+            gmail_client_id,
+            gmail_client_secret,
+            outlook_client_id,
+            outlook_client_secret,
         }
-    }
-
-    fn load_secretspec() {
-        let path = match std::env::var("SECRETSPEC_PATH") {
-            Ok(p) => p,
-            Err(_) => return,
-        };
-
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(e) => {
-                warn!("Failed to read secretspec at {}: {}", path, e);
-                return;
-            }
-        };
-
-        let values: HashMap<String, String> = match serde_json::from_str(&content) {
-            Ok(v) => v,
-            Err(e) => {
-                warn!("Failed to parse secretspec at {}: {}", path, e);
-                return;
-            }
-        };
-
-        for (key, value) in &values {
-            // SAFETY: called once at startup before any threads are spawned
-            unsafe {
-                std::env::set_var(key, value);
-            }
-        }
-        info!("Loaded {} secrets from {}", values.len(), path);
     }
 
     fn resolve_jwt_secret() -> String {

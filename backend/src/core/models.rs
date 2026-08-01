@@ -67,6 +67,7 @@ pub struct Message {
     pub is_archived: bool,
     pub is_deleted: bool,
     pub has_attachments: bool,
+    pub snoozed_until: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }

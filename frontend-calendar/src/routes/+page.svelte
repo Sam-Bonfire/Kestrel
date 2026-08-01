@@ -140,7 +140,16 @@
     const checkMobile = () => isMobileOrTablet = window.innerWidth <= 1024;
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    
+    const handleEmptySlot = (e: any) => {
+      openNewEventPanel(e.detail.date, e.detail.startTime, undefined, e.detail.endTime);
+    };
+    window.addEventListener('emptySlotClickWithEndTime', handleEmptySlot);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('emptySlotClickWithEndTime', handleEmptySlot);
+    };
   });
 
   $effect(() => {
@@ -796,33 +805,33 @@
           </span>
         </div>
 
-        <!-- Right side: Search toggle -->
+        <!-- Right side: Search & Settings -->
         <div class="flex items-center gap-2 relative z-10">
-          {#if isMobileSearchOpen}
-            <div class="flex items-center bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg px-2 py-1 max-w-[200px] relative">
-              <Search class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0" />
-              <input
-                type="text"
-                placeholder="Search..."
-                bind:value={searchQuery}
-                class="bg-transparent text-white text-xs w-full outline-none pl-1.5 pr-5 placeholder:text-neutral-500 font-mono"
-              />
+          <div class="flex items-center bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg px-2 py-1.5 max-w-[200px] relative">
+            <Search class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0" />
+            <input
+              type="text"
+              placeholder="Search..."
+              bind:value={searchQuery}
+              class="bg-transparent text-white text-xs w-full outline-none pl-1.5 pr-5 placeholder:text-neutral-500 font-mono"
+            />
+            {#if searchQuery}
               <button
-                onclick={() => { searchQuery = ''; isMobileSearchOpen = false; }}
+                onclick={() => { searchQuery = ''; }}
                 class="absolute right-1 text-neutral-500 hover:text-white p-0.5 cursor-pointer"
               >
                 <X class="w-3 h-3" />
               </button>
-            </div>
-          {:else}
-            <button
-              onclick={() => isMobileSearchOpen = true}
-              class="p-1.5 rounded-lg hover:bg-white/5 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer flex items-center justify-center w-8 h-8"
-              title="Search Events"
-            >
-              <Search class="w-4 h-4" />
-            </button>
-          {/if}
+            {/if}
+          </div>
+
+          <button
+            onclick={() => isSettingsOpen = true}
+            class="p-1.5 rounded-lg hover:bg-white/5 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer flex items-center justify-center w-8 h-8"
+            title="Settings"
+          >
+            <Settings class="w-4 h-4" />
+          </button>
         </div>
       </header>
     {/if}
@@ -918,14 +927,87 @@
 
   <!-- Creation & Editing Dialog Form Modal Removed in favor of unified EventPeekPanel -->
   
-  <!-- Global Toast Notification UI -->
+  
+  <!-- Settings Modal -->
+  {#if isSettingsOpen}
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="fixed inset-0 cursor-pointer" onclick={() => isSettingsOpen = false} role="presentation"></div>
+      
+      <div class="relative w-full max-w-md bg-[#131313] border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10">
+        <div class="px-5 py-4 border-b border-neutral-800/60 flex items-center justify-between bg-[#181818]">
+          <div class="flex items-center gap-2">
+            <Settings class="w-4 h-4 text-rose-400" />
+            <span class="text-xs font-mono font-semibold text-white uppercase tracking-wider">
+              Calendar Settings
+            </span>
+          </div>
+          <button 
+            onclick={() => isSettingsOpen = false}
+            class="p-1 rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-white transition-all cursor-pointer"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <div class="p-5 space-y-6 overflow-y-auto max-h-[80vh]">
+          <div class="space-y-2.5">
+            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+              Default Calendar
+            </label>
+            <div class="space-y-2">
+              {#each [
+                { id: 'cal-personal', name: 'Personal' },
+                { id: 'cal-work', name: 'Work' },
+                { id: 'cal-birthdays', name: 'Birthdays' }
+              ] as cal}
+                <button
+                  class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all border cursor-pointer {defaultCalendarId === cal.id ? 'bg-rose-500/10 border-rose-500/30' : 'bg-[#1a1a1a] border-neutral-800 hover:border-neutral-600'}"
+                  onclick={() => defaultCalendarId = cal.id}
+                >
+                  <span class="text-xs font-semibold text-white">{cal.name}</span>
+                  {#if defaultCalendarId === cal.id}
+                    <div class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></div>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <div class="space-y-2.5">
+            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+              Start Hour (Day/Week View)
+            </label>
+            <input 
+              type="range" 
+              min="0" max="23" 
+              bind:value={startHour}
+              class="w-full accent-rose-500 cursor-pointer"
+            />
+            <div class="text-xs text-neutral-400 font-mono text-right">{startHour}:00</div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <label class="text-xs font-semibold text-white">Show Weekends</label>
+            <div class="relative inline-block w-10 h-5 cursor-pointer">
+              <input type="checkbox" bind:checked={showWeekends} class="peer sr-only" />
+              <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
+              <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+<!-- Global Toast Notification UI -->
   {#if toastMessage}
     <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] animate-slide-up flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-2xl {toastMessage.type === 'error' ? 'bg-red-500/90 text-white' : toastMessage.type === 'success' ? 'bg-green-500/90 text-white' : 'bg-[#222222] text-white border border-neutral-700'}">
       <span class="text-sm font-medium">{toastMessage.text}</span>
       <button onclick={() => toastMessage = null} class="ml-2 opacity-70 hover:opacity-100 cursor-pointer p-0.5">
         <X class="w-3.5 h-3.5" />
       </button>
-    </div>
     </div>
   {/if}
   {/snippet}

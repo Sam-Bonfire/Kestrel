@@ -1,0 +1,29 @@
+# Build artifacts
+target/
+
+# Version control
+.git/
+.gitignore
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CI/CD
+.github/
+
+# Documentation
+*.md
+LICENSE
+
+# Test data
+tests/
+test_data/
+
+# Docker files (prevent recursive copy)
+Dockerfile
+docker-compose.yml
+.dockerignore

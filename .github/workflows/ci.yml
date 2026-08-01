@@ -1,63 +1,543 @@
-name: CI Pipeline
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - dev
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - dev
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  backend-ci:
-    name: Backend CI (Rust)
+  # ---
+  
+  backend-check:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-
-      - name: Cache cargo dependencies
+          
+      - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend -> target
-
-      - name: Check code formatting
+          
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+        
+      - name: Cargo fmt
         run: cargo fmt --manifest-path backend/Cargo.toml -- --check
-
-      - name: Clippy Linter
+        
+      - name: Cargo clippy
         run: cargo clippy --manifest-path backend/Cargo.toml -- -D warnings
-
-      - name: Run Backend Unit & Integration Tests
+        
+      - name: Cargo test
         run: cargo test --manifest-path backend/Cargo.toml
+        
+      - name: Cargo audit
+        run: cargo audit --file backend/Cargo.lock
+        continue-on-error: true
+        
+      - name: Cargo build
+        run: cargo build --release --manifest-path backend/Cargo.toml
+        
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-linux
+          path: backend/target/release/backend
+          retention-days: 14
 
-  frontend-ci:
-    name: Frontend CI (Node & pnpm)
+  # ---
+
+  backend-integration:
     runs-on: ubuntu-latest
-
+    needs: backend-check
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-linux
+          path: backend-linux
+          
+      - name: Run Integration
+        run: |
+          chmod +x backend-linux/backend
+          DATABASE_URL=sqlite:./test.db PORT=8080 HOST=0.0.0.0 RUST_LOG=info ./backend-linux/backend &
+          PID=$!
+          sleep 5
+          curl -f http://localhost:8080/api/v1/health
+          kill $PID
 
-      - name: Setup Node.js
+  # ---
+
+  backend-docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/kestrel-backend:dev-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---
+
+  frontend-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
-
+          node-version: 22
+          
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
           version: 11.5.2
-
+          
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Build shared frontend library
+        
+      - name: pnpm audit
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
+        
+      - name: Build shared
         run: pnpm --filter @kestrel/shared build
-
-      - name: Type check and build Mail App
+        
+      - name: Build mail
         run: pnpm --filter frontend-mail build
-
-      - name: Type check and build Calendar App
+        
+      - name: Build calendar
         run: pnpm --filter frontend-calendar build
+
+  # ---
+
+  build-windows:
+    runs-on: windows-latest
+    needs: frontend-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            frontend-mail/src-tauri -> target
+            frontend-calendar/src-tauri -> target
+          
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.5.2
+          
+      - name: Get pnpm store path
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build shared
+        run: pnpm --filter @kestrel/shared build
+        
+      - name: Tauri build mail
+        run: pnpm --filter frontend-mail tauri build
+        
+      - name: Tauri build calendar
+        run: pnpm --filter frontend-calendar tauri build
+        
+      - name: Upload mail MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-mail-windows-msi
+          path: frontend-mail/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 14
+          
+      - name: Upload calendar MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-calendar-windows-msi
+          path: frontend-calendar/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 14
+
+  # ---
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: frontend-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            frontend-mail/src-tauri -> target
+            frontend-calendar/src-tauri -> target
+            
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.5.2
+          
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build shared
+        run: pnpm --filter @kestrel/shared build
+        
+      - name: Tauri build mail
+        run: pnpm --filter frontend-mail tauri build
+        
+      - name: Tauri build calendar
+        run: pnpm --filter frontend-calendar tauri build
+        
+      - name: Upload mail deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-mail-linux-deb
+          path: frontend-mail/src-tauri/target/release/bundle/deb/*.deb
+          retention-days: 14
+          
+      - name: Upload mail AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-mail-linux-appimage
+          path: frontend-mail/src-tauri/target/release/bundle/appimage/*.AppImage
+          retention-days: 14
+          if-no-files-found: warn
+          
+      - name: Upload calendar deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-calendar-linux-deb
+          path: frontend-calendar/src-tauri/target/release/bundle/deb/*.deb
+          retention-days: 14
+          
+      - name: Upload calendar AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-calendar-linux-appimage
+          path: frontend-calendar/src-tauri/target/release/bundle/appimage/*.AppImage
+          retention-days: 14
+          if-no-files-found: warn
+
+  # ---
+
+  build-macos:
+    runs-on: macos-latest
+    needs: frontend-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+          
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            frontend-mail/src-tauri -> target
+            frontend-calendar/src-tauri -> target
+            
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.5.2
+          
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build shared
+        run: pnpm --filter @kestrel/shared build
+        
+      - name: Tauri build mail
+        run: pnpm --filter frontend-mail tauri build -- --target universal-apple-darwin
+        
+      - name: Tauri build calendar
+        run: pnpm --filter frontend-calendar tauri build -- --target universal-apple-darwin
+        
+      - name: Upload mail DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-mail-macos-dmg
+          path: frontend-mail/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 14
+          if-no-files-found: warn
+          
+      - name: Upload calendar DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-calendar-macos-dmg
+          path: frontend-calendar/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 14
+          if-no-files-found: warn
+
+  # ---
+
+  mobile-android:
+    runs-on: ubuntu-latest
+    needs: frontend-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+          
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        
+      - name: Install NDK
+        run: sdkmanager "ndk;28.0.12674087"
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+          
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            frontend-mail/src-tauri -> target
+            frontend-calendar/src-tauri -> target
+            
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.5.2
+          
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build shared
+        run: pnpm --filter @kestrel/shared build
+        
+      - name: Build mail Android
+        run: |
+          cd frontend-mail
+          pnpm tauri android init
+          pnpm tauri android build --target aarch64 --target x86_64
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.0.12674087
+          
+      - name: Build calendar Android
+        run: |
+          cd frontend-calendar
+          pnpm tauri android init
+          pnpm tauri android build --target aarch64 --target x86_64
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.0.12674087
+          
+      - name: Upload mail APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-mail-android-apk
+          path: frontend-mail/src-tauri/gen/android/**/outputs/**/*.apk
+          retention-days: 14
+          
+      - name: Upload calendar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-calendar-android-apk
+          path: frontend-calendar/src-tauri/gen/android/**/outputs/**/*.apk
+          retention-days: 14
+
+  # ---
+
+  mobile-ios:
+    runs-on: macos-latest
+    needs: frontend-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+          
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            frontend-mail/src-tauri -> target
+            frontend-calendar/src-tauri -> target
+            
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.5.2
+          
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build shared
+        run: pnpm --filter @kestrel/shared build
+        
+      - name: Build mail iOS
+        run: |
+          cd frontend-mail
+          pnpm tauri ios init
+          pnpm tauri ios build --target aarch64-apple-ios-sim
+          
+      - name: Build calendar iOS
+        run: |
+          cd frontend-calendar
+          pnpm tauri ios init
+          pnpm tauri ios build --target aarch64-apple-ios-sim
+          
+      - name: Upload mail app
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-mail-ios
+          path: frontend-mail/src-tauri/gen/apple/build/**/*.app
+          retention-days: 14
+          if-no-files-found: warn
+          
+      - name: Upload calendar app
+        uses: actions/upload-artifact@v4
+        with:
+          name: kestrel-calendar-ios
+          path: frontend-calendar/src-tauri/gen/apple/build/**/*.app
+          retention-days: 14
+          if-no-files-found: warn

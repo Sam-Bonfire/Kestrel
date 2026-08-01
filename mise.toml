@@ -9,6 +9,15 @@ node = "22"
 pnpm = "latest"
 jujutsu = "latest"
 
+[tasks.init]
+description = "First-time project setup (installs tools + all dependencies)"
+run = [
+    "echo \"==> Installing toolchain (Rust, Node, pnpm, jj)...\"",
+    "mise install",
+    "echo \"==> Running project setup...\"",
+    "mise run setup"
+]
+
 [tasks."dev:backend"]
 description = "Start the Axum daemon in development mode"
 dir = "backend"
@@ -61,5 +70,49 @@ depends = ["dev:backend", "dev:frontend-mail"]
 description = "Start backend + Calendar Tauri app"
 depends = ["dev:backend", "dev:frontend-calendar"]
 
+[tasks.setup]
+description = "Install all project dependencies (run once after mise install)"
+run = [
+    "echo \"==> Installing pnpm dependencies...\"",
+    "pnpm install",
+    "echo \"==> Building shared frontend library (@kestrel/shared)...\"",
+    "pnpm --filter @kestrel/shared build",
+    "echo \"==> Fetching Rust/Cargo dependencies...\"",
+    "cargo fetch --manifest-path backend/Cargo.toml",
+    "cargo fetch --manifest-path frontend-mail/src-tauri/Cargo.toml",
+    "cargo fetch --manifest-path frontend-calendar/src-tauri/Cargo.toml",
+    "echo \"==> Setup complete!\""
+]
 
+[tasks.check]
+description = "Run all linters, tests, and build checks"
+run = [
+    "echo \"==> Backend: fmt check...\"",
+    "cargo fmt --manifest-path backend/Cargo.toml -- --check",
+    "echo \"==> Backend: clippy...\"",
+    "cargo clippy --manifest-path backend/Cargo.toml -- -D warnings",
+    "echo \"==> Backend: tests...\"",
+    "cargo test --manifest-path backend/Cargo.toml",
+    "echo \"==> Frontend: build shared...\"",
+    "pnpm --filter @kestrel/shared build",
+    "echo \"==> Frontend: build mail...\"",
+    "pnpm --filter frontend-mail build",
+    "echo \"==> Frontend: build calendar...\"",
+    "pnpm --filter frontend-calendar build",
+    "echo \"==> All checks passed!\""
+]
+
+[tasks.clean]
+description = "Remove all build artifacts and caches"
+run = [
+    "echo \"==> Cleaning Rust targets...\"",
+    "cargo clean --manifest-path backend/Cargo.toml",
+    "cargo clean --manifest-path frontend-mail/src-tauri/Cargo.toml",
+    "cargo clean --manifest-path frontend-calendar/src-tauri/Cargo.toml",
+    "echo \"==> Cleaning Node artifacts...\"",
+    "rm -rf frontend-mail/.svelte-kit frontend-mail/build",
+    "rm -rf frontend-calendar/.svelte-kit frontend-calendar/build",
+    "rm -rf frontend-shared/dist",
+    "echo \"==> Clean complete.\""
+]
 

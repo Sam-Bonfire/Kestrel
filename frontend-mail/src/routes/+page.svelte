@@ -638,7 +638,20 @@
   <ComposeModal
     isOpen={isComposeOpen}
     onClose={() => isComposeOpen = false}
-    onSend={() => isComposeOpen = false}
+    onSend={async (draft) => {
+      try {
+        const api = await import('@kestrel/shared/api');
+        await api.sendMessage({
+          to: draft.to,
+          subject: draft.subject,
+          body: draft.body,
+        });
+        isComposeOpen = false;
+      } catch (err) {
+        console.error('Failed to send message:', err);
+        // Optionally show toast error here
+      }
+    }}
   />
 
   <CommandPalette 

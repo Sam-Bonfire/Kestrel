@@ -301,28 +301,29 @@ async fn sync_account_messages(
                     m
                 },
                 None => {
-                    let is_deleted = blocked_set.contains(&payload.sender_email);
+                    let is_blocked = blocked_set.contains(&payload.sender_email);
                     crate::core::models::Message {
-                        id: crate::core::types::DbUuid(uuid::Uuid::new_v4()),
+                        id: Uuid::new_v4().into(),
                         account_id: account.id.clone(),
-                        external_id: payload.external_id,
-                        thread_id: payload.thread_id,
-                        subject: payload.subject,
-                        sender_name: payload.sender_name,
-                        sender_email: payload.sender_email,
-                        recipients: payload.recipients,
+                        external_id: payload.external_id.clone(),
+                        thread_id: payload.thread_id.clone(),
+                        subject: payload.subject.clone(),
+                        sender_name: payload.sender_name.clone(),
+                        sender_email: payload.sender_email.clone(),
+                        recipients: payload.recipients.clone(),
                         date_sent: payload.date_sent,
                         date_received: payload.date_received,
-                        snippet: payload.snippet,
+                        snippet: payload.snippet.clone(),
                         body_text: None,
                         body_html: None,
-                        labels: payload.labels,
+                        labels: payload.labels.clone(),
                         is_read: payload.is_read,
                         is_archived: false,
-                        is_deleted,
+                        is_deleted: is_blocked,
                         has_attachments: false,
-                        created_at: chrono::Utc::now().timestamp(),
-                        updated_at: chrono::Utc::now().timestamp(),
+                        snoozed_until: None,
+                        created_at: Utc::now().timestamp(),
+                        updated_at: Utc::now().timestamp(),
                     }
                 }
             };
