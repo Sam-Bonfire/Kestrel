@@ -407,14 +407,56 @@ pub async fn callback(
     
     let token_expires_at = chrono::Utc::now().timestamp() + expires_in;
 
+    // Fetch User Profile
+    let (profile_url, id_field, name_field, email_field) = match provider.as_str() {
+        "gmail" => (
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            "id",
+            "name",
+            "email"
+        ),
+        "outlook" => (
+            "https://graph.microsoft.com/v1.0/me",
+            "id",
+            "displayName",
+            "mail" // or userPrincipalName
+        ),
+        _ => return Err(KestrelError::Internal(Box::new(SimpleError("Unknown provider".to_string())))),
+    };
+
+    let profile_res = client.get(profile_url)
+        .bearer_auth(&access_token)
+        .send()
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(e)))?;
+
+    if !profile_res.status().is_success() {
+        let err_text = profile_res.text().await.unwrap_or_default();
+        tracing::error!("OAuth profile fetch failed: {}", err_text);
+        return Err(KestrelError::Internal(Box::new(SimpleError("OAuth profile fetch failed".to_string()))));
+    }
+
+    let profile_data: serde_json::Value = profile_res.json().await.map_err(|e| KestrelError::Internal(Box::new(e)))?;
+    let provider_account_id = profile_data[id_field].as_str().unwrap_or(&format!("{}-{}", provider, Uuid::new_v4())).to_string();
+    let display_name = profile_data[name_field].as_str().unwrap_or(&format!("{} Account", provider)).to_string();
+    
+    // Outlook sometimes uses userPrincipalName if mail is null
+    let email = if provider == "outlook" {
+        profile_data["mail"].as_str().or(profile_data["userPrincipalName"].as_str()).unwrap_or("").to_string()
+    } else {
+        profile_data[email_field].as_str().unwrap_or("").to_string()
+    };
+
+    let final_display_name = if !email.is_empty() { email.clone() } else { display_name };
+
     // Save to database
     let now = chrono::Utc::now().timestamp();
     let account = crate::core::models::Account {
         id: crate::core::types::DbUuid::new(Uuid::new_v4()),
         user_id: crate::core::types::DbUuid::new(auth_user.user_id),
         provider: provider.clone(),
-        provider_account_id: format!("{}-{}", provider, Uuid::new_v4()), // We need a real ID, but this is a placeholder until we fetch the profile
-        display_name: format!("{} Account", provider),
+        provider_account_id,
+        display_name: final_display_name,
         access_token: Some(access_token.clone()),
         refresh_token,
         token_expires_at: Some(token_expires_at),
@@ -453,9 +495,9 @@ pub async fn callback(
     });
     
     let frontend_url = std::env::var("KESTREL_FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:1420".to_string());
+        .unwrap_or_else(|_| "kestrel://oauth/callback".to_string());
     
-    // Redirect back to Settings Modal -> Accounts tab
-    Ok(axum::response::Redirect::to(&format!("{}/settings?tab=accounts", frontend_url)).into_response())
+    // Redirect back to the app via deep link
+    Ok(axum::response::Redirect::to(&frontend_url).into_response())
 }
 

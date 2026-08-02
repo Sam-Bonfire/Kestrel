@@ -80,6 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start background sync daemon
     start_sync_daemon(state.clone(), sync_tx);
     start_offline_worker(db.clone());
+    crate::api::token_worker::start_token_worker(state.clone());
 
     let router = create_router(state);
 

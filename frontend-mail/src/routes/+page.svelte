@@ -516,6 +516,23 @@
 
   onMount(() => {
     initAuth();
+    
+    // Deep Link Listener for OAuth Callbacks
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
+        onOpenUrl((urls) => {
+          for (const url of urls) {
+            if (url.startsWith('kestrel://oauth/callback')) {
+              isSettingsOpen = true;
+              // We'd want to focus the accounts tab if we had one here, but isSettingsOpen exposes the shared SettingsModal.
+              // We can also trigger a re-fetch of accounts here.
+              // The simplest way to signal the settings modal to load accounts is toggling it open.
+            }
+          }
+        });
+      }).catch(err => console.error("Failed to init deep-link plugin", err));
+    }
+
     const handler = (e: KeyboardEvent) => {
       if (!authState.isAuthenticated) return;
       if (isTyping(e)) return;
