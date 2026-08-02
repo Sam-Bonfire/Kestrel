@@ -1,13 +1,16 @@
 use std::convert::Infallible;
 use std::time::Duration;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Json;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Semaphore};
 use uuid::Uuid;
+use futures::stream::StreamExt;
 
 use super::auth::AuthUser;
 use super::router::AppState;
@@ -132,6 +135,11 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
     tokio::spawn(async move {
         tracing::info!("Background sync daemon started");
 
+        // Provider rate limiters (Max 5 concurrent requests per provider globally)
+        let mut limits = HashMap::new();
+        limits.insert("gmail".to_string(), Arc::new(Semaphore::new(5)));
+        limits.insert("outlook".to_string(), Arc::new(Semaphore::new(5)));
+
         loop {
             // Wait 5 minutes between sync cycles
             tokio::time::sleep(Duration::from_secs(300)).await;
@@ -147,60 +155,70 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
                 }
             };
 
-            for account in &accounts {
-                let token = match &account.access_token {
-                    Some(t) => t.clone(),
-                    None => continue,
-                };
-
-                match sync_account_messages(&state, account, &token).await {
-                    Ok(count) => {
-                        if count > 0 {
-                            let event = SyncEvent {
-                                event_type: "sync_complete".to_string(),
-                                account_id: Some(account.id.0),
-                                message: format!("Synced {} new messages", count),
-                                timestamp: Utc::now().timestamp(),
-                            };
-                            let _ = sync_tx.send(event);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Sync daemon: failed for account {}: {}",
-                            account.id.0,
-                            e
-                        );
-                        let event = SyncEvent {
-                            event_type: "sync_error".to_string(),
-                            account_id: Some(account.id.0),
-                            message: format!("Sync failed: {}", e),
-                            timestamp: Utc::now().timestamp(),
+            let accounts_len = accounts.len();
+            
+            // Process up to 10 accounts concurrently
+            let mut stream = futures::stream::iter(accounts)
+                .map(|account| {
+                    let state_clone = state.clone();
+                    let tx_clone = sync_tx.clone();
+                    let semaphore = limits.get(&account.provider).cloned();
+                    
+                    async move {
+                        let token = match &account.access_token {
+                            Some(t) => t.clone(),
+                            None => return,
                         };
-                        let _ = sync_tx.send(event);
-                    }
-                }
-                
-                match sync_account_calendars(&state, account, &token).await {
-                    Ok(count) => {
-                        if count > 0 {
-                            tracing::info!("Synced {} new calendar events for account {}", count, account.id.0);
+
+                        // Acquire per-provider concurrency permit if available
+                        let _permit = match semaphore {
+                            Some(sem) => Some(sem.acquire_owned().await.unwrap()),
+                            None => None,
+                        };
+
+                        // 60-second timeout to prevent hanging on one provider
+                        let msg_sync = tokio::time::timeout(
+                            Duration::from_secs(60),
+                            sync_account_messages(&state_clone, &account, &token)
+                        ).await;
+
+                        match msg_sync {
+                            Ok(Ok(count)) => {
+                                if count > 0 {
+                                    let event = SyncEvent {
+                                        event_type: "sync_complete".to_string(),
+                                        account_id: Some(account.id.0),
+                                        message: format!("Synced {} new messages", count),
+                                        timestamp: Utc::now().timestamp(),
+                                    };
+                                    let _ = tx_clone.send(event);
+                                }
+                            }
+                            Ok(Err(e)) => tracing::warn!("Sync daemon failed for {}: {}", account.id.0, e),
+                            Err(_) => tracing::warn!("Sync daemon timed out for {}", account.id.0),
+                        }
+                        
+                        let cal_sync = tokio::time::timeout(
+                            Duration::from_secs(60),
+                            sync_account_calendars(&state_clone, &account, &token)
+                        ).await;
+
+                        match cal_sync {
+                            Ok(Ok(count)) => {
+                                if count > 0 {
+                                    tracing::info!("Synced {} new calendar events for account {}", count, account.id.0);
+                                }
+                            }
+                            Ok(Err(e)) => tracing::warn!("Calendar sync failed for {}: {}", account.id.0, e),
+                            Err(_) => tracing::warn!("Calendar sync timed out for {}", account.id.0),
                         }
                     }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Calendar sync daemon: failed for account {}: {}",
-                            account.id.0,
-                            e
-                        );
-                    }
-                }
-            }
+                })
+                .buffer_unordered(10); // Run up to 10 concurrently
 
-            tracing::info!(
-                "Sync daemon: cycle complete, synced {} account(s)",
-                accounts.len()
-            );
+            while let Some(_) = stream.next().await {}
+
+            tracing::info!("Sync daemon: cycle complete, synced {} account(s)", accounts_len);
         }
     });
 }
