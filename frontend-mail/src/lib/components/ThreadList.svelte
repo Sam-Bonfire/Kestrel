@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { fade, slide, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
+  import { isTyping } from '$lib/utils/keyboard';
   import { 
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
     ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check,
@@ -166,9 +167,8 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
+    if (isTyping(event)) return;
     if (filteredList.length === 0) return;
-    const tag = (event.target as HTMLElement).tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
     if (event.key === 'j' || event.key === 'ArrowDown') {
       event.preventDefault();
@@ -528,7 +528,7 @@
                 <Paperclip class="w-3.5 h-3.5 text-[var(--color-text-secondary)]/50 shrink-0" strokeWidth={1.5} />
               {/if}
               
-              <span class="font-mono text-[11px] tracking-tight shrink-0 w-12 text-right hidden sm:block">{thread.date}</span>
+              <span class="font-mono text-[11px] tracking-tight shrink-0 whitespace-nowrap text-right hidden sm:block">{thread.date}</span>
             </div>
 
             <!-- Floating action menu on hover (Matches screenshot: Star, Archive, Delete, CheckSquare, Clock, Tag) -->

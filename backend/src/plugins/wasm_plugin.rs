@@ -5,7 +5,7 @@ use wasmtime::component::Component;
 
 use super::traits::{
     BrandingPayload, CalendarPayload, CalendarProvider, EventPayload, MailProvider, MessageBody,
-    MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SyncResult,
+    MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload, SyncResult,
 };
 use super::wasm_runtime::{WasmEngine, WasmState};
 use super::bindings::KestrelPlugin;
@@ -149,12 +149,70 @@ impl MailProvider for WasmPlugin {
         }
     }
 
+    async fn send_message(
+        &self,
+        auth_token: &str,
+        payload: SendMessagePayload,
+    ) -> Result<(), PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+        
+        let wit_attachments = payload.attachments.map(|atts| {
+            atts.into_iter().map(|a| {
+                crate::plugins::bindings::exports::kestrel::provider::mail_provider::AttachmentPayload {
+                    filename: a.filename,
+                    content_type: a.content_type,
+                    content: a.content,
+                }
+            }).collect::<Vec<_>>()
+        });
+
+        let wit_payload = crate::plugins::bindings::exports::kestrel::provider::mail_provider::SendMessagePayload {
+            to: payload.to,
+            cc: payload.cc,
+            bcc: payload.bcc,
+            subject: payload.subject,
+            body_html: payload.body_html,
+            attachments: wit_attachments,
+        };
+
+        let result = instance
+            .kestrel_provider_mail_provider()
+            .call_send_message(&mut store, auth_token, &wit_payload)
+            .await
+            .map_err(|e| PluginError(e.to_string()))?;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PluginError(e)),
+        }
+    }
+
     async fn archive_message(
         &self,
         _auth_token: &str,
         _external_id: &str,
     ) -> Result<(), PluginError> {
         Err(PluginError("Not implemented for WASM yet".to_string()))
+    }
+
+    async fn download_attachment(
+        &self,
+        auth_token: &str,
+        external_message_id: &str,
+        external_attachment_id: &str,
+    ) -> Result<Vec<u8>, PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+        
+        let result = instance
+            .kestrel_provider_mail_provider()
+            .call_download_attachment(&mut store, auth_token, external_message_id, external_attachment_id)
+            .await
+            .map_err(|e| PluginError(e.to_string()))?;
+
+        match result {
+            Ok(res) => Ok(res),
+            Err(e) => Err(PluginError(e)),
+        }
     }
 
     async fn update_message_labels(

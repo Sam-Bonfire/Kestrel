@@ -126,3 +126,14 @@ pub struct OfflineQueueItem {
     pub queued_at: i64,
     pub retry_count: i32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Attachment {
+    pub id: DbUuid,
+    pub message_id: DbUuid,
+    pub filename: String,
+    pub content_type: String,
+    pub size: i64,
+    pub external_id: Option<String>,
+    pub created_at: i64,
+}

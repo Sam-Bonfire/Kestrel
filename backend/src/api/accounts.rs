@@ -1,5 +1,6 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::Json;
 use uuid::Uuid;
 
 use super::auth::AuthUser;
@@ -9,6 +10,25 @@ use crate::core::repository::AccountRepository;
 use crate::db::pool::DbPool;
 use crate::db::sqlite::account_repository::SqliteAccountRepository;
 use crate::db::postgres::account_repository::PostgresAccountRepository;
+
+pub async fn list_accounts(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+) -> Result<Json<Vec<crate::core::models::Account>>, KestrelError> {
+    let accounts = match &state.db {
+        DbPool::Sqlite(pool) => {
+            SqliteAccountRepository::new(pool.clone())
+                .find_by_user_id(user_id)
+                .await?
+        }
+        DbPool::Postgres(pool) => {
+            PostgresAccountRepository::new(pool.clone())
+                .find_by_user_id(user_id)
+                .await?
+        }
+    };
+    Ok(Json(accounts))
+}
 
 pub async fn delete_account(
     State(state): State<AppState>,

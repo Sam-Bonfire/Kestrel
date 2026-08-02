@@ -4,6 +4,7 @@
   import CenterPeek from '$lib/components/CenterPeek.svelte';
   import ComposeModal from '$lib/components/ComposeModal.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
+  import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell } from '@kestrel/shared/components';
   import { authState, initAuth, logout } from '@kestrel/shared/stores';
@@ -22,6 +23,7 @@
   let isComposeOpen    = $state(false);
   let isCommandOpen    = $state(false);
   let isSettingsOpen   = $state(false);
+  let isMailSettingsOpen = $state(false);
   let activeAccountId  = $state('1');
   let isMobileSidebarOpen = $state(false);
   let initialReplyMode = $state<'reply'|'reply_all'|'forward'|null>(null);
@@ -296,10 +298,12 @@
     import('@kestrel/shared/api').then(({ trashMessage }) => trashMessage(id).catch(err => console.error(err)));
     advanceSelectionAndModify(id, { isTrash: true });
   }
-  function snooze(id: string, until?: string) {
-    import('@kestrel/shared/api').then(({ snoozeMessage }) => snoozeMessage(id).catch(err => console.error(err)));
-    advanceSelectionAndModify(id, { isArchived: true }); // Mocking snooze as archive for UI purposes
+  function snooze(id: string) {
+    const ts = Math.floor(Date.now() / 1000) + 3600; // Snooze for 1 hour
+    advanceSelectionAndModify(id, { isArchived: false, snoozed_until: ts });
+    apiClient.post(`/api/v1/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error);
   }
+
   function reportSpam(id: string) {
     advanceSelectionAndModify(id, { isSpam: true, isTrash: true });
   }
@@ -508,12 +512,13 @@
   }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────
+  import { isTyping } from '$lib/utils/keyboard';
+
   onMount(() => {
     initAuth();
     const handler = (e: KeyboardEvent) => {
       if (!authState.isAuthenticated) return;
-      const target = e.target as HTMLElement;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) return;
+      if (isTyping(e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
       if (e.key === 'c') isComposeOpen = true;
       if (e.key === 'Escape') { selectedThreadId = null; isCommandOpen = false; isComposeOpen = false; }
@@ -529,6 +534,7 @@
       {currentView}
       onSelectView={(v) => { currentView = v; selectedThreadId = null; isMobileSidebarOpen = false; }}
       onComposeClick={() => { isComposeOpen = true; isMobileSidebarOpen = false; }}
+      onOpenMailSettings={() => { isMailSettingsOpen = true; isMobileSidebarOpen = false; }}
       bind:searchQuery
       {accounts}
       bind:activeAccountId
@@ -662,6 +668,10 @@
   <SettingsModal
     isOpen={isSettingsOpen}
     onClose={() => isSettingsOpen = false}
+  />
+  <MailSettingsModal
+    isOpen={isMailSettingsOpen}
+    onClose={() => isMailSettingsOpen = false}
   />
   {/snippet}
 </AppShell>

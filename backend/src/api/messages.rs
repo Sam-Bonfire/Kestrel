@@ -510,35 +510,83 @@ pub async fn bulk_action(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// --- Attachments Redirect (Task 31) ---
+// --- Download Attachment (Task 3) ---
 
-pub async fn get_attachment_redirect(
+pub async fn download_attachment(
     State(state): State<AppState>,
     AuthUser { user_id }: AuthUser,
     Path((message_id, filename)): Path<(Uuid, String)>,
-) -> Result<axum::response::Redirect, KestrelError> {
-    // Verify user owns the message
-    verify_message_ownership(&state, user_id, message_id).await?;
+) -> Result<axum::response::Response, KestrelError> {
+    // 1. Verify ownership and fetch message
+    let msg = find_message_from_db(&state, message_id).await?
+        .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
+    verify_account_ownership(&state, user_id, msg.account_id.0).await?;
+
+    // 2. Fetch the attachment metadata from DB
+    let attachment_repo = crate::db::sqlite::attachment_repository::AttachmentRepository::new(match &state.db {
+        DbPool::Sqlite(pool) => std::sync::Arc::new(pool.clone()),
+        _ => return Err(KestrelError::Internal(Box::new(crate::core::error::SimpleError("Postgres not implemented for attachments".into()))))
+    });
     
-    // Check if message exists (verify_message_ownership does this but doesn't return it)
-    let _msg = find_message_from_db(&state, message_id).await?.unwrap();
+    let attachments = attachment_repo.get_attachments_for_message(crate::core::types::DbUuid(message_id)).await?;
+    let attachment = attachments.iter().find(|a| a.filename == filename)
+        .ok_or_else(|| KestrelError::NotFound("Attachment not found".into()))?;
+        
+    let external_attachment_id = attachment.external_id.as_ref()
+        .ok_or_else(|| KestrelError::BadRequest("Attachment has no external ID".into()))?;
+
+    // 3. Fetch account and tokens
+    let account = match &state.db {
+        DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
+                .find_by_id(msg.account_id.0).await?
+        }
+        DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
+                .find_by_id(msg.account_id.0).await?
+        }
+    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
     
-    // In a full implementation, we'd query the plugin for the presigned URL
-    // For now, we mock the upstream CDN redirect
-    let mock_url = format!("https://cdn.kestrel.local/attachments/{}/{}", message_id, filename);
-    
-    // Use a temporary redirect (307) so the client re-requests us when the presigned URL expires
-    Ok(axum::response::Redirect::temporary(&mock_url))
+    let auth_token = account.access_token.ok_or_else(|| {
+        KestrelError::BadRequest("Account is missing an access token".to_string())
+    })?;
+
+    // 4. Download via plugin
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = plugin_manager.find_by_id(&account.provider)
+        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+
+    let bytes = plugin.as_mail_provider().download_attachment(&auth_token, &msg.external_id, external_attachment_id)
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
+
+    // 5. Stream to client
+    Ok(axum::response::Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, attachment.content_type.clone())
+        .header(axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", attachment.filename))
+        .body(axum::body::Body::from(bytes))
+        .unwrap())
 }
 
 // --- Outbound Send Logic (Task 37) ---
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
+pub struct SendAttachmentPayload {
+    pub filename: String,
+    pub content_type: String,
+    pub base64_content: String,
+}
+
+#[derive(serde::Deserialize)]
 pub struct SendMessageRequest {
-    pub to: String,
+    pub account_id: Uuid,
+    pub to: Vec<String>,
+    pub cc: Option<Vec<String>>,
+    pub bcc: Option<Vec<String>>,
     pub subject: String,
-    pub body: String,
-    pub thread_id: Option<String>,
+    pub body_html: String,
+    pub attachments: Option<Vec<SendAttachmentPayload>>,
 }
 
 #[derive(Serialize)]
@@ -549,59 +597,76 @@ pub struct SendMessageResponse {
 pub async fn send_message(
     State(state): State<AppState>,
     AuthUser { user_id }: AuthUser,
-    axum::Json(params): axum::Json<SendMessageRequest>,
+    axum::Json(payload): axum::Json<SendMessageRequest>,
 ) -> Result<Json<SendMessageResponse>, KestrelError> {
-    // 1. Fetch user's first linked account to use for sending (in a real app, the client would specify the account_id)
-    let accounts = crate::api::sync::list_user_accounts(&state, user_id).await?;
-    let account = accounts.into_iter().next().ok_or_else(|| KestrelError::BadRequest("No linked accounts".to_string()))?;
-    
-    let token = account.access_token.ok_or_else(|| KestrelError::Unauthorized)?;
+    // 1. Fetch account and verify ownership
+    let account = match &state.db {
+        DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
+                .find_by_id(payload.account_id)
+                .await?
+        }
+        DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
+                .find_by_id(payload.account_id)
+                .await?
+        }
+    };
 
-    // 2. Direct-to-provider API calls (Simulating dispatch.ts logic in backend)
-    let client = reqwest::Client::new();
-    
-    if account.provider.to_lowercase() == "google" || account.provider.to_lowercase() == "gmail" {
-        // Construct MIME base64 request for Gmail API
-        let raw_message = format!("To: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n{}", params.to, params.subject, params.body);
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-        let encoded_message = URL_SAFE_NO_PAD.encode(raw_message);
-        
-        let res = client.post("https://gmail.googleapis.com/gmail/v1/users/me/messages/send")
-            .bearer_auth(token)
-            .json(&serde_json::json!({ "raw": encoded_message }))
-            .send()
-            .await
-            .map_err(|e| KestrelError::Internal(format!("Reqwest error: {}", e).into()))?;
-            
-        if !res.status().is_success() {
-            let err_text = res.text().await.unwrap_or_default();
-            tracing::error!("Gmail send failed: {}", err_text);
-            // In a real app we would fail here, but for the mock we'll fall through
-        }
-    } else {
-        // Construct Microsoft Graph API sendMail payload
-        let res = client.post("https://graph.microsoft.com/v1.0/me/sendMail")
-            .bearer_auth(token)
-            .json(&serde_json::json!({
-                "message": {
-                    "subject": params.subject,
-                    "body": { "contentType": "HTML", "content": params.body },
-                    "toRecipients": [{ "emailAddress": { "address": params.to } }]
-                }
-            }))
-            .send()
-            .await
-            .map_err(|e| KestrelError::Internal(format!("Reqwest error: {}", e).into()))?;
-            
-        if !res.status().is_success() {
-            let err_text = res.text().await.unwrap_or_default();
-            tracing::error!("Graph send failed: {}", err_text);
-        }
+    let account = account.ok_or_else(|| KestrelError::NotFound("Account not found".to_string()))?;
+    if *account.user_id != user_id {
+        return Err(KestrelError::NotFound("Account not found".to_string()));
     }
-    
-    // 3. Insert into local DB immediately to update UI instantly (Optimistic update)
-    // For now we just return a fake ID so the UI knows it succeeded
-    
+
+    let auth_token = account.access_token.ok_or_else(|| {
+        KestrelError::BadRequest("Account is missing an access token".to_string())
+    })?;
+
+    // 2. Map request payload to plugin WIT payload
+    use base64::{Engine as _, engine::general_purpose::STANDARD as b64};
+    let mapped_attachments = match payload.attachments {
+        Some(atts) => {
+            let mut mapped = Vec::new();
+            for a in atts {
+                // Remove data uri prefix if present
+                let b64_str = if a.base64_content.contains(",") {
+                    a.base64_content.split(",").nth(1).unwrap_or(&a.base64_content)
+                } else {
+                    &a.base64_content
+                };
+                let bytes = b64.decode(b64_str).map_err(|e| {
+                    KestrelError::BadRequest(format!("Invalid base64 attachment: {}", e))
+                })?;
+                mapped.push(crate::plugins::traits::AttachmentPayload {
+                    filename: a.filename,
+                    content_type: a.content_type,
+                    content: bytes,
+                });
+            }
+            Some(mapped)
+        }
+        None => None,
+    };
+
+    let wit_payload = crate::plugins::traits::SendMessagePayload {
+        to: payload.to,
+        cc: payload.cc,
+        bcc: payload.bcc,
+        subject: payload.subject,
+        body_html: payload.body_html,
+        attachments: mapped_attachments,
+    };
+
+    // 3. Dispatch to plugin manager
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = plugin_manager.find_by_id(&account.provider)
+        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+
+    plugin.as_mail_provider().send_message(&auth_token, wit_payload).await.map_err(|e| {
+        KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Dispatch failed: {:?}", e))))
+    })?;
+
+    // 4. Return success response (UI expects SendMessageResponse)
     Ok(Json(SendMessageResponse {
         id: format!("sent-{}", uuid::Uuid::new_v4()),
     }))
@@ -706,3 +771,5 @@ pub async fn block_sender(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+

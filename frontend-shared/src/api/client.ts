@@ -445,3 +445,9 @@ export async function deleteEvent(
 ): Promise<void> {
   return request<void>('DELETE', `/events/${eventId}`, { token });
 }
+
+export const apiClient = {
+  get: (path: string) => request<any>('GET', path.replace('/api/v1', '')),
+  post: (path: string, body?: any) => request<any>('POST', path.replace('/api/v1', ''), { body }),
+  delete: (path: string) => request<any>('DELETE', path.replace('/api/v1', ''))
+};

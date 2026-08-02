@@ -38,11 +38,33 @@ interface mail-provider {
         next-cursor: string,
     }
 
+    record attachment-payload {
+        filename: string,
+        content-type: string,
+        content: list<u8>,
+    }
+
+    /// Payload for sending an email.
+    record send-message-payload {
+        to: list<string>,
+        cc: option<list<string>>,
+        bcc: option<list<string>>,
+        subject: string,
+        body-html: string,
+        attachments: option<list<attachment-payload>>,
+    }
+
     /// Fetch new/updated message headers since the last cursor position.
     sync-mail: func(auth-token: string, cursor: option<string>) -> result<sync-result, string>;
 
     /// Fetch the full body of a single message by its provider-side external ID.
     fetch-message-body: func(auth-token: string, external-id: string) -> result<message-body, string>;
+    
+    /// Download an attachment by its external message ID and attachment ID.
+    download-attachment: func(auth-token: string, external-message-id: string, external-attachment-id: string) -> result<list<u8>, string>;
+
+    /// Send an email message.
+    send-message: func(auth-token: string, payload: send-message-payload) -> result<_, string>;
 
     /// Soft-delete a message on the provider (moves to Trash).
     delete-message: func(auth-token: string, external-id: string) -> result<_, string>;
@@ -117,6 +139,28 @@ interface provider-branding {
 }
 
 // ─────────────────────────────────────────────
+// Host-Provided HTTP Client
+// ─────────────────────────────────────────────
+
+interface http-client {
+    record http-request {
+        method: string,
+        url: string,
+        headers: list<tuple<string, string>>,
+        body: option<list<u8>>,
+    }
+    
+    record http-response {
+        status: u16,
+        headers: list<tuple<string, string>>,
+        body: list<u8>,
+    }
+    
+    /// Make an HTTP request through the host's networking stack
+    request: func(req: http-request) -> result<http-response, string>;
+}
+
+// ─────────────────────────────────────────────
 // Plugin World
 // ─────────────────────────────────────────────
 
@@ -132,6 +176,8 @@ world kestrel-plugin {
     /// Host-provided function: plugin calls this to retrieve its OAuth credentials
     /// rather than bundling secrets inside the .wasm binary.
     import get-client-credentials: func(provider: string) -> result<client-credentials, string>;
+
+    import http-client;
 
     export mail-provider;
     export calendar-provider;

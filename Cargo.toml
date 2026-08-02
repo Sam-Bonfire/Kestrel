@@ -3,6 +3,6 @@ members = [
     "backend",
     "frontend-mail/src-tauri",
     "frontend-calendar/src-tauri"
-]
+, "plugins/gmail", "plugins/outlook"]
 resolver = "2"
 

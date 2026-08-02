@@ -17,20 +17,9 @@ use crate::core::error::KestrelError;
 use crate::core::models::User;
 use crate::core::types::DbUuid;
 
-/// Wrapper to satisfy the `Box<dyn std::error::Error>` bound on `KestrelError::Internal`
-/// for error types (like argon2's) that don't implement `std::error::Error`.
-#[derive(Debug)]
-struct SimpleError(String);
+use crate::core::error::SimpleError;
 
-impl std::fmt::Display for SimpleError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for SimpleError {}
-
-use crate::core::repository::UserRepository;
+use crate::core::repository::{UserRepository, AccountRepository};
 use crate::db::pool::DbPool;
 use crate::db::postgres::user_repository::PostgresUserRepository;
 use crate::db::sqlite::user_repository::SqliteUserRepository;
@@ -360,6 +349,8 @@ pub async fn login(Query(params): Query<LoginParams>) -> Result<Response, Kestre
 // --- K-027: GET /api/v1/auth/callback/:provider ---
 
 pub async fn callback(
+    State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<AuthUser>,
     axum::extract::Path(provider): axum::extract::Path<String>,
     Query(params): Query<CallbackParams>,
 ) -> Result<Response, KestrelError> {
@@ -367,10 +358,104 @@ pub async fn callback(
     
     tracing::info!("Received OAuth callback for {} with code: {}", provider, code);
 
-    // TODO: Exchange code for access_token and refresh_token, then create/update Account in DB.
-    // For now, redirect back to frontend.
+    let base_url = std::env::var("KESTREL_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:1420".to_string());
+    let redirect_uri = format!("{}/api/v1/auth/callback/{}", base_url, provider);
+
+    let (token_url, client_id, client_secret) = match provider.as_str() {
+        "gmail" => (
+            "https://oauth2.googleapis.com/token".to_string(),
+            std::env::var("GMAIL_CLIENT_ID").unwrap_or_default(),
+            std::env::var("GMAIL_CLIENT_SECRET").unwrap_or_default(),
+        ),
+        "outlook" => (
+            "https://login.microsoftonline.com/common/oauth2/v2.0/token".to_string(),
+            std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default(),
+            std::env::var("OUTLOOK_CLIENT_SECRET").unwrap_or_default(),
+        ),
+        _ => return Err(KestrelError::BadRequest("Unknown provider".to_string())),
+    };
+
+    if client_id.is_empty() || client_secret.is_empty() {
+        return Err(KestrelError::Internal(Box::new(SimpleError(format!("Missing credentials for {}", provider)))));
+    }
+
+    let client = reqwest::Client::new();
+    let res = client.post(&token_url)
+        .form(&[
+            ("client_id", client_id.as_str()),
+            ("client_secret", client_secret.as_str()),
+            ("code", code.as_str()),
+            ("redirect_uri", redirect_uri.as_str()),
+            ("grant_type", "authorization_code"),
+        ])
+        .send()
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(e)))?;
+
+    if !res.status().is_success() {
+        let err_text = res.text().await.unwrap_or_default();
+        tracing::error!("OAuth token exchange failed: {}", err_text);
+        return Err(KestrelError::Internal(Box::new(SimpleError("OAuth token exchange failed".to_string()))));
+    }
+
+    let token_data: serde_json::Value = res.json().await.map_err(|e| KestrelError::Internal(Box::new(e)))?;
+    
+    let access_token = token_data["access_token"].as_str().unwrap_or("").to_string();
+    let refresh_token = token_data["refresh_token"].as_str().map(|s| s.to_string());
+    let expires_in = token_data["expires_in"].as_i64().unwrap_or(3600);
+    
+    let token_expires_at = chrono::Utc::now().timestamp() + expires_in;
+
+    // Save to database
+    let now = chrono::Utc::now().timestamp();
+    let account = crate::core::models::Account {
+        id: crate::core::types::DbUuid::new(Uuid::new_v4()),
+        user_id: crate::core::types::DbUuid::new(auth_user.user_id),
+        provider: provider.clone(),
+        provider_account_id: format!("{}-{}", provider, Uuid::new_v4()), // We need a real ID, but this is a placeholder until we fetch the profile
+        display_name: format!("{} Account", provider),
+        access_token: Some(access_token.clone()),
+        refresh_token,
+        token_expires_at: Some(token_expires_at),
+        created_at: now,
+        updated_at: now,
+    };
+
+    let db_res = match &state.db {
+        DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
+                .create(&account)
+                .await
+        }
+        DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
+                .create(&account)
+                .await
+        }
+    };
+
+    if let Err(e) = db_res {
+        tracing::error!("Failed to save account to DB: {:?}", e);
+        return Err(KestrelError::Internal(Box::new(SimpleError("Failed to save account".to_string()))));
+    }
+    
+    // Trigger initial historical sync in the background
+    let sync_state = state.clone();
+    let sync_account = account.clone();
+    let sync_token = access_token.clone();
+    tokio::spawn(async move {
+        tracing::info!("Starting initial historical sync for account {}", sync_account.id.0);
+        if let Err(e) = crate::api::sync::sync_account_messages(&sync_state, &sync_account, &sync_token).await {
+            tracing::error!("Initial historical sync failed for {}: {}", sync_account.id.0, e);
+        }
+        tracing::info!("Completed initial historical sync for account {}", sync_account.id.0);
+    });
+    
     let frontend_url = std::env::var("KESTREL_FRONTEND_URL")
         .unwrap_or_else(|_| "http://localhost:1420".to_string());
     
-    Ok(axum::response::Redirect::to(&frontend_url).into_response())
+    // Redirect back to Settings Modal -> Accounts tab
+    Ok(axum::response::Redirect::to(&format!("{}/settings?tab=accounts", frontend_url)).into_response())
 }
+

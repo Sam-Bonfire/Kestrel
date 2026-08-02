@@ -30,6 +30,23 @@ pub struct MessageBody {
     pub body_html: Option<String>,
 }
 
+/// Payload for sending an email.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AttachmentPayload {
+    pub filename: String,
+    pub content_type: String,
+    pub content: Vec<u8>,
+}
+
+pub struct SendMessagePayload {
+    pub to: Vec<String>,
+    pub cc: Option<Vec<String>>,
+    pub bcc: Option<Vec<String>>,
+    pub subject: String,
+    pub body_html: String,
+    pub attachments: Option<Vec<AttachmentPayload>>,
+}
+
 /// Cursor-based sync result for incremental message fetching.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SyncResult {
@@ -56,11 +73,26 @@ pub trait MailProvider: Send + Sync {
         external_id: &str,
     ) -> Result<MessageBody, PluginError>;
 
+    /// Download an attachment by its provider-side IDs.
+    async fn download_attachment(
+        &self,
+        auth_token: &str,
+        external_message_id: &str,
+        external_attachment_id: &str,
+    ) -> Result<Vec<u8>, PluginError>;
+
     /// Soft-delete a message on the provider (moves to Trash).
     async fn delete_message(
         &self,
         auth_token: &str,
         external_id: &str,
+    ) -> Result<(), PluginError>;
+
+    /// Send an email message.
+    async fn send_message(
+        &self,
+        auth_token: &str,
+        payload: SendMessagePayload,
     ) -> Result<(), PluginError>;
 
     /// Archive a message on the provider.

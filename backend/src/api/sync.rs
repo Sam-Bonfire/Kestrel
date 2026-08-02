@@ -235,7 +235,7 @@ async fn get_all_accounts_with_tokens(
 
 /// K-038: LWW conflict resolution — sync messages from a provider account.
 /// Compares timestamps to decide whether to upsert or skip.
-async fn sync_account_messages(
+pub async fn sync_account_messages(
     state: &AppState,
     account: &crate::core::models::Account,
     token: &str,

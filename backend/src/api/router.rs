@@ -64,7 +64,6 @@ pub fn create_router(state: AppState) -> Router {
             auth::auth_middleware,
         )))
         .route("/api/v1/auth/login", get(auth::login))
-        .route("/api/v1/auth/callback", get(auth::callback))
         .route("/api/v1/providers", get(providers::list_providers))
         // Auth-specific rate limit: max 10 requests per minute per IP
         .layer(middleware::from_fn_with_state(
@@ -74,10 +73,12 @@ pub fn create_router(state: AppState) -> Router {
 
     // Protected routes (auth middleware required)
     let protected = Router::new()
+        .route("/api/v1/auth/callback/:provider", get(auth::callback))
+        .route("/api/v1/accounts", get(accounts::list_accounts))
         .route("/api/v1/accounts/{id}", delete(accounts::delete_account))
         .route("/api/v1/messages", get(messages::list_messages))
         .route("/api/v1/messages/{id}", get(messages::get_message))
-        .route("/api/v1/messages/{id}/attachments/{filename}/redirect", get(messages::get_attachment_redirect))
+        .route("/api/v1/messages/{id}/attachments/{filename}", get(messages::download_attachment))
         .route("/api/v1/messages/{id}/read", post(messages::mark_read))
         .route("/api/v1/messages/{id}/archive", post(messages::archive_message))
         .route("/api/v1/messages/{id}/snooze", post(messages::snooze_message))

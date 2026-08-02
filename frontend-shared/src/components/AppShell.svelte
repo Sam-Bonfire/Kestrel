@@ -35,7 +35,7 @@
   {/if}
 
   <!-- Sidebar Container -->
-  <div class="fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 {isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl lg:shadow-none">
+  <div class="fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:transform-none lg:relative lg:translate-x-0 {isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl lg:shadow-none">
     {@render sidebar?.()}
   </div>
 

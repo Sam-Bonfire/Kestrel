@@ -50,18 +50,13 @@ pub async fn init_pool(database_url: &str) -> Result<DbPool, Box<dyn std::error:
 }
 
 pub async fn run_migrations(db: &DbPool) -> Result<(), Box<dyn std::error::Error>> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
     match db {
         DbPool::Sqlite(pool) => {
-            let migration_path = format!("{}/migrations/sqlite/001_initial.sql", manifest_dir);
-            let migration_sql = std::fs::read_to_string(&migration_path)?;
-            sqlx::raw_sql(&migration_sql).execute(pool).await?;
+            sqlx::migrate!("./migrations/sqlite").run(pool).await?;
             info!("SQLite migrations completed");
         }
         DbPool::Postgres(pool) => {
-            let migration_path = format!("{}/migrations/postgres/001_initial.sql", manifest_dir);
-            let migration_sql = std::fs::read_to_string(&migration_path)?;
-            sqlx::raw_sql(&migration_sql).execute(pool).await?;
+            sqlx::migrate!("./migrations/postgres").run(pool).await?;
             info!("PostgreSQL migrations completed");
         }
     }

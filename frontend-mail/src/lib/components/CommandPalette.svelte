@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { Search, Mail, Settings, PenSquare } from 'lucide-svelte';
+  import { isTyping } from '$lib/utils/keyboard';
 
   let {
     isOpen = false,
@@ -25,11 +26,18 @@
   );
 
   function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+    
+    // Ignore command shortcuts if typing, unless they use a modifier
+    if (isTyping(e) && !(e.ctrlKey || e.metaKey)) {
+        return;
+    }
+    
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       isOpen = !isOpen;
-    } else if (e.key === 'Escape' && isOpen) {
-      onClose();
     }
   }
 
