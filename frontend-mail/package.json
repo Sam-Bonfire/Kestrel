@@ -21,6 +21,8 @@
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2",
+    "@types/dompurify": "^3.2.0",
+    "dompurify": "^3.4.12",
     "lucide-svelte": "^0.469.0"
   },
   "devDependencies": {

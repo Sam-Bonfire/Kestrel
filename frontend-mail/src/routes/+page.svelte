@@ -8,7 +8,7 @@
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell } from '@kestrel/shared/components';
   import { authState, initAuth, logout } from '@kestrel/shared/stores';
-  import { replayOfflineQueue } from '@kestrel/shared/api';
+  import { replayOfflineQueue, searchMessages } from '@kestrel/shared/api';
   import { onMount, untrack } from 'svelte';
 
   onMount(() => {
@@ -18,6 +18,30 @@
     // Setup online listener
     const onOnline = () => replayOfflineQueue().catch(console.error);
     window.addEventListener('online', onOnline);
+
+    import('@tauri-apps/plugin-notification').then(({ registerActionTypes, onNotificationAction }) => {
+      registerActionTypes([
+        {
+          id: 'new_email_actions',
+          actions: [
+            { id: 'mark_read', title: 'Mark as Read' },
+            { id: 'archive', title: 'Archive' }
+          ]
+        }
+      ]).catch(() => {});
+
+      onNotificationAction((event) => {
+        if (event.actionId === 'mark_read') {
+          console.log("Notification action: Mark as Read triggered");
+          // Here we would call api.markAsRead(event.notification.id)
+        } else if (event.actionId === 'archive') {
+          console.log("Notification action: Archive triggered");
+          // Here we would call api.archiveMessage(event.notification.id)
+        }
+      });
+    }).catch(() => {
+      // Ignore if not in Tauri
+    });
     
     return () => {
       window.removeEventListener('online', onOnline);
@@ -47,6 +71,7 @@
 
   // ── Real emails from API ───────────────────────────────
   let allEmails = $state<any[]>([]);
+  let searchResults = $state<any[] | null>(null);
   let isLoading = $state(true);
 
   $effect(() => {
@@ -135,7 +160,8 @@
                 import('@tauri-apps/plugin-notification').then(({ sendNotification }) => {
                   sendNotification({
                     title: 'New Email Received',
-                    body: data.subject || 'You have a new message'
+                    body: data.subject || 'You have a new message',
+                    actionTypeId: 'new_email_actions'
                   });
                 }).catch(() => {
                   // Ignore if Tauri is not available (e.g. running in browser)
@@ -204,15 +230,6 @@
         }
         return true;
       })
-      .filter(e => {
-        if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-          e.sender.toLowerCase().includes(q) ||
-          e.subject.toLowerCase().includes(q) ||
-          e.body.toLowerCase().includes(q)
-        );
-      })
       .map(e => ({
         id: e.id,
         sender: e.sender,
@@ -227,6 +244,42 @@
         category: e.category
       }))
   );
+
+  let finalThreads = $derived(
+    searchResults 
+      ? searchResults.map(e => ({
+          id: e.id,
+          sender: e.sender_name || e.sender_email,
+          senderEmail: e.sender_email,
+          subject: e.subject || '(no subject)',
+          snippet: e.snippet || '',
+          date: formatDate(e.date_received * 1000),
+          isUnread: !e.is_read,
+          isStarred: false,
+          hasAttachment: false,
+          labels: [],
+          category: 'Primary'
+        }))
+      : threads
+  );
+
+  // Debounced search logic
+  let searchTimeout: any;
+  $effect(() => {
+    if (searchQuery.trim().length > 0) {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        searchMessages(searchQuery.trim()).then(res => {
+          searchResults = res.results;
+        }).catch(err => {
+          console.error("Search error:", err);
+          searchResults = null;
+        });
+      }, 300);
+    } else {
+      searchResults = null;
+    }
+  });
 
   let activeEmail = $derived.by(() => {
     if (!selectedThreadId) return null;
@@ -582,7 +635,7 @@
   {#snippet children()}
     <!-- Mail panel: full width thread list, no reader pane -->
     <ThreadList
-      {threads}
+      threads={finalThreads}
       {currentView}
       {selectedThreadId}
       {allLabels}

@@ -39,6 +39,7 @@
     EmailPillInput,
     Dropdown
   } from '@kestrel/shared';
+  import DOMPurify from 'dompurify';
 
   export interface Email {
     id: string;
@@ -328,7 +329,7 @@
             <iframe 
               title="Email Body"
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-              srcdoc={email.body}
+              srcdoc={DOMPurify.sanitize(email.body, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
               class="w-full min-h-[20vh] bg-white"
               onload={(e) => { 
                 const target = e.currentTarget as HTMLIFrameElement;

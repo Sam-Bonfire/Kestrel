@@ -109,6 +109,36 @@ export async function replayOfflineQueue(): Promise<void> {
   }
 }
 
+// ── Search (FTS5) ───────────────────────────────────────────
+
+export interface SearchResult {
+  id: string;
+  account_id: string;
+  external_id: string;
+  thread_id: string;
+  subject: string | null;
+  sender_name: string | null;
+  sender_email: string;
+  snippet: string | null;
+  date_received: number;
+  is_read: boolean;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  total: number;
+  query: string;
+}
+
+export async function searchMessages(query: string, limit?: number): Promise<SearchResponse> {
+  const q = new URLSearchParams();
+  q.append('q', query);
+  if (limit !== undefined) {
+    q.append('limit', limit.toString());
+  }
+  return request<SearchResponse>('GET', `/search?${q.toString()}`);
+}
+
 // ── Types ───────────────────────────────────────────────────────
 
 export interface HealthResponse {
