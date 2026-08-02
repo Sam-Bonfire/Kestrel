@@ -198,13 +198,39 @@ pub async fn get_message(
     AuthUser { user_id }: AuthUser,
     Path(message_id): Path<Uuid>,
 ) -> Result<Json<MessageDetail>, KestrelError> {
-    let msg = find_message_from_db(&state, message_id).await?;
-    let msg = msg.ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
+    let mut msg = find_message_from_db(&state, message_id).await?
+        .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
 
     // Verify the message belongs to an account owned by this user
     let owns = verify_account_ownership(&state, user_id, msg.account_id.0).await?;
     if !owns {
         return Err(KestrelError::NotFound("Message not found".to_string()));
+    }
+
+    // On-demand body fetching (Task 2.2)
+    if msg.body_text.is_none() && msg.body_html.is_none() {
+        if let Some(account) = find_account_from_db(&state, msg.account_id.0).await? {
+            if let Some(token) = account.access_token {
+                let plugin_manager = state.plugin_manager.read().await;
+                if let Some(plugin) = plugin_manager.find_by_id(&account.provider) {
+                    if let Ok(body) = plugin.as_mail_provider().fetch_message_body(&token, &msg.external_id).await {
+                        msg.body_text = body.body_text;
+                        msg.body_html = body.body_html;
+                        // Save back to DB
+                        match &state.db {
+                            DbPool::Sqlite(pool) => {
+                                let repo = SqliteMessageRepository::new(pool.clone());
+                                let _ = repo.upsert(&msg).await;
+                            }
+                            DbPool::Postgres(pool) => {
+                                let repo = PostgresMessageRepository::new(pool.clone());
+                                let _ = repo.upsert(&msg).await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(Json(MessageDetail {
@@ -243,6 +269,26 @@ async fn find_message_from_db(
         DbPool::Postgres(pool) => {
             let repo = PostgresMessageRepository::new(pool.clone());
             Ok(repo.find_by_id(message_id).await?)
+        }
+    }
+}
+
+async fn find_account_from_db(
+    state: &AppState,
+    account_id: Uuid,
+) -> Result<Option<crate::core::models::Account>, KestrelError> {
+    use crate::db::sqlite::account_repository::SqliteAccountRepository;
+    use crate::db::postgres::account_repository::PostgresAccountRepository;
+    use crate::core::repository::AccountRepository;
+
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            let repo = SqliteAccountRepository::new(pool.clone());
+            Ok(repo.find_by_id(account_id).await?)
+        }
+        DbPool::Postgres(pool) => {
+            let repo = PostgresAccountRepository::new(pool.clone());
+            Ok(repo.find_by_id(account_id).await?)
         }
     }
 }

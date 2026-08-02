@@ -1,5 +1,6 @@
 export {
   ApiError,
+  replayOfflineQueue,
   getHealth,
   register,
   createToken,

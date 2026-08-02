@@ -32,6 +32,8 @@ function buildHeaders(): HeadersInit {
   return headers;
 }
 
+import { enqueueMutation, dequeuePending, acknowledgeMutation } from '../offline/queue';
+
 async function request<T>(
   method: string,
   path: string,
@@ -39,6 +41,11 @@ async function request<T>(
 ): Promise<T> {
   const { token, body, ...init } = opts;
   
+  if (!navigator.onLine && method !== 'GET') {
+    enqueueMutation(path, method, body);
+    return undefined as T; // Return early for void operations (or mock for others)
+  }
+
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method,
@@ -71,11 +78,34 @@ async function request<T>(
 
     return res.json() as Promise<T>;
   } catch (err: any) {
-    // If it's a network error (TypeError on fetch)
     if (err instanceof TypeError) {
+      if (method !== 'GET') {
+        enqueueMutation(path, method, body);
+        return undefined as T;
+      }
       throw new ApiError(0, 'Network error');
     }
     throw err;
+  }
+}
+
+export async function replayOfflineQueue(): Promise<void> {
+  if (!navigator.onLine) return;
+  const pending = dequeuePending();
+  for (const mut of pending) {
+    try {
+      await fetch(`${API_BASE}${mut.path}`, {
+        method: mut.method,
+        headers: buildHeaders(),
+        credentials: 'include',
+        body: mut.body != null ? JSON.stringify(mut.body) : undefined,
+      });
+      acknowledgeMutation(mut.id);
+    } catch (err) {
+      console.error('Failed to replay mutation', mut, err);
+      // Stop replay on first network failure to maintain order
+      if (err instanceof TypeError) break; 
+    }
   }
 }
 

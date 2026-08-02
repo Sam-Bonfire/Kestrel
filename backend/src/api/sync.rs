@@ -180,6 +180,21 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
                         let _ = sync_tx.send(event);
                     }
                 }
+                
+                match sync_account_calendars(&state, account, &token).await {
+                    Ok(count) => {
+                        if count > 0 {
+                            tracing::info!("Synced {} new calendar events for account {}", count, account.id.0);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Calendar sync daemon: failed for account {}: {}",
+                            account.id.0,
+                            e
+                        );
+                    }
+                }
             }
 
             tracing::info!(
@@ -227,8 +242,14 @@ async fn get_all_accounts_with_tokens(
             Ok(accounts)
         }
         DbPool::Postgres(pool) => {
-            let _ = pool; // Placeholder for Postgres impl
-            Ok(vec![])
+            let accounts = sqlx::query_as::<_, crate::core::models::Account>(
+                "SELECT id, user_id, provider, provider_account_id, display_name, \
+                 access_token, refresh_token, token_expires_at, created_at, updated_at \
+                 FROM accounts WHERE access_token IS NOT NULL",
+            )
+            .fetch_all(pool)
+            .await?;
+            Ok(accounts)
         }
     }
 }
@@ -331,6 +352,128 @@ pub async fn sync_account_messages(
             repo.upsert(&message).await?;
             synced_count += 1;
         }
+    }
+
+    Ok(synced_count)
+}
+
+/// Task 2.2: Fetch and store calendar events.
+pub async fn sync_account_calendars(
+    state: &AppState,
+    account: &crate::core::models::Account,
+    token: &str,
+) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = match plugin_manager.find_by_provider(&account.provider) {
+        Some(p) => p,
+        None => return Ok(0),
+    };
+
+    let calendar_provider = plugin.as_calendar_provider();
+    
+    // Sync calendars (metadata) first
+    let calendars = calendar_provider.fetch_calendars(token).await?;
+    let mut default_calendar_id = None;
+    
+    let cal_repo: Box<dyn crate::core::repository::CalendarRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::calendar_repository::SqliteCalendarRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::calendar_repository::PostgresCalendarRepository::new(pool.clone())),
+    };
+
+    let calendars_for_account = cal_repo.list_by_account(account.id.0).await?;
+
+    for payload in calendars {
+        let existing = calendars_for_account.iter().find(|c| c.external_id == payload.id).cloned();
+        let calendar_db_id = match existing {
+            Some(mut c) => {
+                c.name = payload.name;
+                c.color = payload.color;
+                c.is_primary = payload.is_primary;
+                c.updated_at = Utc::now().timestamp();
+                cal_repo.upsert(&c).await?;
+                c.id.0
+            }
+            None => {
+                let id = Uuid::new_v4();
+                let c = crate::core::models::Calendar {
+                    id: crate::core::types::DbUuid(id),
+                    account_id: account.id.clone(),
+                    external_id: payload.id.clone(),
+                    name: payload.name,
+                    color: payload.color,
+                    is_primary: payload.is_primary,
+                    created_at: Utc::now().timestamp(),
+                    updated_at: Utc::now().timestamp(),
+                };
+                cal_repo.upsert(&c).await?;
+                id
+            }
+        };
+        if payload.is_primary || default_calendar_id.is_none() {
+            default_calendar_id = Some(calendar_db_id);
+        }
+    }
+
+    let default_calendar_id = match default_calendar_id {
+        Some(id) => id,
+        None => return Ok(0), // No calendars found
+    };
+
+    // Sync events for the next 30 days
+    let start_time = Utc::now().timestamp();
+    let end_time = start_time + 30 * 24 * 60 * 60;
+    
+    let events = calendar_provider.fetch_events(token, start_time, end_time).await?;
+    let mut synced_count = 0;
+
+    let event_repo: Box<dyn crate::core::repository::EventRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::event_repository::PostgresEventRepository::new(pool.clone())),
+    };
+
+    for payload in events {
+        let existing = event_repo.find_by_external_id(account.id.0, &payload.external_id).await?;
+        
+        match existing {
+            Some(mut e) => {
+                e.title = payload.title;
+                e.description = payload.description;
+                e.location = payload.location;
+                e.start_time = payload.start_time;
+                e.end_time = payload.end_time;
+                e.is_all_day = payload.is_all_day;
+                e.recurrence_rules = payload.recurrence_rules;
+                e.organizer_email = payload.organizer_email;
+                e.organizer_name = payload.organizer_name;
+                e.attendees = payload.attendees;
+                e.status = payload.status;
+                e.updated_at = Utc::now().timestamp();
+                event_repo.upsert(&e).await?;
+            }
+            None => {
+                let e = crate::core::models::CalendarEvent {
+                    id: crate::core::types::DbUuid(Uuid::new_v4()),
+                    account_id: account.id.clone(),
+                    calendar_id: crate::core::types::DbUuid(default_calendar_id), // Simplified: attach to default calendar
+                    external_id: payload.external_id,
+                    title: payload.title,
+                    description: payload.description,
+                    location: payload.location,
+                    start_time: payload.start_time,
+                    end_time: payload.end_time,
+                    is_all_day: payload.is_all_day,
+                    recurrence_rules: payload.recurrence_rules,
+                    organizer_email: payload.organizer_email,
+                    organizer_name: payload.organizer_name,
+                    attendees: payload.attendees,
+                    status: payload.status,
+                    created_at: Utc::now().timestamp(),
+                    updated_at: Utc::now().timestamp(),
+                };
+                event_repo.upsert(&e).await?;
+            }
+        };
+        synced_count += 1;
     }
 
     Ok(synced_count)

@@ -8,7 +8,21 @@
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell } from '@kestrel/shared/components';
   import { authState, initAuth, logout } from '@kestrel/shared/stores';
+  import { replayOfflineQueue } from '@kestrel/shared/api';
   import { onMount, untrack } from 'svelte';
+
+  onMount(() => {
+    // Initial offline queue replay
+    replayOfflineQueue().catch(console.error);
+    
+    // Setup online listener
+    const onOnline = () => replayOfflineQueue().catch(console.error);
+    window.addEventListener('online', onOnline);
+    
+    return () => {
+      window.removeEventListener('online', onOnline);
+    };
+  });
 
   // ── Accounts ────────────────────────────────────────────────────
   const accounts = [
