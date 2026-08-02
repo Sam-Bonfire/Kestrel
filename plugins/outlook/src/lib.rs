@@ -238,8 +238,69 @@ impl MailGuest for OutlookPlugin {
 impl CalendarGuest for OutlookPlugin {
     fn fetch_calendars(_auth_token: String) -> Result<Vec<CalendarPayload>, String> { Ok(vec![]) }
     fn fetch_events(_auth_token: String, _start_time: i64, _end_time: i64) -> Result<Vec<EventPayload>, String> { Ok(vec![]) }
-    fn mutate_event(_auth_token: String, _action: String, _payload: EventPayload) -> Result<(), String> { Ok(()) }
-    fn delete_event(_auth_token: String, _external_id: String) -> Result<(), String> { Ok(()) }
+    
+    fn mutate_event(auth_token: String, action: String, payload: EventPayload) -> Result<(), String> {
+        // Use chrono's TimeZone to create UTC DateTime, then format
+        use chrono::TimeZone;
+        let start_dt = chrono::Utc.timestamp_opt(payload.start_time, 0).unwrap();
+        let end_dt = chrono::Utc.timestamp_opt(payload.end_time, 0).unwrap();
+        
+        // Graph API requires the format: YYYY-MM-DDTHH:MM:SS
+        let start_str = start_dt.format("%Y-%m-%dT%H:%M:%S").to_string();
+        let end_str = end_dt.format("%Y-%m-%dT%H:%M:%S").to_string();
+
+        let event_json = json!({
+            "subject": payload.title,
+            "body": {
+                "contentType": "HTML",
+                "content": payload.description.unwrap_or_default()
+            },
+            "location": {
+                "displayName": payload.location.unwrap_or_default()
+            },
+            "start": {
+                "dateTime": start_str,
+                "timeZone": "UTC"
+            },
+            "end": {
+                "dateTime": end_str,
+                "timeZone": "UTC"
+            },
+            "isAllDay": payload.is_all_day
+        });
+        
+        let (method, url) = if action == "create" {
+            ("POST".to_string(), "https://graph.microsoft.com/v1.0/me/events".to_string())
+        } else {
+            ("PATCH".to_string(), format!("https://graph.microsoft.com/v1.0/me/events/{}", payload.external_id))
+        };
+        
+        let body_bytes = serde_json::to_vec(&event_json).unwrap();
+        
+        let req = HttpRequest {
+            method,
+            url,
+            headers: vec![
+                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            body: Some(body_bytes),
+        };
+        
+        let res = request(&req)?;
+        if res.status >= 200 && res.status < 300 { Ok(()) } else { Err(format!("HTTP {} - {}", res.status, String::from_utf8_lossy(&res.body))) }
+    }
+    
+    fn delete_event(auth_token: String, external_id: String) -> Result<(), String> {
+        let req = HttpRequest {
+            method: "DELETE".to_string(),
+            url: format!("https://graph.microsoft.com/v1.0/me/events/{}", external_id),
+            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            body: None,
+        };
+        let res = request(&req)?;
+        if res.status == 204 || res.status == 200 || res.status == 404 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+    }
 }
 
 export!(OutlookPlugin);

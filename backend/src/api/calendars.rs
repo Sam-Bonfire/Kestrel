@@ -9,7 +9,7 @@ use super::auth::AuthUser;
 use super::router::AppState;
 use crate::core::error::KestrelError;
 use crate::core::models::{Calendar, CalendarEvent};
-use crate::core::repository::{CalendarRepository, EventRepository};
+use crate::core::repository::{AccountRepository, CalendarRepository, EventRepository};
 use crate::core::types::DbUuid;
 use crate::db::pool::DbPool;
 use crate::db::sqlite::calendar_repository::SqliteCalendarRepository;
@@ -335,12 +335,54 @@ pub async fn create_event(
     let cal = cal.ok_or_else(|| KestrelError::NotFound("Calendar not found".to_string()))?;
     verify_calendar_ownership(&state, user_id, &cal).await?;
 
+    let account = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
+                .find_by_id(cal.account_id.0).await?
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
+                .find_by_id(cal.account_id.0).await?
+        }
+    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+    
+    let auth_token = account.access_token.ok_or_else(|| {
+        KestrelError::BadRequest("Account is missing an access token".to_string())
+    })?;
+
     let now = Utc::now().timestamp();
+    let event_id = Uuid::new_v4();
+    let external_id = format!("local-{}", event_id);
+    
+    let payload = crate::plugins::traits::EventPayload {
+        id: event_id.to_string(),
+        external_id: external_id.clone(),
+        title: body.title.clone(),
+        description: body.description.clone(),
+        location: body.location.clone(),
+        start_time: body.start_time,
+        end_time: body.end_time,
+        is_all_day: body.is_all_day,
+        recurrence_rules: body.recurrence_rules.clone(),
+        organizer_email: None,
+        organizer_name: None,
+        attendees: body.attendees.clone(),
+        status: Some("confirmed".to_string()),
+    };
+
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = plugin_manager.find_by_id(&account.provider)
+        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+
+    plugin.as_calendar_provider().mutate_event(&auth_token, "create", &payload)
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
+
     let event = CalendarEvent {
-        id: DbUuid::new(Uuid::new_v4()),
+        id: DbUuid::new(event_id),
         account_id: cal.account_id,
         calendar_id: DbUuid(body.calendar_id),
-        external_id: format!("local-{}", Uuid::new_v4()),
+        external_id,
         title: body.title,
         description: body.description,
         location: body.location,
@@ -443,6 +485,45 @@ pub async fn update_event(
     }
     event.updated_at = Utc::now().timestamp();
 
+    let account = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
+                .find_by_id(event.account_id.0).await?
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
+                .find_by_id(event.account_id.0).await?
+        }
+    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+    
+    let auth_token = account.access_token.ok_or_else(|| {
+        KestrelError::BadRequest("Account is missing an access token".to_string())
+    })?;
+
+    let payload = crate::plugins::traits::EventPayload {
+        id: event.id.0.to_string(),
+        external_id: event.external_id.clone(),
+        title: event.title.clone(),
+        description: event.description.clone(),
+        location: event.location.clone(),
+        start_time: event.start_time,
+        end_time: event.end_time,
+        is_all_day: event.is_all_day,
+        recurrence_rules: event.recurrence_rules.clone(),
+        organizer_email: event.organizer_email.clone(),
+        organizer_name: event.organizer_name.clone(),
+        attendees: event.attendees.clone(),
+        status: event.status.clone(),
+    };
+
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = plugin_manager.find_by_id(&account.provider)
+        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+
+    plugin.as_calendar_provider().mutate_event(&auth_token, "update", &payload)
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
+
     upsert_event_to_db(&state, &event).await?;
 
     Ok(Json(EventDetail {
@@ -477,6 +558,29 @@ pub async fn delete_event(
     let event = event.ok_or_else(|| KestrelError::NotFound("Event not found".to_string()))?;
 
     verify_event_ownership(&state, user_id, &event).await?;
+
+    let account = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
+                .find_by_id(event.account_id.0).await?
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
+                .find_by_id(event.account_id.0).await?
+        }
+    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+    
+    let auth_token = account.access_token.ok_or_else(|| {
+        KestrelError::BadRequest("Account is missing an access token".to_string())
+    })?;
+
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = plugin_manager.find_by_id(&account.provider)
+        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+
+    plugin.as_calendar_provider().delete_event(&auth_token, &event.external_id)
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
 
     soft_delete_event_from_db(&state, event_id).await?;
 
