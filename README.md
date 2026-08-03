@@ -92,14 +92,14 @@ This project is in **active early development (v0.1.0)**.
 - CI/CD pipeline producing Windows MSI, Linux .deb/.AppImage, macOS .dmg, Android APK, iOS builds, and Docker images
 
 ### Roadmap
-- [ ] Live Gmail/Outlook sync via real WASM provider plugins
-- [ ] Real SMTP/API email sending
-- [ ] Calendar provider sync (Google Calendar, Outlook Calendar)
+- [x] Live Gmail/Outlook sync via real WASM provider plugins (mail + calendar)
+- [x] Real SMTP/API email sending (via Gmail/Outlook APIs)
+- [x] Calendar provider sync (Google Calendar, Outlook Calendar)
 - [ ] Push notifications via FCM/APNs
 - [ ] Tauri auto-update mechanism
 - [ ] Android/iOS code signing for store distribution
 - [ ] Rich text email composition
-- [ ] Attachment handling and CDN
+- [x] Attachment handling and download (via Tauri fs to OS download dir)
 - [ ] Contact address book integration
 
 ## ⚡ Quick Start

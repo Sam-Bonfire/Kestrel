@@ -121,6 +121,35 @@
 
   onMount(() => {
     initAuth();
+
+    // Deep Link Listener for OAuth callbacks & "create event" actions
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
+        onOpenUrl((urls) => {
+          for (const url of urls) {
+            if (url.startsWith('kestrel-calendar://oauth/callback')) {
+              // OAuth callback completed — refresh events/calendars from the backend
+              showToast('Account connected — syncing calendars...', 'info');
+              try {
+                const saved = localStorage.getItem('kestrel_accounts');
+                if (saved) accounts = JSON.parse(saved);
+              } catch (e) {}
+            } else if (url.startsWith('kestrel-calendar://new')) {
+              // kestrel-calendar://new?date=YYYY-MM-DD&startTime=HH:MM&endTime=HH:MM
+              const u = new URL(url);
+              const date = u.searchParams.get('date') || new Date().toISOString().split('T')[0];
+              const startTime = u.searchParams.get('startTime') || '09:00';
+              const endTime = u.searchParams.get('endTime');
+              openNewEventPanel(date, startTime);
+              if (endTime && selectedEvent) {
+                selectedEvent.endTime = endTime;
+              }
+            }
+          }
+        });
+      }).catch(err => console.error("Failed to init deep-link plugin", err));
+    }
+
     // Load state from localStorage
     try {
       const savedAccounts = localStorage.getItem('kestrel_accounts');

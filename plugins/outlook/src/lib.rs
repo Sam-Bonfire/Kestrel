@@ -235,9 +235,164 @@ impl MailGuest for OutlookPlugin {
     }
 }
 
+// ── Calendar helpers (Outlook / Microsoft Graph) ─────────────────
+
+fn parse_outlook_calendar(item: &Value) -> Option<CalendarPayload> {
+    let id = item["id"].as_str()?.to_string();
+    let name = item["name"].as_str().map(|s| s.to_string()).unwrap_or_else(|| id.clone());
+    // Graph returns hexColor for Outlook calendars (e.g. "auto", "#FF0000")
+    let color = item["hexColor"].as_str()
+        .map(|s| s.to_string())
+        .filter(|c| c.starts_with('#'));
+    let is_primary = item["isDefaultCalendar"].as_bool().unwrap_or(false);
+    Some(CalendarPayload {
+        id,
+        name,
+        color,
+        is_primary,
+    })
+}
+
+/// Outlook's Graph API returns dates as `{ dateTime, timeZone }` (or `date` for all-day).
+fn parse_outlook_event(item: &Value) -> Option<EventPayload> {
+    let id = item["id"].as_str()?.to_string();
+    let external_id = id.clone();
+    let title = item["subject"].as_str().map(|s| s.to_string()).unwrap_or_else(|| "(no title)".to_string());
+    let description = item["body"]["content"].as_str().map(|s| s.to_string());
+    let location = item["location"]["displayName"].as_str().map(|s| s.to_string());
+
+    let is_all_day = item["isAllDay"].as_bool().unwrap_or(false);
+
+    // Timed events: start/end.dateTime in RFC3339.
+    let start_dt = item["start"]["dateTime"].as_str().and_then(|s| DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.timestamp()));
+    let end_dt = item["end"]["dateTime"].as_str().and_then(|s| DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.timestamp()));
+
+    // All-day events: start/end.date (YYYY-MM-DD), end is exclusive.
+    let start_date = item["start"]["date"].as_str();
+    let end_date = item["end"]["date"].as_str();
+
+    let (start_time, end_time) = if let (Some(s), Some(e)) = (start_dt, end_dt) {
+        (s, e)
+    } else if let (Some(sd), Some(ed)) = (start_date, end_date) {
+        let s = chrono::NaiveDate::parse_from_str(sd, "%Y-%m-%d").ok()
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+            .and_then(|dt| dt.and_utc().timestamp().into());
+        let e = chrono::NaiveDate::parse_from_str(ed, "%Y-%m-%d").ok()
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+            .and_then(|dt| dt.and_utc().timestamp().into());
+        (s.unwrap_or(0), e.unwrap_or(0))
+    } else {
+        return None;
+    };
+
+    let recurrence_rules = item["recurrence"]["pattern"]["rule"]
+        .as_str()
+        .map(|s| s.to_string());
+
+    let organizer_email = item["organizer"]["emailAddress"]["address"].as_str().map(|s| s.to_string());
+    let organizer_name = item["organizer"]["emailAddress"]["name"].as_str().map(|s| s.to_string());
+
+    let attendees = item["attendees"].as_array().map(|arr| {
+        let mapped: Vec<Value> = arr.iter().map(|a| {
+            json!({
+                "email": a["emailAddress"]["address"].as_str().unwrap_or(""),
+                "name": a["emailAddress"]["name"].as_str(),
+                "responseStatus": a["status"].as_str(),
+            })
+        }).collect();
+        serde_json::to_string(&mapped).unwrap_or_else(|_| "[]".to_string())
+    });
+
+    let status = item["isCancelled"].as_bool()
+        .map(|c| if c { "cancelled" } else { "confirmed" })
+        .map(|s| s.to_string());
+
+    Some(EventPayload {
+        id,
+        external_id,
+        title,
+        description,
+        location,
+        start_time,
+        end_time,
+        is_all_day,
+        recurrence_rules,
+        organizer_email,
+        organizer_name,
+        attendees,
+        status,
+    })
+}
+
 impl CalendarGuest for OutlookPlugin {
-    fn fetch_calendars(_auth_token: String) -> Result<Vec<CalendarPayload>, String> { Ok(vec![]) }
-    fn fetch_events(_auth_token: String, _start_time: i64, _end_time: i64) -> Result<Vec<EventPayload>, String> { Ok(vec![]) }
+    fn fetch_calendars(auth_token: String) -> Result<Vec<CalendarPayload>, String> {
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: "https://graph.microsoft.com/v1.0/me/calendars".to_string(),
+            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            body: None,
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to list calendars: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse calendars")?;
+        let mut calendars = Vec::new();
+        if let Some(items) = json["value"].as_array() {
+            for item in items {
+                if let Some(c) = parse_outlook_calendar(item) {
+                    calendars.push(c);
+                }
+            }
+        }
+        Ok(calendars)
+    }
+
+    fn fetch_events(auth_token: String, start_time: i64, end_time: i64) -> Result<Vec<EventPayload>, String> {
+        let start = chrono::DateTime::from_timestamp(start_time, 0)
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_default();
+        let end = chrono::DateTime::from_timestamp(end_time, 0)
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_default();
+        // Minimal percent-encoding for query params (RFC3339 contains ':' and '+')
+        fn pct_encode(s: &str) -> String {
+            let mut out = String::new();
+            for b in s.bytes() {
+                if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' {
+                    out.push(b as char);
+                } else {
+                    out.push_str(&format!("%{:02X}", b));
+                }
+            }
+            out
+        }
+        let url = format!(
+            "https://graph.microsoft.com/v1.0/me/calendarView?startDateTime={}&endDateTime={}&$select=id,subject,body,location,start,end,isAllDay,recurrence,organizer,attendees,isCancelled",
+            pct_encode(&start),
+            pct_encode(&end)
+        );
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url,
+            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            body: None,
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to list events: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse events")?;
+        let mut events = Vec::new();
+        if let Some(items) = json["value"].as_array() {
+            for item in items {
+                if let Some(e) = parse_outlook_event(item) {
+                    events.push(e);
+                }
+            }
+        }
+        Ok(events)
+    }
     
     fn mutate_event(auth_token: String, action: String, payload: EventPayload) -> Result<(), String> {
         // Use chrono's TimeZone to create UTC DateTime, then format

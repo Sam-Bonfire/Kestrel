@@ -14,6 +14,7 @@
     "opener:default",
     "notification:default",
     "notification:allow-register-listener",
+    "deep-link:default",
     "http:default",
     "fs:default",
     "core:path:default"

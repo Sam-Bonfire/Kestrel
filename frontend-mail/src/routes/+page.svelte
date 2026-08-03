@@ -9,6 +9,7 @@
   import { AppShell } from '@kestrel/shared/components';
   import { authState, initAuth, logout } from '@kestrel/shared/stores';
   import { replayOfflineQueue, searchMessages } from '@kestrel/shared/api';
+  import { registerNotificationCategories } from '$lib/notifications';
   import { onMount, untrack } from 'svelte';
 
   onMount(() => {
@@ -19,24 +20,26 @@
     const onOnline = () => replayOfflineQueue().catch(console.error);
     window.addEventListener('online', onOnline);
 
-    import('@tauri-apps/plugin-notification').then(({ registerActionTypes, onNotificationAction }) => {
-      registerActionTypes([
-        {
-          id: 'new_email_actions',
-          actions: [
-            { id: 'mark_read', title: 'Mark as Read' },
-            { id: 'archive', title: 'Archive' }
-          ]
-        }
-      ]).catch(() => {});
+    // Register interactive notification category (Reply / Mark as Read / Archive)
+    registerNotificationCategories().catch(console.error);
 
-      onNotificationAction((event) => {
-        if (event.actionId === 'mark_read') {
-          console.log("Notification action: Mark as Read triggered");
-          // Here we would call api.markAsRead(event.notification.id)
-        } else if (event.actionId === 'archive') {
-          console.log("Notification action: Archive triggered");
-          // Here we would call api.archiveMessage(event.notification.id)
+    import('@tauri-apps/plugin-notification').then(({ onNotificationAction }) => {
+      onNotificationAction(async (event) => {
+        const messageId = event.notification?.id;
+        if (!messageId) return;
+        try {
+          if (event.actionId === 'mark_read') {
+            const api = await import('@kestrel/shared/api');
+            await api.markAsRead(messageId);
+            // Optimistically update the list so the UI reflects the change immediately
+            allEmails = allEmails.map(e => e.id === messageId ? { ...e, isUnread: false } : e);
+          } else if (event.actionId === 'archive') {
+            const api = await import('@kestrel/shared/api');
+            await api.archiveMessage(messageId);
+            allEmails = allEmails.map(e => e.id === messageId ? { ...e, isArchived: true } : e);
+          }
+        } catch (err) {
+          console.error('Notification action failed:', err);
         }
       });
     }).catch(() => {

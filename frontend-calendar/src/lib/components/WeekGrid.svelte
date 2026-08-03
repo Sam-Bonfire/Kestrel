@@ -198,6 +198,145 @@
     return events.filter((e: CalendarEvent) => e.date === dateStr);
   }
 
+  // ── Drag-to-create state & helpers ──────────────────────────────
+  let dragCreate = $state<{
+    dateStr: string;
+    startY: number;
+    currentY: number;
+    active: boolean;
+  } | null>(null);
+  // Set when a drag-create committed, so the subsequent `click` event is ignored
+  let suppressNextClick = $state(false);
+
+  // Convert a Y coordinate (relative to the timeline body) into HH:MM,
+  // snapped to 15-minute increments and clamped to 23:59.
+  function yToTime(y: number): string {
+    const clamped = Math.max(0, Math.min(24 * 60 - 1, Math.floor(y)));
+    const mins = Math.floor(clamped / 15) * 15;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  }
+
+  function startDragCreate(e: PointerEvent, dateStr: string) {
+    // Ignore right-clicks and drags that begin on an event card
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-event-card]')) return;
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    dragCreate = {
+      dateStr,
+      startY: e.clientY - rect.top,
+      currentY: e.clientY - rect.top,
+      active: true,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function updateDragCreate(e: PointerEvent) {
+    if (!dragCreate?.active) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    dragCreate.currentY = e.clientY - rect.top;
+  }
+
+  function endDragCreate(e: PointerEvent) {
+    if (!dragCreate?.active) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const endY = e.clientY - rect.top;
+
+    const startTime = yToTime(dragCreate.startY);
+    const endTime = yToTime(endY);
+
+    let [sh, sm] = startTime.split(':').map(Number);
+    let [eh, em] = endTime.split(':').map(Number);
+    const startMins = sh * 60 + sm;
+    const endMins = eh * 60 + em;
+
+    // Enforce a minimum 30-minute span; ignore tiny accidental drags
+    if (Math.abs(endMins - startMins) < 30) {
+      dragCreate = null;
+      return;
+    }
+
+    const [startStr, endStr] =
+      endMins > startMins ? [startTime, endTime] : [endTime, startTime];
+
+    // Only create if this wasn't a click (moved at least 30 minutes worth)
+    suppressNextClick = true;
+    onEmptySlotClick?.(dragCreate.dateStr, startStr);
+    const customEv = new CustomEvent('emptySlotClickWithEndTime', {
+      detail: { date: dragCreate.dateStr, startTime: startStr, endTime: endStr },
+    });
+    window.dispatchEvent(customEv);
+
+    dragCreate = null;
+  }
+
+  // Derived ghost-rect style while dragging to create
+  function getDragCreateStyle(): string {
+    if (!dragCreate?.active) return '';
+    const start = dragCreate.startY;
+    const end = dragCreate.currentY;
+    const top = Math.min(start, end);
+    const height = Math.abs(end - start);
+    return `top: ${top}px; height: ${Math.max(height, 2)}px;`;
+  }
+
+  // ── Drag-to-resize state & helpers ──────────────────────────────
+  let resizing = $state<{
+    id: string;
+    startY: number;
+    originalEndMins: number;
+  } | null>(null);
+  let resizePreviewEnd = $state<string | null>(null);
+
+  function startResize(e: PointerEvent, ev: CalendarEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const [eh, em] = ev.endTime.split(':').map(Number);
+    resizing = {
+      id: ev.id,
+      startY: e.clientY - rect.top,
+      originalEndMins: eh * 60 + em,
+    };
+    resizePreviewEnd = ev.endTime;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function updateResize(e: PointerEvent) {
+    if (!resizing) return;
+    const el = e.currentTarget as HTMLElement | null;
+    if (!el) return;
+    const deltaMins = Math.round((e.clientY - el.getBoundingClientRect().top - resizing.startY) / 15) * 15;
+    const newEndMins = Math.max(resizing.originalEndMins + deltaMins, 30);
+    const h = Math.floor(newEndMins / 60);
+    const m = newEndMins % 60;
+    resizePreviewEnd = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  }
+
+  function endResize(e: PointerEvent) {
+    if (!resizing) return;
+    updateResize(e);
+    if (resizePreviewEnd && resizePreviewEnd !== resizing.originalEndMins.toString()) {
+      const id = resizing.id;
+      const newEnd = resizePreviewEnd;
+      // Keep the new end clamped to the same day (never beyond 23:59)
+      const [h, m] = newEnd.split(':').map(Number);
+      const capped = h > 23 ? '23:59' : newEnd;
+      onEventUpdate(id, { endTime: capped });
+    }
+    resizing = null;
+    resizePreviewEnd = null;
+  }
+
+  function pointerCaptureLost() {
+    dragCreate = null;
+    resizing = null;
+    resizePreviewEnd = null;
+  }
+
   import { onMount } from 'svelte';
   let scrollContainer: HTMLDivElement | null = $state(null);
 
@@ -351,7 +490,7 @@
           {@const dateStr = toISODateString(date)}
           {@const dayEvents = getEventsForDate(dateStr)}
           {@const layoutInfo = getTimedEventsLayout(dayEvents)}
-          <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors"
+          <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors cursor-cell select-none"
                ondragover={(e) => { e.preventDefault(); e.dataTransfer!.dropEffect = 'move'; }}
                ondrop={(e) => {
                  e.preventDefault();
@@ -383,7 +522,16 @@
                    });
                  }
                }}
+               onpointerdown={(e) => startDragCreate(e, dateStr)}
+               onpointermove={(e) => updateDragCreate(e)}
+               onpointerup={(e) => endDragCreate(e)}
+               onpointercancel={pointerCaptureLost}
                onclick={(e) => {
+                 // A drag-to-create that just committed will fire this click too — skip it.
+                 if (suppressNextClick) {
+                   suppressNextClick = false;
+                   return;
+                 }
                  // Fractional time selection based on exact click coordinate
                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                  const y = e.clientY - rect.top;
@@ -411,7 +559,14 @@
                tabindex="0"
                onkeydown={(e) => { if (e.key === 'Enter') onEmptySlotClick?.(dateStr, '09:00'); }}
           >
-            
+            <!-- Drag-to-create ghost selection overlay -->
+            {#if dragCreate?.active && dragCreate.dateStr === dateStr}
+              <div
+                class="absolute left-0 right-0 bg-blue-500/25 border border-blue-400/50 rounded-md pointer-events-none z-20"
+                style={getDragCreateStyle()}
+              ></div>
+            {/if}
+
             <!-- Render events for this column day -->
             {#each dayEvents as ev}
               {@const top = getEventTopOffset(ev.startTime)}
@@ -420,6 +575,9 @@
               {@const layout = layoutInfo.get(ev.id)}
               {@const widthPct = layout ? layout.width : 100}
               {@const leftPct = layout ? layout.left : 0}
+              {@const isSelected = ev.id === selectedEventId}
+              {@const previewEnd = resizing?.id === ev.id ? resizePreviewEnd : ev.endTime}
+              {@const displayHeight = resizing?.id === ev.id ? getEventHeight(ev.startTime, previewEnd ?? ev.endTime) : height}
               
               <button
                 in:scale={{ duration: 200, start: 0.95 }}
@@ -429,17 +587,31 @@
                   e.dataTransfer!.effectAllowed = 'move';
                 }}
                 onclick={(e) => { e.stopPropagation(); onEventClick(ev, e); }}
+                data-event-card
                 class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-move overflow-hidden
-                  {colStyle.bg} {colStyle.border} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}"
-                style="top: {top}px; height: {height}px; left: {leftPct}%; width: calc({widthPct}% - 4px);"
+                  {colStyle.bg} {colStyle.border} {isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}"
+                style="top: {top}px; height: {displayHeight}px; left: {leftPct}%; width: calc({widthPct}% - 4px);"
               >
                 <div class="font-bold truncate text-white leading-tight pointer-events-none">{ev.title}</div>
-                <div class="text-[10px] opacity-75 font-mono mt-0.5 pointer-events-none">{ev.startTime} - {ev.endTime}</div>
+                <div class="text-[10px] opacity-75 font-mono mt-0.5 pointer-events-none">
+                  {ev.startTime} - {resizing?.id === ev.id ? (resizePreviewEnd ?? ev.endTime) : ev.endTime}
+                </div>
                 {#if ev.location && height > 50}
                   <div class="text-[9px] opacity-80 truncate flex items-center gap-1 mt-1 pointer-events-none">
                     <MapPin class="w-3 h-3 text-current shrink-0" />
                     <span class="truncate">{ev.location}</span>
                   </div>
+                {/if}
+
+                <!-- Drag-to-resize handle (bottom edge) -->
+                {#if isSelected}
+                  <div
+                    class="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-white/20 hover:bg-white/50 rounded-b-lg transition-colors"
+                    onpointerdown={(e) => startResize(e, ev)}
+                    onpointermove={(e) => updateResize(e)}
+                    onpointerup={(e) => endResize(e)}
+                    onpointercancel={pointerCaptureLost}
+                  ></div>
                 {/if}
               </button>
             {/each}

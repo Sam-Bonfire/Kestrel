@@ -39,10 +39,10 @@ This document tracks the current feature status and planned work for Kestrel.
 | Command palette (Cmd+K) | ✅ Done | Quick actions and navigation |
 | Keyboard shortcuts | ✅ Done | Vim-style navigation |
 | Peek panel (split view) | ✅ Done | Notion-style sliding panel |
-| Gmail sync (live) | 📋 Planned | Currently using mock provider plugin |
-| Outlook sync (live) | 📋 Planned | Currently using mock provider plugin |
+| Gmail sync (live) | ✅ Done | Real Gmail API via WASM plugin (mail + calendar fetch, send, mutate) |
+| Outlook sync (live) | ✅ Done | Real Microsoft Graph via WASM plugin (mail + calendar fetch, send, mutate) |
 | SMTP/API email sending | 📋 Planned | Currently mocked |
-| Attachment handling | 📋 Planned | CDN URLs mocked |
+| Attachment handling | ✅ Done | Downloads via Tauri fs to OS download dir; browser fallback |
 | Snooze | 📋 Planned | Currently mocked as archive |
 | Rich text signatures | 📋 Planned | Basic textarea only |
 
@@ -58,10 +58,10 @@ This document tracks the current feature status and planned work for Kestrel.
 | Keyboard shortcuts (1-7, D/W/M) | ✅ Done | View switching |
 | Settings panel | ✅ Done | Start hour, weekends toggle |
 | Recurring events (client) | ✅ Done | Via rrule.js for offline calculation |
-| Google Calendar sync | 📋 Planned | Currently using mock provider |
-| Outlook Calendar sync | 📋 Planned | Currently using mock provider |
-| Drag-to-create events | 📋 Planned | |
-| Drag-to-resize events | 📋 Planned | |
+| Google Calendar sync | ✅ Done | Real Google Calendar API via WASM plugin |
+| Outlook Calendar sync | ✅ Done | Real Microsoft Graph Calendar API via WASM plugin |
+| Drag-to-create events | ✅ Done | Week/day/N-day timeline: drag on empty slot to create |
+| Drag-to-resize events | ✅ Done | Week/day/N-day timeline: drag selected event's bottom edge |
 
 ## Desktop & Mobile
 
@@ -76,7 +76,7 @@ This document tracks the current feature status and planned work for Kestrel.
 | Android code signing | 📋 Planned | Keystore not yet configured |
 | iOS code signing | 📋 Planned | Apple Developer cert not yet configured |
 | Tauri auto-update | 📋 Planned | Signing key and update endpoint needed |
-| Deep linking | 🚧 In Progress | Registered schemes, native handler incomplete |
+| Deep linking | ✅ Done | `kestrel://` / `kestrel-calendar://` registered + onOpenUrl listeners (OAuth callback + create-event actions) |
 
 ## Shared Platform
 
@@ -88,15 +88,15 @@ This document tracks the current feature status and planned work for Kestrel.
 | Design tokens (Kestrel Slate) | ✅ Done | Dark theme with periwinkle accent |
 | Settings modal | ✅ Done | Shortcut rebinding |
 | Shared UI components | ✅ Done | Avatar, Button, Dropdown, Login, etc. |
-| Native notifications | 🚧 In Progress | Tauri plugin registered, action handling partial |
+| Native notifications | ✅ Done | Tauri plugin registered; Mail reply/mark_read/archive actions call API; Calendar snooze/dismiss + reminders |
 
 ## Backend Integrations
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Mock provider plugin | ✅ Done | Reference implementation for dev/test |
-| Gmail WASM plugin | 📋 Planned | OAuth flow designed, plugin scaffolded |
-| Outlook WASM plugin | 📋 Planned | OAuth flow designed, plugin scaffolded |
+| Gmail WASM plugin | ✅ Done | OAuth flow, mail sync/send, calendar fetch + mutate implemented |
+| Outlook WASM plugin | ✅ Done | OAuth flow, mail sync/send, calendar fetch + mutate implemented |
 | SSE real-time sync stream | ✅ Done | `/api/sync/stream` endpoint |
 | Background sync daemon | ✅ Done | Configurable interval |
 | Push notifications (FCM/APNs) | 📋 Planned | |

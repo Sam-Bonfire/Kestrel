@@ -130,6 +130,46 @@
 
   let showHistory = $state(false);
 
+  // ── Attachment download via Tauri ──────────────────────────────
+  let downloadingAttachments = $state<Record<string, boolean>>({});
+
+  async function downloadAttachment(attachment: { filename: string; size: number }) {
+    if (!email) return;
+    const key = `${email.id}:${attachment.filename}`;
+    if (downloadingAttachments[key]) return;
+    downloadingAttachments[key] = true;
+
+    try {
+      const { downloadAttachment: fetchBytes } = await import('@kestrel/shared/api');
+      const bytes = await fetchBytes(email.id, attachment.filename);
+      const data = new Uint8Array(bytes);
+
+      // Save to the OS download directory via the Tauri fs plugin
+      const { writeFile } = await import('@tauri-apps/plugin-fs');
+      const { downloadDir, join } = await import('@tauri-apps/api/path');
+      const dir = await downloadDir();
+      const targetPath = await join(dir, attachment.filename);
+      await writeFile(targetPath, data);
+
+      // Reveal/open the downloaded file
+      try {
+        const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+        await revealItemInDir(targetPath);
+      } catch {
+        // Reveal is a nice-to-have; ignore failures.
+      }
+    } catch (err) {
+      console.error('Attachment download failed:', err);
+      // Fall back to opening the redirect URL in the system browser
+      window.open(
+        `/api/v1/messages/${email.id}/attachments/${encodeURIComponent(attachment.filename)}`,
+        '_blank',
+      );
+    } finally {
+      downloadingAttachments[key] = false;
+    }
+  }
+
   function handleSendReply() {
     if (replyText.trim() && email) {
       onSendReply(email.id, replyText.trim());
@@ -347,18 +387,9 @@
             <div class="flex gap-3 overflow-x-auto pb-2">
               {#each email.attachments as attachment}
                 <button 
-                  onclick={() => {
-                    import('@tauri-apps/plugin-http').then(http => {
-                      import('@tauri-apps/plugin-fs').then(fs => {
-                        import('@tauri-apps/api/path').then(path => {
-                          console.log(`Downloading ${attachment.filename} via Tauri native HTTPS...`);
-                        });
-                      });
-                    }).catch(() => {
-                      window.open(`/api/v1/messages/${email.id}/attachments/${attachment.filename}`, '_blank');
-                    });
-                  }}
-                  class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors text-left"
+                  onclick={() => downloadAttachment(attachment)}
+                  disabled={downloadingAttachments[`${email.id}:${attachment.filename}`]}
+                  class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors text-left disabled:opacity-50"
                 >
                   <div class="w-8 h-8 rounded bg-purple-500/10 flex items-center justify-center text-purple-400">
                     <Paperclip class="w-4 h-4" />

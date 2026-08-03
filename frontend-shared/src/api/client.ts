@@ -446,6 +446,28 @@ export function getAttachmentRedirectUrl(
   return `${API_BASE}/messages/${messageId}/attachments/${encodeURIComponent(filename)}/redirect`;
 }
 
+/**
+ * Download an attachment's raw bytes from the backend.
+ * Uses cookie auth (credentials: 'include'), so it works inside Tauri
+ * where the webview shares the backend session cookie.
+ */
+export async function downloadAttachment(
+  messageId: string,
+  filename: string,
+): Promise<ArrayBuffer> {
+  const res = await fetch(
+    `${API_BASE}/messages/${messageId}/attachments/${encodeURIComponent(filename)}`,
+    {
+      method: 'GET',
+      credentials: 'include',
+    },
+  );
+  if (!res.ok) {
+    throw new ApiError(res.status, `Downloading attachment failed: ${res.statusText}`);
+  }
+  return res.arrayBuffer();
+}
+
 // ── Sync endpoints ──────────────────────────────────────────────
 
 export function createSyncStream(token?: string): EventSource {

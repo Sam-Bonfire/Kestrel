@@ -24,10 +24,7 @@ services:
       - SESSION_SECRET=${SESSION_SECRET} # Secure key for session cookies
       - PLUGINS_DIR=${PLUGINS_DIR:-/app/plugins}
       
-      # Secrets Manager Spec (Optional secretspec integration)
-      - SECRETSPEC_PATH=${SECRETSPEC_PATH}
-      
-      # OAuth Provider Scopes & Credentials (Fallback if SECRETSPEC_PATH is empty)
+      # OAuth Provider Credentials
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}

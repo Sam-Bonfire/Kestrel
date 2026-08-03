@@ -90,7 +90,10 @@
   }
 
   function connectProvider(providerId: string) {
-    window.location.href = `http://localhost:3000/api/v1/auth/login?provider=${providerId}`;
+    // Use the shared helper so the correct backend base URL (and OAuth flow) is used.
+    import('@kestrel/shared/api').then(({ loginWithProvider }) => {
+      loginWithProvider(providerId);
+    });
   }
 </script>
 

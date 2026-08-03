@@ -16,6 +16,7 @@
     "notification:allow-register-listener",
     "http:default",
     "fs:default",
+    "fs:allow-download-write",
     "core:path:default"
   ]
 }

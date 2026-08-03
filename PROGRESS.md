@@ -18,7 +18,7 @@ Current Milestone: M3 — Production ready apps, shared libraries, and test suit
 Current Phase: Verification & Complete
 Status: **Complete**
 Started: 2026-07-20
-Last Updated: 2026-07-23
+Last Updated: 2026-08-04
 
 ---
 
@@ -354,4 +354,27 @@ All tasks map directly to the **Kestrel** Project in the Notion database.
 # Next Actions
 
 1. None. All features are built, tests are fully passing, and workspace builds successfully.
+
+---
+
+# Post-Review Additions (2026-08-04)
+
+Resolved items flagged as pending in ROADMAP.md / README.md from the original docs:
+
+| Item | Status | Verified |
+|------|--------|----------|
+| Mail notification actions call real API (mark_read / archive) | Completed | 2026-08-04 |
+| Calendar deep-link handling (`kestrel-calendar://` onOpenUrl for OAuth callback + create-event) | Completed | 2026-08-04 |
+| Real attachment download via Tauri fs (saves to OS download dir, browser fallback) | Completed | 2026-08-04 |
+| Calendar drag-to-create (week/day/N-day timeline) | Completed | 2026-08-04 |
+| Calendar drag-to-resize (selected event bottom edge) | Completed | 2026-08-04 |
+| Real Gmail `fetch_calendars` / `fetch_events` (Google Calendar API) | Completed | 2026-08-04 (compiled + release wasm) |
+| Real Outlook `fetch_calendars` / `fetch_events` (Microsoft Graph) | Completed | 2026-08-04 (compiled + release wasm) |
+| Provider connect UI on Mail + Calendar login screens (uses shared `loginWithProvider`) | Completed | 2026-08-04 |
+| Fixed `SettingsModal` connectProvider to use shared helper (was hardcoded to :3000) | Completed | 2026-08-04 |
+
+Notes:
+- `plugins/gmail/` is untracked (not yet committed to jj) — commit when ready.
+- `plugins/outlook/build.log` is a stray build artifact that should not be committed.
+- Real OAuth verification requires live Gmail/Outlook client credentials (`GMAIL_CLIENT_ID/SECRET`, `OUTLOOK_CLIENT_ID/SECRET`, `KESTREL_BASE_URL`).
 
