@@ -1,17 +1,17 @@
 mod common;
 
-use backend::api::rate_limit::RateLimiter;
-use backend::api::router::{create_router, AppState};
-use backend::plugins::manager::PluginManager;
-use common::setup_test_db;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use backend::api::rate_limit::RateLimiter;
+use backend::api::router::{AppState, create_router};
+use backend::plugins::manager::PluginManager;
+use common::setup_test_db;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tower::ServiceExt;
 
 #[tokio::test]

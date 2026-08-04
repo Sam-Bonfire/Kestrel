@@ -32,7 +32,7 @@ function buildHeaders(): HeadersInit {
   return headers;
 }
 
-import { enqueueMutation, dequeuePending, acknowledgeMutation } from '../offline/queue';
+import { enqueueMutation, dequeuePending, acknowledgeMutation } from '../offline/queue.js';
 
 async function request<T>(
   method: string,
@@ -419,7 +419,7 @@ export async function bulkAction(message_ids: string[], action: BulkActionType, 
 
 // ── Search & Attachments ────────────────────────────────────────────
 
-export async function searchMessages(
+export async function searchMessagesByToken(
   query: string,
   token?: string,
 ): Promise<SearchResult> {

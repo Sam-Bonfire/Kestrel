@@ -1,15 +1,15 @@
+use argon2::Argon2;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::Argon2;
 use async_trait::async_trait;
+use axum::Json;
 use axum::body::Body;
 use axum::extract::{FromRequestParts, Query, State};
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use chrono::Utc;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -19,7 +19,7 @@ use crate::core::types::DbUuid;
 
 use crate::core::error::SimpleError;
 
-use crate::core::repository::{UserRepository, AccountRepository};
+use crate::core::repository::{AccountRepository, UserRepository};
 use crate::db::pool::DbPool;
 use crate::db::postgres::user_repository::PostgresUserRepository;
 use crate::db::sqlite::user_repository::SqliteUserRepository;
@@ -234,8 +234,7 @@ async fn create_user(db: &DbPool, user: &User) -> Result<(), KestrelError> {
 }
 
 fn is_unique_violation(e: &dyn sqlx::error::DatabaseError) -> bool {
-    e.message().contains("UNIQUE constraint failed")
-        || e.message().contains("duplicate key")
+    e.message().contains("UNIQUE constraint failed") || e.message().contains("duplicate key")
 }
 
 // --- K-024: POST /api/v1/auth/token ---
@@ -263,10 +262,13 @@ pub async fn token(
     let response = axum::response::Response::builder()
         .header(axum::http::header::SET_COOKIE, cookie)
         .header(axum::http::header::CONTENT_TYPE, "application/json")
-        .body(axum::body::Body::from(serde_json::to_string(&TokenResponse {
-            token: jwt,
-            user_id: user.id.to_string(),
-        }).unwrap()))
+        .body(axum::body::Body::from(
+            serde_json::to_string(&TokenResponse {
+                token: jwt,
+                user_id: user.id.to_string(),
+            })
+            .unwrap(),
+        ))
         .map_err(|e| KestrelError::Internal(Box::new(e)))?;
 
     Ok(response)
@@ -279,9 +281,7 @@ pub struct MeResponse {
     pub user_id: String,
 }
 
-pub async fn me(
-    auth_user: axum::Extension<AuthUser>,
-) -> Result<Json<MeResponse>, KestrelError> {
+pub async fn me(auth_user: axum::Extension<AuthUser>) -> Result<Json<MeResponse>, KestrelError> {
     Ok(Json(MeResponse {
         user_id: auth_user.user_id.to_string(),
     }))
@@ -292,30 +292,28 @@ async fn find_user_by_username(
     username: &str,
 ) -> Result<Option<User>, KestrelError> {
     match &state.db {
-        DbPool::Sqlite(pool) => {
-            Ok(SqliteUserRepository::new(pool.clone())
-                .find_by_username(username)
-                .await?)
-        }
-        DbPool::Postgres(pool) => {
-            Ok(PostgresUserRepository::new(pool.clone())
-                .find_by_username(username)
-                .await?)
-        }
+        DbPool::Sqlite(pool) => Ok(SqliteUserRepository::new(pool.clone())
+            .find_by_username(username)
+            .await?),
+        DbPool::Postgres(pool) => Ok(PostgresUserRepository::new(pool.clone())
+            .find_by_username(username)
+            .await?),
     }
 }
 
 // --- K-026: GET /api/v1/auth/login?provider=x ---
 
 pub async fn login(Query(params): Query<LoginParams>) -> Result<Response, KestrelError> {
-    let base_url = std::env::var("KESTREL_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:1420".to_string());
+    let base_url =
+        std::env::var("KESTREL_BASE_URL").unwrap_or_else(|_| "http://localhost:1420".to_string());
 
     let auth_url = match params.provider.as_str() {
         "gmail" => {
             let client_id = std::env::var("GMAIL_CLIENT_ID").unwrap_or_default();
             if client_id.is_empty() {
-                return Err(KestrelError::Internal(Box::new(SimpleError("GMAIL_CLIENT_ID not set".to_string()))));
+                return Err(KestrelError::Internal(Box::new(SimpleError(
+                    "GMAIL_CLIENT_ID not set".to_string(),
+                ))));
             }
             let redirect_uri = format!("{}/api/v1/auth/callback/gmail", base_url);
             let scopes = "https://mail.google.com/ https://www.googleapis.com/auth/calendar";
@@ -329,7 +327,9 @@ pub async fn login(Query(params): Query<LoginParams>) -> Result<Response, Kestre
         "outlook" => {
             let client_id = std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default();
             if client_id.is_empty() {
-                return Err(KestrelError::Internal(Box::new(SimpleError("OUTLOOK_CLIENT_ID not set".to_string()))));
+                return Err(KestrelError::Internal(Box::new(SimpleError(
+                    "OUTLOOK_CLIENT_ID not set".to_string(),
+                ))));
             }
             let redirect_uri = format!("{}/api/v1/auth/callback/outlook", base_url);
             let scopes = "offline_access Mail.ReadWrite Mail.Send Calendars.ReadWrite";
@@ -354,12 +354,18 @@ pub async fn callback(
     axum::extract::Path(provider): axum::extract::Path<String>,
     Query(params): Query<CallbackParams>,
 ) -> Result<Response, KestrelError> {
-    let code = params.code.ok_or_else(|| KestrelError::BadRequest("Missing code".to_string()))?;
-    
-    tracing::info!("Received OAuth callback for {} with code: {}", provider, code);
+    let code = params
+        .code
+        .ok_or_else(|| KestrelError::BadRequest("Missing code".to_string()))?;
 
-    let base_url = std::env::var("KESTREL_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:1420".to_string());
+    tracing::info!(
+        "Received OAuth callback for {} with code: {}",
+        provider,
+        code
+    );
+
+    let base_url =
+        std::env::var("KESTREL_BASE_URL").unwrap_or_else(|_| "http://localhost:1420".to_string());
     let redirect_uri = format!("{}/api/v1/auth/callback/{}", base_url, provider);
 
     let (token_url, client_id, client_secret) = match provider.as_str() {
@@ -377,11 +383,15 @@ pub async fn callback(
     };
 
     if client_id.is_empty() || client_secret.is_empty() {
-        return Err(KestrelError::Internal(Box::new(SimpleError(format!("Missing credentials for {}", provider)))));
+        return Err(KestrelError::Internal(Box::new(SimpleError(format!(
+            "Missing credentials for {}",
+            provider
+        )))));
     }
 
     let client = reqwest::Client::new();
-    let res = client.post(&token_url)
+    let res = client
+        .post(&token_url)
         .form(&[
             ("client_id", client_id.as_str()),
             ("client_secret", client_secret.as_str()),
@@ -396,15 +406,23 @@ pub async fn callback(
     if !res.status().is_success() {
         let err_text = res.text().await.unwrap_or_default();
         tracing::error!("OAuth token exchange failed: {}", err_text);
-        return Err(KestrelError::Internal(Box::new(SimpleError("OAuth token exchange failed".to_string()))));
+        return Err(KestrelError::Internal(Box::new(SimpleError(
+            "OAuth token exchange failed".to_string(),
+        ))));
     }
 
-    let token_data: serde_json::Value = res.json().await.map_err(|e| KestrelError::Internal(Box::new(e)))?;
-    
-    let access_token = token_data["access_token"].as_str().unwrap_or("").to_string();
+    let token_data: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(e)))?;
+
+    let access_token = token_data["access_token"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
     let refresh_token = token_data["refresh_token"].as_str().map(|s| s.to_string());
     let expires_in = token_data["expires_in"].as_i64().unwrap_or(3600);
-    
+
     let token_expires_at = chrono::Utc::now().timestamp() + expires_in;
 
     // Fetch User Profile
@@ -413,18 +431,23 @@ pub async fn callback(
             "https://www.googleapis.com/oauth2/v2/userinfo",
             "id",
             "name",
-            "email"
+            "email",
         ),
         "outlook" => (
             "https://graph.microsoft.com/v1.0/me",
             "id",
             "displayName",
-            "mail" // or userPrincipalName
+            "mail", // or userPrincipalName
         ),
-        _ => return Err(KestrelError::Internal(Box::new(SimpleError("Unknown provider".to_string())))),
+        _ => {
+            return Err(KestrelError::Internal(Box::new(SimpleError(
+                "Unknown provider".to_string(),
+            ))));
+        }
     };
 
-    let profile_res = client.get(profile_url)
+    let profile_res = client
+        .get(profile_url)
         .bearer_auth(&access_token)
         .send()
         .await
@@ -433,21 +456,40 @@ pub async fn callback(
     if !profile_res.status().is_success() {
         let err_text = profile_res.text().await.unwrap_or_default();
         tracing::error!("OAuth profile fetch failed: {}", err_text);
-        return Err(KestrelError::Internal(Box::new(SimpleError("OAuth profile fetch failed".to_string()))));
+        return Err(KestrelError::Internal(Box::new(SimpleError(
+            "OAuth profile fetch failed".to_string(),
+        ))));
     }
 
-    let profile_data: serde_json::Value = profile_res.json().await.map_err(|e| KestrelError::Internal(Box::new(e)))?;
-    let provider_account_id = profile_data[id_field].as_str().unwrap_or(&format!("{}-{}", provider, Uuid::new_v4())).to_string();
-    let display_name = profile_data[name_field].as_str().unwrap_or(&format!("{} Account", provider)).to_string();
-    
+    let profile_data: serde_json::Value = profile_res
+        .json()
+        .await
+        .map_err(|e| KestrelError::Internal(Box::new(e)))?;
+    let provider_account_id = profile_data[id_field]
+        .as_str()
+        .unwrap_or(&format!("{}-{}", provider, Uuid::new_v4()))
+        .to_string();
+    let display_name = profile_data[name_field]
+        .as_str()
+        .unwrap_or(&format!("{} Account", provider))
+        .to_string();
+
     // Outlook sometimes uses userPrincipalName if mail is null
     let email = if provider == "outlook" {
-        profile_data["mail"].as_str().or(profile_data["userPrincipalName"].as_str()).unwrap_or("").to_string()
+        profile_data["mail"]
+            .as_str()
+            .or(profile_data["userPrincipalName"].as_str())
+            .unwrap_or("")
+            .to_string()
     } else {
         profile_data[email_field].as_str().unwrap_or("").to_string()
     };
 
-    let final_display_name = if !email.is_empty() { email.clone() } else { display_name };
+    let final_display_name = if !email.is_empty() {
+        email.clone()
+    } else {
+        display_name
+    };
 
     // Save to database
     let now = chrono::Utc::now().timestamp();
@@ -479,25 +521,38 @@ pub async fn callback(
 
     if let Err(e) = db_res {
         tracing::error!("Failed to save account to DB: {:?}", e);
-        return Err(KestrelError::Internal(Box::new(SimpleError("Failed to save account".to_string()))));
+        return Err(KestrelError::Internal(Box::new(SimpleError(
+            "Failed to save account".to_string(),
+        ))));
     }
-    
+
     // Trigger initial historical sync in the background
     let sync_state = state.clone();
     let sync_account = account.clone();
     let sync_token = access_token.clone();
     tokio::spawn(async move {
-        tracing::info!("Starting initial historical sync for account {}", sync_account.id.0);
-        if let Err(e) = crate::api::sync::sync_account_messages(&sync_state, &sync_account, &sync_token).await {
-            tracing::error!("Initial historical sync failed for {}: {}", sync_account.id.0, e);
+        tracing::info!(
+            "Starting initial historical sync for account {}",
+            sync_account.id.0
+        );
+        if let Err(e) =
+            crate::api::sync::sync_account_messages(&sync_state, &sync_account, &sync_token).await
+        {
+            tracing::error!(
+                "Initial historical sync failed for {}: {}",
+                sync_account.id.0,
+                e
+            );
         }
-        tracing::info!("Completed initial historical sync for account {}", sync_account.id.0);
+        tracing::info!(
+            "Completed initial historical sync for account {}",
+            sync_account.id.0
+        );
     });
-    
+
     let frontend_url = std::env::var("KESTREL_FRONTEND_URL")
         .unwrap_or_else(|_| "kestrel://oauth/callback".to_string());
-    
+
     // Redirect back to the app via deep link
     Ok(axum::response::Redirect::to(&frontend_url).into_response())
 }
-

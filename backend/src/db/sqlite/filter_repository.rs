@@ -21,7 +21,7 @@ impl FilterRepository for SqliteFilterRepository {
         sqlx::query(
             "INSERT INTO blocked_senders (id, user_id, email_address)
              VALUES (?, ?, ?)
-             ON CONFLICT(user_id, email_address) DO NOTHING"
+             ON CONFLICT(user_id, email_address) DO NOTHING",
         )
         .bind(id)
         .bind(user_id.to_string())
@@ -33,7 +33,7 @@ impl FilterRepository for SqliteFilterRepository {
 
     async fn get_blocked_senders(&self, user_id: Uuid) -> Result<Vec<String>, sqlx::Error> {
         let records = sqlx::query_scalar::<_, String>(
-            "SELECT email_address FROM blocked_senders WHERE user_id = ?"
+            "SELECT email_address FROM blocked_senders WHERE user_id = ?",
         )
         .bind(user_id.to_string())
         .fetch_all(&self.pool)

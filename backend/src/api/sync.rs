@@ -1,24 +1,24 @@
-use std::convert::Infallible;
-use std::time::Duration;
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::sync::Arc;
+use std::time::Duration;
 
+use axum::Json;
 use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::Json;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, Semaphore};
-use uuid::Uuid;
 use futures::stream::StreamExt;
+use serde::{Deserialize, Serialize};
+use tokio::sync::{Semaphore, broadcast};
+use uuid::Uuid;
 
 use super::auth::AuthUser;
 use super::router::AppState;
 use crate::core::error::KestrelError;
 use crate::core::repository::AccountRepository;
 use crate::db::pool::DbPool;
-use crate::db::sqlite::account_repository::SqliteAccountRepository;
 use crate::db::postgres::account_repository::PostgresAccountRepository;
+use crate::db::sqlite::account_repository::SqliteAccountRepository;
 
 // --- Sync event types ---
 
@@ -111,9 +111,7 @@ pub async fn sync_stream(
                 Ok(event) => {
                     // Filter events relevant to this user
                     let data = serde_json::to_string(&event).unwrap_or_default();
-                    let sse_event = Event::default()
-                        .event(&event.event_type)
-                        .data(data);
+                    let sse_event = Event::default().event(&event.event_type).data(data);
                     Some((Ok(sse_event), rx))
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => {
@@ -156,14 +154,14 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
             };
 
             let accounts_len = accounts.len();
-            
+
             // Process up to 10 accounts concurrently
             let mut stream = futures::stream::iter(accounts)
                 .map(|account| {
                     let state_clone = state.clone();
                     let tx_clone = sync_tx.clone();
                     let semaphore = limits.get(&account.provider).cloned();
-                    
+
                     async move {
                         let token = match &account.access_token {
                             Some(t) => t.clone(),
@@ -179,8 +177,9 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
                         // 60-second timeout to prevent hanging on one provider
                         let msg_sync = tokio::time::timeout(
                             Duration::from_secs(60),
-                            sync_account_messages(&state_clone, &account, &token)
-                        ).await;
+                            sync_account_messages(&state_clone, &account, &token),
+                        )
+                        .await;
 
                         match msg_sync {
                             Ok(Ok(count)) => {
@@ -194,31 +193,45 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
                                     let _ = tx_clone.send(event);
                                 }
                             }
-                            Ok(Err(e)) => tracing::warn!("Sync daemon failed for {}: {}", account.id.0, e),
+                            Ok(Err(e)) => {
+                                tracing::warn!("Sync daemon failed for {}: {}", account.id.0, e)
+                            }
                             Err(_) => tracing::warn!("Sync daemon timed out for {}", account.id.0),
                         }
-                        
+
                         let cal_sync = tokio::time::timeout(
                             Duration::from_secs(60),
-                            sync_account_calendars(&state_clone, &account, &token)
-                        ).await;
+                            sync_account_calendars(&state_clone, &account, &token),
+                        )
+                        .await;
 
                         match cal_sync {
                             Ok(Ok(count)) => {
                                 if count > 0 {
-                                    tracing::info!("Synced {} new calendar events for account {}", count, account.id.0);
+                                    tracing::info!(
+                                        "Synced {} new calendar events for account {}",
+                                        count,
+                                        account.id.0
+                                    );
                                 }
                             }
-                            Ok(Err(e)) => tracing::warn!("Calendar sync failed for {}: {}", account.id.0, e),
-                            Err(_) => tracing::warn!("Calendar sync timed out for {}", account.id.0),
+                            Ok(Err(e)) => {
+                                tracing::warn!("Calendar sync failed for {}: {}", account.id.0, e)
+                            }
+                            Err(_) => {
+                                tracing::warn!("Calendar sync timed out for {}", account.id.0)
+                            }
                         }
                     }
                 })
                 .buffer_unordered(10); // Run up to 10 concurrently
 
-            while let Some(_) = stream.next().await {}
+            while stream.next().await.is_some() {}
 
-            tracing::info!("Sync daemon: cycle complete, synced {} account(s)", accounts_len);
+            tracing::info!(
+                "Sync daemon: cycle complete, synced {} account(s)",
+                accounts_len
+            );
         }
     });
 }
@@ -289,7 +302,7 @@ pub async fn sync_account_messages(
     };
 
     let mail_provider = plugin.as_mail_provider();
-    
+
     // For now, always do a full sync without cursor until we add cursor storage
     let cursor = None;
 
@@ -297,24 +310,37 @@ pub async fn sync_account_messages(
     let mut synced_count = 0;
 
     let repo: Box<dyn crate::core::repository::MessageRepository> = match &state.db {
-        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone())),
-        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone()),
+        ),
     };
 
     let filter_repo: Box<dyn crate::core::repository::FilterRepository> = match &state.db {
-        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::filter_repository::SqliteFilterRepository::new(pool.clone())),
-        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::filter_repository::PostgresFilterRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::filter_repository::SqliteFilterRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::filter_repository::PostgresFilterRepository::new(pool.clone()),
+        ),
     };
 
-    let blocked_senders = filter_repo.get_blocked_senders(account.user_id.0).await.unwrap_or_default();
+    let blocked_senders = filter_repo
+        .get_blocked_senders(account.user_id.0)
+        .await
+        .unwrap_or_default();
     let blocked_set: std::collections::HashSet<String> = blocked_senders.into_iter().collect();
 
     for payload in result.messages {
-        let existing = repo.find_by_external_id(account.id.0, &payload.external_id).await?;
-        
+        let existing = repo
+            .find_by_external_id(account.id.0, &payload.external_id)
+            .await?;
+
         let should_upsert = match &existing {
             Some(msg) => {
-                // Last-Write-Wins (LWW): if remote is newer, update. 
+                // Last-Write-Wins (LWW): if remote is newer, update.
                 // Since payload doesn't have updated_at, we assume sync_mail only returns NEW or UPDATED emails
                 // We use date_received as a proxy for now, or just assume it's newer if it was yielded.
                 // Ideally we'd use an updated_at from the provider payload.
@@ -324,7 +350,7 @@ pub async fn sync_account_messages(
         };
 
         if should_upsert {
-            let mut message = match existing {
+            let message = match existing {
                 Some(mut m) => {
                     m.subject = payload.subject;
                     m.sender_name = payload.sender_name;
@@ -338,12 +364,12 @@ pub async fn sync_account_messages(
                     m.labels = payload.labels;
                     m.is_read = payload.is_read;
                     m
-                },
+                }
                 None => {
                     let is_blocked = blocked_set.contains(&payload.sender_email);
                     crate::core::models::Message {
                         id: Uuid::new_v4().into(),
-                        account_id: account.id.clone(),
+                        account_id: account.id,
                         external_id: payload.external_id.clone(),
                         thread_id: payload.thread_id.clone(),
                         subject: payload.subject.clone(),
@@ -366,7 +392,7 @@ pub async fn sync_account_messages(
                     }
                 }
             };
-            
+
             repo.upsert(&message).await?;
             synced_count += 1;
         }
@@ -388,20 +414,27 @@ pub async fn sync_account_calendars(
     };
 
     let calendar_provider = plugin.as_calendar_provider();
-    
+
     // Sync calendars (metadata) first
     let calendars = calendar_provider.fetch_calendars(token).await?;
     let mut default_calendar_id = None;
-    
+
     let cal_repo: Box<dyn crate::core::repository::CalendarRepository> = match &state.db {
-        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::calendar_repository::SqliteCalendarRepository::new(pool.clone())),
-        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::calendar_repository::PostgresCalendarRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::calendar_repository::SqliteCalendarRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::calendar_repository::PostgresCalendarRepository::new(pool.clone()),
+        ),
     };
 
     let calendars_for_account = cal_repo.list_by_account(account.id.0).await?;
 
     for payload in calendars {
-        let existing = calendars_for_account.iter().find(|c| c.external_id == payload.id).cloned();
+        let existing = calendars_for_account
+            .iter()
+            .find(|c| c.external_id == payload.id)
+            .cloned();
         let calendar_db_id = match existing {
             Some(mut c) => {
                 c.name = payload.name;
@@ -415,7 +448,7 @@ pub async fn sync_account_calendars(
                 let id = Uuid::new_v4();
                 let c = crate::core::models::Calendar {
                     id: crate::core::types::DbUuid(id),
-                    account_id: account.id.clone(),
+                    account_id: account.id,
                     external_id: payload.id.clone(),
                     name: payload.name,
                     color: payload.color,
@@ -440,18 +473,26 @@ pub async fn sync_account_calendars(
     // Sync events for the next 30 days
     let start_time = Utc::now().timestamp();
     let end_time = start_time + 30 * 24 * 60 * 60;
-    
-    let events = calendar_provider.fetch_events(token, start_time, end_time).await?;
+
+    let events = calendar_provider
+        .fetch_events(token, start_time, end_time)
+        .await?;
     let mut synced_count = 0;
 
     let event_repo: Box<dyn crate::core::repository::EventRepository> = match &state.db {
-        crate::db::pool::DbPool::Sqlite(pool) => Box::new(crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone())),
-        crate::db::pool::DbPool::Postgres(pool) => Box::new(crate::db::postgres::event_repository::PostgresEventRepository::new(pool.clone())),
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            Box::new(crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone()))
+        }
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::event_repository::PostgresEventRepository::new(pool.clone()),
+        ),
     };
 
     for payload in events {
-        let existing = event_repo.find_by_external_id(account.id.0, &payload.external_id).await?;
-        
+        let existing = event_repo
+            .find_by_external_id(account.id.0, &payload.external_id)
+            .await?;
+
         match existing {
             Some(mut e) => {
                 e.title = payload.title;
@@ -471,7 +512,7 @@ pub async fn sync_account_calendars(
             None => {
                 let e = crate::core::models::CalendarEvent {
                     id: crate::core::types::DbUuid(Uuid::new_v4()),
-                    account_id: account.id.clone(),
+                    account_id: account.id,
                     calendar_id: crate::core::types::DbUuid(default_calendar_id), // Simplified: attach to default calendar
                     external_id: payload.external_id,
                     title: payload.title,

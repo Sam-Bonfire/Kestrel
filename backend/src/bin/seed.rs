@@ -1,12 +1,12 @@
+use argon2::Argon2;
+use argon2::password_hash::rand_core::OsRng;
+use argon2::password_hash::{PasswordHasher, SaltString};
+use chrono::{DateTime, Duration, Utc};
+use rand::Rng;
+use rand::seq::SliceRandom;
 use sqlx::sqlite::SqlitePoolOptions;
 use std::env;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
-use argon2::password_hash::rand_core::OsRng;
-use argon2::password_hash::{PasswordHasher, SaltString};
-use argon2::Argon2;
-use rand::Rng;
-use rand::seq::SliceRandom;
 
 const SENDERS: &[(&str, &str)] = &[
     ("Alice Smith", "alice@example.com"),
@@ -46,29 +46,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         format!("sqlite:{}/data/kestrel.db", manifest_dir)
     });
     println!("Connecting to database at {}", db_url);
-    
-    let pool = SqlitePoolOptions::new()
-        .connect(&db_url)
-        .await?;
+
+    let pool = SqlitePoolOptions::new().connect(&db_url).await?;
 
     println!("Generating fake data...");
 
     // Create a dummy user
     let user_id = Uuid::new_v4().to_string();
     let now = Utc::now().timestamp();
-    
+
     let salt = SaltString::generate(&mut OsRng);
     let hash = Argon2::default()
         .hash_password(b"password", &salt)
         .expect("Failed to hash password")
         .to_string();
-    
+
     sqlx::query(
         r#"
         INSERT INTO users (id, username, password_hash, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(username) DO NOTHING
-        "#
+        "#,
     )
     .bind(&user_id)
     .bind("demo_user")
@@ -103,36 +101,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .execute(&pool)
     .await?;
 
-    let row: (String,) = sqlx::query_as("SELECT id FROM accounts WHERE user_id = ? AND provider = 'mock'")
-        .bind(&user_id)
-        .fetch_one(&pool)
-        .await?;
+    let row: (String,) =
+        sqlx::query_as("SELECT id FROM accounts WHERE user_id = ? AND provider = 'mock'")
+            .bind(&user_id)
+            .fetch_one(&pool)
+            .await?;
     let account_id = row.0;
 
     println!("Using user_id: {} and account_id: {}", user_id, account_id);
-    
+
     // Wipe existing mock messages for this account to prevent endless buildup
-    sqlx::query("DELETE FROM messages WHERE account_id = ?").bind(&account_id).execute(&pool).await?;
+    sqlx::query("DELETE FROM messages WHERE account_id = ?")
+        .bind(&account_id)
+        .execute(&pool)
+        .await?;
 
     let mut rng = rand::thread_rng();
 
     // Insert 100 fake emails
     for i in 0..100 {
         let msg_id = Uuid::new_v4().to_string();
-        let thread_id = if rng.gen_bool(0.3) { Uuid::new_v4().to_string() } else { msg_id.clone() };
-        
+        let thread_id = if rng.gen_bool(0.3) {
+            Uuid::new_v4().to_string()
+        } else {
+            msg_id.clone()
+        };
+
         let (sender_name, sender_email) = SENDERS.choose(&mut rng).unwrap();
         let subject = SUBJECTS.choose(&mut rng).unwrap();
         let body = BODIES.choose(&mut rng).unwrap();
-        
+
         let days_ago = rng.gen_range(0..30);
         let ts = (Utc::now() - Duration::days(days_ago)).timestamp();
-        
+
         let is_read = rng.gen_bool(0.7);
         let is_archived = rng.gen_bool(0.2);
         let is_deleted = rng.gen_bool(0.05);
         let has_attachments = rng.gen_bool(0.1);
-        let snoozed_until = if rng.gen_bool(0.05) { Some(now + 86400) } else { None };
+        let snoozed_until = if rng.gen_bool(0.05) {
+            Some(now + 86400)
+        } else {
+            None
+        };
 
         sqlx::query(
             r#"
@@ -167,10 +177,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .execute(&pool)
         .await?;
     }
-    
+
     // Generate some calendar events
-    sqlx::query("DELETE FROM calendars WHERE account_id = ?").bind(&account_id).execute(&pool).await?;
-    sqlx::query("DELETE FROM calendar_events WHERE account_id = ?").bind(&account_id).execute(&pool).await?;
+    sqlx::query("DELETE FROM calendars WHERE account_id = ?")
+        .bind(&account_id)
+        .execute(&pool)
+        .await?;
+    sqlx::query("DELETE FROM calendar_events WHERE account_id = ?")
+        .bind(&account_id)
+        .execute(&pool)
+        .await?;
 
     let calendar_id = Uuid::new_v4().to_string();
     sqlx::query(
@@ -195,7 +211,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let days_offset = rng.gen_range(-10..10);
         let start_time = (Utc::now() + Duration::days(days_offset)).timestamp();
         let end_time = start_time + 3600; // 1 hour duration
-        
+
         let title = format!("Meeting {}", i);
 
         sqlx::query(
@@ -205,7 +221,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 start_time, end_time, is_all_day, created_at, updated_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            "#
+            "#,
         )
         .bind(&event_id)
         .bind(&account_id)

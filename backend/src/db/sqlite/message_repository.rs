@@ -219,7 +219,7 @@ impl MessageRepository for SqliteMessageRepository {
              END, \
              is_archived = 1, \
              updated_at = unixepoch() \
-             WHERE thread_id = ?"
+             WHERE thread_id = ?",
         )
         .bind(thread_id)
         .execute(&self.pool)
@@ -238,7 +238,7 @@ impl MessageRepository for SqliteMessageRepository {
                 ELSE labels \
              END, \
              updated_at = unixepoch() \
-             WHERE id = ?"
+             WHERE id = ?",
         )
         .bind(id.to_string())
         .execute(&self.pool)
@@ -253,7 +253,7 @@ impl MessageRepository for SqliteMessageRepository {
             "UPDATE messages SET \
              is_deleted = 1, \
              updated_at = unixepoch() \
-             WHERE sender_email = ? AND account_id IN (SELECT id FROM accounts WHERE user_id = ?)"
+             WHERE sender_email = ? AND account_id IN (SELECT id FROM accounts WHERE user_id = ?)",
         )
         .bind(email)
         .bind(user_id.to_string())

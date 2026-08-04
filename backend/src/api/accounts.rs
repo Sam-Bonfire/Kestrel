@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use uuid::Uuid;
 
 use super::auth::AuthUser;
@@ -8,8 +8,8 @@ use super::router::AppState;
 use crate::core::error::KestrelError;
 use crate::core::repository::AccountRepository;
 use crate::db::pool::DbPool;
-use crate::db::sqlite::account_repository::SqliteAccountRepository;
 use crate::db::postgres::account_repository::PostgresAccountRepository;
+use crate::db::sqlite::account_repository::SqliteAccountRepository;
 
 pub async fn list_accounts(
     State(state): State<AppState>,

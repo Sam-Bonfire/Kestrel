@@ -1,11 +1,11 @@
 mod common;
 
-use backend::core::models::{User, Account};
-use backend::core::repository::{UserRepository, AccountRepository};
+use backend::core::models::{Account, User};
+use backend::core::repository::{AccountRepository, UserRepository};
 use backend::core::types::DbUuid;
-use backend::db::sqlite::user_repository::SqliteUserRepository;
-use backend::db::sqlite::account_repository::SqliteAccountRepository;
 use backend::db::pool::DbPool;
+use backend::db::sqlite::account_repository::SqliteAccountRepository;
+use backend::db::sqlite::user_repository::SqliteUserRepository;
 use common::setup_test_db;
 use uuid::Uuid;
 
@@ -34,7 +34,10 @@ async fn test_user_repository_crud() {
 
     repo.create(&user).await.expect("User creation failed");
 
-    let fetched = repo.find_by_username("test@kestrel.dev").await.expect("Find by username failed");
+    let fetched = repo
+        .find_by_username("test@kestrel.dev")
+        .await
+        .expect("Find by username failed");
     assert!(fetched.is_some());
     let created_user = fetched.unwrap();
     assert_eq!(created_user.username, "test@kestrel.dev");
@@ -59,7 +62,10 @@ async fn test_account_repository_crud() {
         created_at: now,
         updated_at: now,
     };
-    user_repo.create(&user_model).await.expect("User creation failed");
+    user_repo
+        .create(&user_model)
+        .await
+        .expect("User creation failed");
 
     let account_id = Uuid::new_v4();
     let account = Account {
@@ -75,14 +81,26 @@ async fn test_account_repository_crud() {
         updated_at: now,
     };
 
-    account_repo.create(&account).await.expect("Account creation failed");
+    account_repo
+        .create(&account)
+        .await
+        .expect("Account creation failed");
 
-    let list = account_repo.find_by_user_id(user_id).await.expect("Account list failed");
+    let list = account_repo
+        .find_by_user_id(user_id)
+        .await
+        .expect("Account list failed");
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].display_name, "Owner");
     assert_eq!(list[0].provider, "gmail");
 
-    account_repo.delete(account_id).await.expect("Account delete failed");
-    let after_del = account_repo.find_by_user_id(user_id).await.expect("Account list failed");
+    account_repo
+        .delete(account_id)
+        .await
+        .expect("Account delete failed");
+    let after_del = account_repo
+        .find_by_user_id(user_id)
+        .await
+        .expect("Account list failed");
     assert_eq!(after_del.len(), 0);
 }

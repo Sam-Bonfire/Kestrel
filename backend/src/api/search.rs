@@ -1,5 +1,5 @@
-use axum::extract::{Query, State};
 use axum::Json;
+use axum::extract::{Query, State};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,8 +8,8 @@ use super::router::AppState;
 use crate::core::error::KestrelError;
 use crate::core::repository::MessageRepository;
 use crate::db::pool::DbPool;
-use crate::db::sqlite::message_repository::SqliteMessageRepository;
 use crate::db::postgres::message_repository::PostgresMessageRepository;
+use crate::db::sqlite::message_repository::SqliteMessageRepository;
 
 #[derive(Deserialize)]
 pub struct SearchParams {
@@ -55,7 +55,7 @@ pub async fn search_messages(
         ));
     }
 
-    let limit = params.limit.min(50).max(1);
+    let limit = params.limit.clamp(1, 50);
 
     let messages = match &state.db {
         DbPool::Sqlite(pool) => {
@@ -71,18 +71,21 @@ pub async fn search_messages(
     let total = messages.len();
     let query = params.q;
 
-    let results: Vec<SearchResult> = messages.into_iter().map(|m| SearchResult {
-        id: m.id.0,
-        account_id: m.account_id.0,
-        external_id: m.external_id,
-        thread_id: m.thread_id,
-        subject: m.subject,
-        sender_name: m.sender_name,
-        sender_email: m.sender_email,
-        snippet: m.snippet,
-        date_received: m.date_received,
-        is_read: m.is_read,
-    }).collect();
+    let results: Vec<SearchResult> = messages
+        .into_iter()
+        .map(|m| SearchResult {
+            id: m.id.0,
+            account_id: m.account_id.0,
+            external_id: m.external_id,
+            thread_id: m.thread_id,
+            subject: m.subject,
+            sender_name: m.sender_name,
+            sender_email: m.sender_email,
+            snippet: m.snippet,
+            date_received: m.date_received,
+            is_read: m.is_read,
+        })
+        .collect();
 
     Ok(Json(SearchResponse {
         results,

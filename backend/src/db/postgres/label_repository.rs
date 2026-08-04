@@ -22,7 +22,7 @@ impl LabelRepository for PostgresLabelRepository {
         sqlx::query_as::<_, Label>(
             r#"
             SELECT * FROM labels WHERE account_id = $1
-            "#
+            "#,
         )
         .bind(account_id_db)
         .fetch_all(&self.pool)
@@ -38,10 +38,10 @@ impl LabelRepository for PostgresLabelRepository {
                 color = excluded.color,
                 icon = excluded.icon,
                 updated_at = excluded.updated_at
-            "#
+            "#,
         )
-        .bind(label.id.clone())
-        .bind(label.account_id.clone())
+        .bind(label.id)
+        .bind(label.account_id)
         .bind(&label.name)
         .bind(&label.color)
         .bind(&label.icon)
