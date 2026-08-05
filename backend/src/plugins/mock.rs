@@ -167,11 +167,7 @@ impl CalendarProvider for MockProviderPlugin {
         Ok(())
     }
 
-    async fn delete_event(
-        &self,
-        _auth_token: &str,
-        _external_id: &str,
-    ) -> Result<(), PluginError> {
+    async fn delete_event(&self, _auth_token: &str, _external_id: &str) -> Result<(), PluginError> {
         Ok(())
     }
 }

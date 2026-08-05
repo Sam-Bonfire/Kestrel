@@ -1,8 +1,8 @@
+use axum::Router;
 use axum::middleware;
 use axum::routing::{delete, get, post};
-use axum::Router;
 use tokio::sync::broadcast;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use super::accounts;
@@ -29,8 +29,7 @@ pub struct AppState {
 
 pub fn create_router(state: AppState) -> Router {
     use axum::http::HeaderValue;
-    use tower_http::cors::Any;
-    
+
     let cors = CorsLayer::new()
         .allow_origin(vec![
             "http://localhost:1420".parse::<HeaderValue>().unwrap(),
@@ -59,10 +58,13 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/auth/register", post(auth::register))
         .route("/api/v1/auth/token", post(auth::token))
-        .route("/api/v1/auth/me", get(auth::me).route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            auth::auth_middleware,
-        )))
+        .route(
+            "/api/v1/auth/me",
+            get(auth::me).route_layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                auth::auth_middleware,
+            )),
+        )
         .route("/api/v1/auth/login", get(auth::login))
         .route("/api/v1/providers", get(providers::list_providers))
         // Auth-specific rate limit: max 10 requests per minute per IP
@@ -78,25 +80,51 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/accounts/{id}", delete(accounts::delete_account))
         .route("/api/v1/messages", get(messages::list_messages))
         .route("/api/v1/messages/{id}", get(messages::get_message))
-        .route("/api/v1/messages/{id}/attachments/{filename}", get(messages::download_attachment))
+        .route(
+            "/api/v1/messages/{id}/attachments/{filename}",
+            get(messages::download_attachment),
+        )
         .route("/api/v1/messages/{id}/read", post(messages::mark_read))
-        .route("/api/v1/messages/{id}/archive", post(messages::archive_message))
-        .route("/api/v1/messages/{id}/snooze", post(messages::snooze_message))
+        .route(
+            "/api/v1/messages/{id}/archive",
+            post(messages::archive_message),
+        )
+        .route(
+            "/api/v1/messages/{id}/snooze",
+            post(messages::snooze_message),
+        )
         .route("/api/v1/messages/{id}/trash", post(messages::trash_message))
         .route("/api/v1/messages/{id}/star", post(messages::toggle_star))
         .route("/api/v1/messages/{id}/mute", post(messages::mute_thread))
-        .route("/api/v1/messages/{id}/report-phishing", post(messages::report_phishing))
+        .route(
+            "/api/v1/messages/{id}/report-phishing",
+            post(messages::report_phishing),
+        )
         .route("/api/v1/messages/{id}/raw", get(messages::get_raw_eml))
         .route("/api/v1/senders/block", post(messages::block_sender))
-        .route("/api/v1/messages/{id}/labels", post(messages::update_labels))
-        .route("/api/v1/labels", get(super::labels::list_labels).patch(super::labels::update_label))
+        .route(
+            "/api/v1/messages/{id}/labels",
+            post(messages::update_labels),
+        )
+        .route(
+            "/api/v1/labels",
+            get(super::labels::list_labels).patch(super::labels::update_label),
+        )
         .route("/api/v1/messages/bulk", post(messages::bulk_action))
         .route("/api/v1/messages/send", post(messages::send_message))
         .route("/api/v1/search", get(search::search_messages))
         .route("/api/v1/calendars", get(calendars::list_calendars))
         .route("/api/v1/calendars/{id}", get(calendars::get_calendar))
-        .route("/api/v1/events", get(calendars::list_events).post(calendars::create_event))
-        .route("/api/v1/events/{id}", get(calendars::get_event).patch(calendars::update_event).delete(calendars::delete_event))
+        .route(
+            "/api/v1/events",
+            get(calendars::list_events).post(calendars::create_event),
+        )
+        .route(
+            "/api/v1/events/{id}",
+            get(calendars::get_event)
+                .patch(calendars::update_event)
+                .delete(calendars::delete_event),
+        )
         .route("/api/v1/sync/stream", get(sync::sync_stream))
         .route("/api/v1/sync/trigger", post(sync::trigger_sync))
         .layer(middleware::from_fn_with_state(

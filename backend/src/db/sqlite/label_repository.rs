@@ -3,7 +3,6 @@ use uuid::Uuid;
 
 use crate::core::models::Label;
 use crate::core::repository::LabelRepository;
-use crate::core::types::DbUuid;
 
 pub struct SqliteLabelRepository {
     pool: sqlx::SqlitePool,
@@ -22,7 +21,7 @@ impl LabelRepository for SqliteLabelRepository {
         sqlx::query_as::<_, Label>(
             r#"
             SELECT * FROM labels WHERE account_id = ?
-            "#
+            "#,
         )
         .bind(account_id_str)
         .fetch_all(&self.pool)
@@ -38,7 +37,7 @@ impl LabelRepository for SqliteLabelRepository {
                 color = excluded.color,
                 icon = excluded.icon,
                 updated_at = excluded.updated_at
-            "#
+            "#,
         )
         .bind(label.id.to_string())
         .bind(label.account_id.to_string())

@@ -82,11 +82,7 @@ pub trait MailProvider: Send + Sync {
     ) -> Result<Vec<u8>, PluginError>;
 
     /// Soft-delete a message on the provider (moves to Trash).
-    async fn delete_message(
-        &self,
-        auth_token: &str,
-        external_id: &str,
-    ) -> Result<(), PluginError>;
+    async fn delete_message(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError>;
 
     /// Send an email message.
     async fn send_message(
@@ -96,11 +92,8 @@ pub trait MailProvider: Send + Sync {
     ) -> Result<(), PluginError>;
 
     /// Archive a message on the provider.
-    async fn archive_message(
-        &self,
-        auth_token: &str,
-        external_id: &str,
-    ) -> Result<(), PluginError>;
+    async fn archive_message(&self, auth_token: &str, external_id: &str)
+    -> Result<(), PluginError>;
 
     /// Update labels on the provider.
     async fn update_message_labels(
@@ -162,10 +155,7 @@ pub struct EventPayload {
 #[async_trait]
 pub trait CalendarProvider: Send + Sync {
     /// Fetch all calendars available under this account.
-    async fn fetch_calendars(
-        &self,
-        auth_token: &str,
-    ) -> Result<Vec<CalendarPayload>, PluginError>;
+    async fn fetch_calendars(&self, auth_token: &str) -> Result<Vec<CalendarPayload>, PluginError>;
 
     /// Fetch all events within a UTC timestamp range.
     async fn fetch_events(
@@ -184,11 +174,7 @@ pub trait CalendarProvider: Send + Sync {
     ) -> Result<(), PluginError>;
 
     /// Soft-delete an event on the provider.
-    async fn delete_event(
-        &self,
-        auth_token: &str,
-        external_id: &str,
-    ) -> Result<(), PluginError>;
+    async fn delete_event(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError>;
 }
 
 // ─────────────────────────────────────────────

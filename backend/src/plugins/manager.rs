@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use tracing::{info, warn};
 use std::sync::Arc;
+use tracing::{info, warn};
 
 use super::traits::{
     BrandingPayload, CalendarProvider, MailProvider, ProviderBranding, ProviderPlugin,
@@ -66,7 +66,10 @@ impl PluginManager {
     /// Register a plugin instance directly (for testing or built-in plugins).
     pub fn register(&mut self, plugin: Box<dyn ProviderPlugin>) {
         let loaded = LoadedPlugin::new(plugin);
-        info!("Registered plugin: {} ({})", loaded.id, loaded.branding.name);
+        info!(
+            "Registered plugin: {} ({})",
+            loaded.id, loaded.branding.name
+        );
         self.plugins.push(loaded);
     }
 
@@ -75,8 +78,7 @@ impl PluginManager {
         let dir = match &self.plugins_dir {
             Some(d) => d.clone(),
             None => {
-                let dir = std::env::var("PLUGINS_DIR")
-                    .unwrap_or_else(|_| "./plugins".to_string());
+                let dir = std::env::var("PLUGINS_DIR").unwrap_or_else(|_| "./plugins".to_string());
                 PathBuf::from(dir)
             }
         };
@@ -84,7 +86,10 @@ impl PluginManager {
         info!("Loading plugins from {}", dir.display());
 
         if !dir.exists() {
-            warn!("Plugins directory {} does not exist, skipping plugin load", dir.display());
+            warn!(
+                "Plugins directory {} does not exist, skipping plugin load",
+                dir.display()
+            );
             return Ok(());
         }
 
@@ -94,16 +99,26 @@ impl PluginManager {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("wasm") {
                 info!("Discovered plugin WASM: {}", path.display());
-                
+
                 // Read the component
                 match wasmtime::component::Component::from_file(&self.wasm_engine.engine, &path) {
                     Ok(component) => {
                         // Extract plugin ID from filename (e.g., "google.wasm" -> "google")
-                        let id = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-                        
+                        let id = path
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+
                         // Instantiate asynchronously
                         // Since load_all is async, we can do this!
-                        match super::wasm_plugin::WasmPlugin::new(id.clone(), self.wasm_engine.clone(), component).await {
+                        match super::wasm_plugin::WasmPlugin::new(
+                            id.clone(),
+                            self.wasm_engine.clone(),
+                            component,
+                        )
+                        .await
+                        {
                             Ok(plugin) => {
                                 info!("WASM Plugin '{}' loaded successfully.", id);
                                 self.register(Box::new(plugin));

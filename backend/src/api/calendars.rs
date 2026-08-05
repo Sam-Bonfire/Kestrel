@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -12,10 +12,10 @@ use crate::core::models::{Calendar, CalendarEvent};
 use crate::core::repository::{AccountRepository, CalendarRepository, EventRepository};
 use crate::core::types::DbUuid;
 use crate::db::pool::DbPool;
-use crate::db::sqlite::calendar_repository::SqliteCalendarRepository;
-use crate::db::sqlite::event_repository::SqliteEventRepository;
 use crate::db::postgres::calendar_repository::PostgresCalendarRepository;
 use crate::db::postgres::event_repository::PostgresEventRepository;
+use crate::db::sqlite::calendar_repository::SqliteCalendarRepository;
+use crate::db::sqlite::event_repository::SqliteEventRepository;
 
 // --- K-048: GET /api/v1/calendars ---
 
@@ -44,16 +44,19 @@ pub async fn list_calendars(
     let calendars = list_calendars_from_db(&state, user_id).await?;
     let total = calendars.len();
 
-    let summaries: Vec<CalendarSummary> = calendars.into_iter().map(|c| CalendarSummary {
-        id: c.id.0,
-        account_id: c.account_id.0,
-        external_id: c.external_id,
-        name: c.name,
-        color: c.color,
-        is_primary: c.is_primary,
-        created_at: c.created_at,
-        updated_at: c.updated_at,
-    }).collect();
+    let summaries: Vec<CalendarSummary> = calendars
+        .into_iter()
+        .map(|c| CalendarSummary {
+            id: c.id.0,
+            account_id: c.account_id.0,
+            external_id: c.external_id,
+            name: c.name,
+            color: c.color,
+            is_primary: c.is_primary,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+        })
+        .collect();
 
     Ok(Json(CalendarListResponse {
         calendars: summaries,
@@ -177,24 +180,34 @@ pub async fn list_events(
     AuthUser { user_id }: AuthUser,
     Query(params): Query<EventListParams>,
 ) -> Result<Json<EventListResponse>, KestrelError> {
-    let events = list_events_from_db(&state, user_id, params.start_time, params.end_time, params.calendar_id).await?;
+    let events = list_events_from_db(
+        &state,
+        user_id,
+        params.start_time,
+        params.end_time,
+        params.calendar_id,
+    )
+    .await?;
     let total = events.len();
 
-    let summaries: Vec<EventSummary> = events.into_iter().map(|e| EventSummary {
-        id: e.id.0,
-        account_id: e.account_id.0,
-        calendar_id: e.calendar_id.0,
-        external_id: e.external_id,
-        title: e.title,
-        description: e.description,
-        location: e.location,
-        start_time: e.start_time,
-        end_time: e.end_time,
-        is_all_day: e.is_all_day,
-        status: e.status,
-        created_at: e.created_at,
-        updated_at: e.updated_at,
-    }).collect();
+    let summaries: Vec<EventSummary> = events
+        .into_iter()
+        .map(|e| EventSummary {
+            id: e.id.0,
+            account_id: e.account_id.0,
+            calendar_id: e.calendar_id.0,
+            external_id: e.external_id,
+            title: e.title,
+            description: e.description,
+            location: e.location,
+            start_time: e.start_time,
+            end_time: e.end_time,
+            is_all_day: e.is_all_day,
+            status: e.status,
+            created_at: e.created_at,
+            updated_at: e.updated_at,
+        })
+        .collect();
 
     Ok(Json(EventListResponse {
         events: summaries,
@@ -212,11 +225,15 @@ async fn list_events_from_db(
     match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteEventRepository::new(pool.clone());
-            Ok(repo.list_range(user_id, start_time, end_time, calendar_id).await?)
+            Ok(repo
+                .list_range(user_id, start_time, end_time, calendar_id)
+                .await?)
         }
         DbPool::Postgres(pool) => {
             let repo = PostgresEventRepository::new(pool.clone());
-            Ok(repo.list_range(user_id, start_time, end_time, calendar_id).await?)
+            Ok(repo
+                .list_range(user_id, start_time, end_time, calendar_id)
+                .await?)
         }
     }
 }
@@ -327,7 +344,9 @@ pub async fn create_event(
     }
 
     if body.start_time >= body.end_time {
-        return Err(KestrelError::BadRequest("start_time must be before end_time".to_string()));
+        return Err(KestrelError::BadRequest(
+            "start_time must be before end_time".to_string(),
+        ));
     }
 
     // Verify calendar belongs to user
@@ -338,14 +357,17 @@ pub async fn create_event(
     let account = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
-                .find_by_id(cal.account_id.0).await?
+                .find_by_id(cal.account_id.0)
+                .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
-                .find_by_id(cal.account_id.0).await?
+                .find_by_id(cal.account_id.0)
+                .await?
         }
-    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
-    
+    }
+    .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+
     let auth_token = account.access_token.ok_or_else(|| {
         KestrelError::BadRequest("Account is missing an access token".to_string())
     })?;
@@ -353,7 +375,7 @@ pub async fn create_event(
     let now = Utc::now().timestamp();
     let event_id = Uuid::new_v4();
     let external_id = format!("local-{}", event_id);
-    
+
     let payload = crate::plugins::traits::EventPayload {
         id: event_id.to_string(),
         external_id: external_id.clone(),
@@ -371,12 +393,25 @@ pub async fn create_event(
     };
 
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager.find_by_id(&account.provider)
-        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+    let plugin = plugin_manager
+        .find_by_id(&account.provider)
+        .ok_or_else(|| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin {} not loaded",
+                account.provider
+            ))))
+        })?;
 
-    plugin.as_calendar_provider().mutate_event(&auth_token, "create", &payload)
+    plugin
+        .as_calendar_provider()
+        .mutate_event(&auth_token, "create", &payload)
         .await
-        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
+        .map_err(|e| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin error: {:?}",
+                e
+            ))))
+        })?;
 
     let event = CalendarEvent {
         id: DbUuid::new(event_id),
@@ -413,10 +448,7 @@ pub async fn create_event(
     ))
 }
 
-async fn upsert_event_to_db(
-    state: &AppState,
-    event: &CalendarEvent,
-) -> Result<(), KestrelError> {
+async fn upsert_event_to_db(state: &AppState, event: &CalendarEvent) -> Result<(), KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteEventRepository::new(pool.clone());
@@ -488,14 +520,17 @@ pub async fn update_event(
     let account = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
-                .find_by_id(event.account_id.0).await?
+                .find_by_id(event.account_id.0)
+                .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
-                .find_by_id(event.account_id.0).await?
+                .find_by_id(event.account_id.0)
+                .await?
         }
-    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
-    
+    }
+    .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+
     let auth_token = account.access_token.ok_or_else(|| {
         KestrelError::BadRequest("Account is missing an access token".to_string())
     })?;
@@ -517,12 +552,25 @@ pub async fn update_event(
     };
 
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager.find_by_id(&account.provider)
-        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+    let plugin = plugin_manager
+        .find_by_id(&account.provider)
+        .ok_or_else(|| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin {} not loaded",
+                account.provider
+            ))))
+        })?;
 
-    plugin.as_calendar_provider().mutate_event(&auth_token, "update", &payload)
+    plugin
+        .as_calendar_provider()
+        .mutate_event(&auth_token, "update", &payload)
         .await
-        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
+        .map_err(|e| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin error: {:?}",
+                e
+            ))))
+        })?;
 
     upsert_event_to_db(&state, &event).await?;
 
@@ -562,35 +610,48 @@ pub async fn delete_event(
     let account = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
-                .find_by_id(event.account_id.0).await?
+                .find_by_id(event.account_id.0)
+                .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
-                .find_by_id(event.account_id.0).await?
+                .find_by_id(event.account_id.0)
+                .await?
         }
-    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
-    
+    }
+    .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+
     let auth_token = account.access_token.ok_or_else(|| {
         KestrelError::BadRequest("Account is missing an access token".to_string())
     })?;
 
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager.find_by_id(&account.provider)
-        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+    let plugin = plugin_manager
+        .find_by_id(&account.provider)
+        .ok_or_else(|| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin {} not loaded",
+                account.provider
+            ))))
+        })?;
 
-    plugin.as_calendar_provider().delete_event(&auth_token, &event.external_id)
+    plugin
+        .as_calendar_provider()
+        .delete_event(&auth_token, &event.external_id)
         .await
-        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
+        .map_err(|e| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin error: {:?}",
+                e
+            ))))
+        })?;
 
     soft_delete_event_from_db(&state, event_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn soft_delete_event_from_db(
-    state: &AppState,
-    event_id: Uuid,
-) -> Result<(), KestrelError> {
+async fn soft_delete_event_from_db(state: &AppState, event_id: Uuid) -> Result<(), KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteEventRepository::new(pool.clone());
@@ -611,9 +672,9 @@ async fn verify_account_ownership(
     user_id: Uuid,
     account_id: Uuid,
 ) -> Result<bool, KestrelError> {
-    use crate::db::sqlite::account_repository::SqliteAccountRepository;
-    use crate::db::postgres::account_repository::PostgresAccountRepository;
     use crate::core::repository::AccountRepository;
+    use crate::db::postgres::account_repository::PostgresAccountRepository;
+    use crate::db::sqlite::account_repository::SqliteAccountRepository;
 
     match &state.db {
         DbPool::Sqlite(pool) => {

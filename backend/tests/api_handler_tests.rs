@@ -1,17 +1,17 @@
 mod common;
 
-use backend::api::rate_limit::RateLimiter;
-use backend::api::router::{create_router, AppState};
-use backend::plugins::manager::PluginManager;
-use common::setup_test_db;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use backend::api::rate_limit::RateLimiter;
+use backend::api::router::{AppState, create_router};
+use backend::plugins::manager::PluginManager;
+use common::setup_test_db;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tower::ServiceExt;
 
 /// Helper to create a test AppState with in-memory SQLite
@@ -79,7 +79,12 @@ async fn register_and_get_token(app: &axum::Router) -> String {
         .await
         .unwrap();
     let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    body_json.get("token").unwrap().as_str().unwrap().to_string()
+    body_json
+        .get("token")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string()
 }
 
 // === Health Endpoint Tests ===
@@ -447,10 +452,7 @@ async fn test_get_message_nonexistent() {
         .unwrap();
 
     // Should return 404 or empty (depends on implementation)
-    assert!(
-        response.status() == StatusCode::NOT_FOUND
-            || response.status() == StatusCode::OK
-    );
+    assert!(response.status() == StatusCode::NOT_FOUND || response.status() == StatusCode::OK);
 }
 
 // === Calendar Handler Tests ===
@@ -474,10 +476,7 @@ async fn test_get_calendar_nonexistent() {
         .unwrap();
 
     // Should return 404 or error (depends on implementation)
-    assert!(
-        response.status() == StatusCode::NOT_FOUND
-            || response.status() == StatusCode::OK
-    );
+    assert!(response.status() == StatusCode::NOT_FOUND || response.status() == StatusCode::OK);
 }
 
 #[tokio::test]

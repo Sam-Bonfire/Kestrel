@@ -90,10 +90,8 @@ impl MessageRepository for PostgresMessageRepository {
         if let Some(aid) = account_id {
             q = q.bind(aid);
         }
-        if let Some(f) = folder {
-            if folder_is_label {
-                q = q.bind(format!("%{}%", f));
-            }
+        if let (Some(f), true) = (folder, folder_is_label) {
+            q = q.bind(format!("%{}%", f));
         }
         if let Some(c) = cursor {
             q = q.bind(c);

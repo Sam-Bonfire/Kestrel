@@ -1,14 +1,13 @@
 use async_trait::async_trait;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use wasmtime::component::Component;
 
+use super::bindings::KestrelPlugin;
 use super::traits::{
     BrandingPayload, CalendarPayload, CalendarProvider, EventPayload, MailProvider, MessageBody,
     MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload, SyncResult,
 };
 use super::wasm_runtime::{WasmEngine, WasmState};
-use super::bindings::KestrelPlugin;
 
 pub struct WasmPlugin {
     id: String,
@@ -25,18 +24,18 @@ impl WasmPlugin {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Instantiate the plugin once to get the static branding info
         let mut store = engine.create_store();
-        
+
         // Setup imports if needed
         // For now, we mock the client credentials import
-        let (instance, _) = KestrelPlugin::instantiate_async(
-            &mut store,
-            &component,
-            &engine.linker,
-        ).await?;
+        let (instance, _) =
+            KestrelPlugin::instantiate_async(&mut store, &component, &engine.linker).await?;
 
         // Extract branding
-        let branding_res = instance.kestrel_provider_provider_branding().call_get_branding(&mut store).await?;
-        
+        let branding_res = instance
+            .kestrel_provider_provider_branding()
+            .call_get_branding(&mut store)
+            .await?;
+
         let branding = BrandingPayload {
             name: branding_res.name,
             button_text: branding_res.button_text,
@@ -53,14 +52,15 @@ impl WasmPlugin {
     }
 
     /// Helper to instantiate a fresh store and plugin instance for a stateless request.
-    async fn instantiate(&self) -> Result<(wasmtime::Store<WasmState>, KestrelPlugin), PluginError> {
+    async fn instantiate(
+        &self,
+    ) -> Result<(wasmtime::Store<WasmState>, KestrelPlugin), PluginError> {
         let mut store = self.engine.create_store();
-        let (instance, _) = KestrelPlugin::instantiate_async(
-            &mut store,
-            &self.component,
-            &self.engine.linker,
-        ).await.map_err(|e| PluginError(e.to_string()))?;
-        
+        let (instance, _) =
+            KestrelPlugin::instantiate_async(&mut store, &self.component, &self.engine.linker)
+                .await
+                .map_err(|e| PluginError(e.to_string()))?;
+
         Ok((store, instance))
     }
 }
@@ -79,7 +79,7 @@ impl MailProvider for WasmPlugin {
         cursor: Option<&str>,
     ) -> Result<SyncResult, PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let result = instance
             .kestrel_provider_mail_provider()
             .call_sync_mail(&mut store, auth_token, cursor)
@@ -88,20 +88,24 @@ impl MailProvider for WasmPlugin {
 
         match result {
             Ok(res) => Ok(SyncResult {
-                messages: res.messages.into_iter().map(|m| MessagePayload {
-                    id: m.id,
-                    external_id: m.external_id,
-                    thread_id: m.thread_id,
-                    subject: m.subject,
-                    sender_name: m.sender_name,
-                    sender_email: m.sender_email,
-                    recipients: m.recipients,
-                    date_sent: m.date_sent,
-                    date_received: m.date_received,
-                    snippet: m.snippet,
-                    labels: m.labels,
-                    is_read: m.is_read,
-                }).collect(),
+                messages: res
+                    .messages
+                    .into_iter()
+                    .map(|m| MessagePayload {
+                        id: m.id,
+                        external_id: m.external_id,
+                        thread_id: m.thread_id,
+                        subject: m.subject,
+                        sender_name: m.sender_name,
+                        sender_email: m.sender_email,
+                        recipients: m.recipients,
+                        date_sent: m.date_sent,
+                        date_received: m.date_received,
+                        snippet: m.snippet,
+                        labels: m.labels,
+                        is_read: m.is_read,
+                    })
+                    .collect(),
                 next_cursor: res.next_cursor,
             }),
             Err(e) => Err(PluginError(e)),
@@ -114,7 +118,7 @@ impl MailProvider for WasmPlugin {
         external_id: &str,
     ) -> Result<MessageBody, PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let result = instance
             .kestrel_provider_mail_provider()
             .call_fetch_message_body(&mut store, auth_token, external_id)
@@ -130,13 +134,9 @@ impl MailProvider for WasmPlugin {
         }
     }
 
-    async fn delete_message(
-        &self,
-        auth_token: &str,
-        external_id: &str,
-    ) -> Result<(), PluginError> {
+    async fn delete_message(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let result = instance
             .kestrel_provider_mail_provider()
             .call_delete_message(&mut store, auth_token, external_id)
@@ -155,7 +155,7 @@ impl MailProvider for WasmPlugin {
         payload: SendMessagePayload,
     ) -> Result<(), PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let wit_attachments = payload.attachments.map(|atts| {
             atts.into_iter().map(|a| {
                 crate::plugins::bindings::exports::kestrel::provider::mail_provider::AttachmentPayload {
@@ -202,10 +202,15 @@ impl MailProvider for WasmPlugin {
         external_attachment_id: &str,
     ) -> Result<Vec<u8>, PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let result = instance
             .kestrel_provider_mail_provider()
-            .call_download_attachment(&mut store, auth_token, external_message_id, external_attachment_id)
+            .call_download_attachment(
+                &mut store,
+                auth_token,
+                external_message_id,
+                external_attachment_id,
+            )
             .await
             .map_err(|e| PluginError(e.to_string()))?;
 
@@ -236,12 +241,9 @@ impl MailProvider for WasmPlugin {
 
 #[async_trait]
 impl CalendarProvider for WasmPlugin {
-    async fn fetch_calendars(
-        &self,
-        auth_token: &str,
-    ) -> Result<Vec<CalendarPayload>, PluginError> {
+    async fn fetch_calendars(&self, auth_token: &str) -> Result<Vec<CalendarPayload>, PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let result = instance
             .kestrel_provider_calendar_provider()
             .call_fetch_calendars(&mut store, auth_token)
@@ -249,12 +251,15 @@ impl CalendarProvider for WasmPlugin {
             .map_err(|e| PluginError(e.to_string()))?;
 
         match result {
-            Ok(res) => Ok(res.into_iter().map(|c| CalendarPayload {
-                id: c.id,
-                name: c.name,
-                color: c.color,
-                is_primary: c.is_primary,
-            }).collect()),
+            Ok(res) => Ok(res
+                .into_iter()
+                .map(|c| CalendarPayload {
+                    id: c.id,
+                    name: c.name,
+                    color: c.color,
+                    is_primary: c.is_primary,
+                })
+                .collect()),
             Err(e) => Err(PluginError(e)),
         }
     }
@@ -266,7 +271,7 @@ impl CalendarProvider for WasmPlugin {
         end_time: i64,
     ) -> Result<Vec<EventPayload>, PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let result = instance
             .kestrel_provider_calendar_provider()
             .call_fetch_events(&mut store, auth_token, start_time, end_time)
@@ -274,21 +279,24 @@ impl CalendarProvider for WasmPlugin {
             .map_err(|e| PluginError(e.to_string()))?;
 
         match result {
-            Ok(res) => Ok(res.into_iter().map(|e| EventPayload {
-                id: e.id,
-                external_id: e.external_id,
-                title: e.title,
-                description: e.description,
-                location: e.location,
-                start_time: e.start_time,
-                end_time: e.end_time,
-                is_all_day: e.is_all_day,
-                recurrence_rules: e.recurrence_rules,
-                organizer_email: e.organizer_email,
-                organizer_name: e.organizer_name,
-                attendees: e.attendees,
-                status: e.status,
-            }).collect()),
+            Ok(res) => Ok(res
+                .into_iter()
+                .map(|e| EventPayload {
+                    id: e.id,
+                    external_id: e.external_id,
+                    title: e.title,
+                    description: e.description,
+                    location: e.location,
+                    start_time: e.start_time,
+                    end_time: e.end_time,
+                    is_all_day: e.is_all_day,
+                    recurrence_rules: e.recurrence_rules,
+                    organizer_email: e.organizer_email,
+                    organizer_name: e.organizer_name,
+                    attendees: e.attendees,
+                    status: e.status,
+                })
+                .collect()),
             Err(e) => Err(PluginError(e)),
         }
     }
@@ -300,23 +308,24 @@ impl CalendarProvider for WasmPlugin {
         payload: &EventPayload,
     ) -> Result<(), PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         // Convert to WIT struct
-        let wit_payload = super::bindings::exports::kestrel::provider::calendar_provider::EventPayload {
-            id: payload.id.clone(),
-            external_id: payload.external_id.clone(),
-            title: payload.title.clone(),
-            description: payload.description.clone(),
-            location: payload.location.clone(),
-            start_time: payload.start_time,
-            end_time: payload.end_time,
-            is_all_day: payload.is_all_day,
-            recurrence_rules: payload.recurrence_rules.clone(),
-            organizer_email: payload.organizer_email.clone(),
-            organizer_name: payload.organizer_name.clone(),
-            attendees: payload.attendees.clone(),
-            status: payload.status.clone(),
-        };
+        let wit_payload =
+            super::bindings::exports::kestrel::provider::calendar_provider::EventPayload {
+                id: payload.id.clone(),
+                external_id: payload.external_id.clone(),
+                title: payload.title.clone(),
+                description: payload.description.clone(),
+                location: payload.location.clone(),
+                start_time: payload.start_time,
+                end_time: payload.end_time,
+                is_all_day: payload.is_all_day,
+                recurrence_rules: payload.recurrence_rules.clone(),
+                organizer_email: payload.organizer_email.clone(),
+                organizer_name: payload.organizer_name.clone(),
+                attendees: payload.attendees.clone(),
+                status: payload.status.clone(),
+            };
 
         let result = instance
             .kestrel_provider_calendar_provider()
@@ -330,13 +339,9 @@ impl CalendarProvider for WasmPlugin {
         }
     }
 
-    async fn delete_event(
-        &self,
-        auth_token: &str,
-        external_id: &str,
-    ) -> Result<(), PluginError> {
+    async fn delete_event(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError> {
         let (mut store, instance) = self.instantiate().await?;
-        
+
         let result = instance
             .kestrel_provider_calendar_provider()
             .call_delete_event(&mut store, auth_token, external_id)

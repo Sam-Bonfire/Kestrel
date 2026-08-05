@@ -4,8 +4,8 @@ mod core;
 mod db;
 mod plugins;
 
-use api::router::{AppState, create_router};
 use api::rate_limit::RateLimiter;
+use api::router::{AppState, create_router};
 use api::sync::{SyncEvent, start_sync_daemon};
 use config::Config;
 use core::offline_worker::start_offline_worker;
