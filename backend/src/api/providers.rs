@@ -1,5 +1,5 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use serde::Serialize;
 
 use super::router::AppState;
@@ -20,9 +20,7 @@ pub struct ProvidersResponse {
 }
 
 /// K-035: GET /api/v1/providers — Returns branding info for all loaded plugins.
-pub async fn list_providers(
-    State(state): State<AppState>,
-) -> Json<ProvidersResponse> {
+pub async fn list_providers(State(state): State<AppState>) -> Json<ProvidersResponse> {
     let manager = state.plugin_manager.read().await;
 
     let providers = manager

@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{HeaderValue, Request, StatusCode};
+use axum::http::{HeaderValue, Request};
 use axum::middleware::Next;
 use axum::response::Response;
 use uuid::Uuid;
@@ -25,7 +25,7 @@ pub async fn request_logging_middleware(
     // Log request body size if available
     let (parts, body) = req.into_parts();
     let (body_size, body) = {
-        let mut size: usize = 0;
+        let size: usize = 0;
         // We can't easily peek at body size without consuming it,
         // so we'll log it from the response instead
         let body = axum::body::Body::new(body);

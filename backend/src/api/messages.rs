@@ -1,17 +1,16 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::auth::AuthUser;
 use super::router::AppState;
-use crate::core::models::Message;
-use crate::core::repository::{AccountRepository, MessageRepository, FilterRepository};
 use crate::core::error::KestrelError;
+use crate::core::repository::{AccountRepository, FilterRepository, MessageRepository};
 use crate::db::pool::DbPool;
-use crate::db::sqlite::message_repository::SqliteMessageRepository;
 use crate::db::postgres::message_repository::PostgresMessageRepository;
+use crate::db::sqlite::message_repository::SqliteMessageRepository;
 
 // --- Request / Response types ---
 
@@ -121,7 +120,8 @@ pub async fn list_messages(
     let folder = params.folder.as_deref();
     let cursor = params.cursor.as_deref();
 
-    let messages = list_messages_from_db(&state, user_id, params.account_id, folder, cursor, limit).await?;
+    let messages =
+        list_messages_from_db(&state, user_id, params.account_id, folder, cursor, limit).await?;
 
     let next_cursor = if messages.len() == limit as usize {
         messages.last().map(|m| m.date_received.to_string())
@@ -131,21 +131,24 @@ pub async fn list_messages(
 
     let total = messages.len();
 
-    let summaries: Vec<MessageSummary> = messages.into_iter().map(|m| MessageSummary {
-        id: m.id.0,
-        account_id: m.account_id.0,
-        external_id: m.external_id,
-        thread_id: m.thread_id,
-        subject: m.subject,
-        sender_name: m.sender_name,
-        sender_email: m.sender_email,
-        snippet: m.snippet,
-        date_received: m.date_received,
-        is_read: m.is_read,
-        is_archived: m.is_archived,
-        has_attachments: m.has_attachments,
-        labels: m.labels,
-    }).collect();
+    let summaries: Vec<MessageSummary> = messages
+        .into_iter()
+        .map(|m| MessageSummary {
+            id: m.id.0,
+            account_id: m.account_id.0,
+            external_id: m.external_id,
+            thread_id: m.thread_id,
+            subject: m.subject,
+            sender_name: m.sender_name,
+            sender_email: m.sender_email,
+            snippet: m.snippet,
+            date_received: m.date_received,
+            is_read: m.is_read,
+            is_archived: m.is_archived,
+            has_attachments: m.has_attachments,
+            labels: m.labels,
+        })
+        .collect();
 
     Ok(Json(MessageListResponse {
         messages: summaries,
@@ -198,7 +201,8 @@ pub async fn get_message(
     AuthUser { user_id }: AuthUser,
     Path(message_id): Path<Uuid>,
 ) -> Result<Json<MessageDetail>, KestrelError> {
-    let mut msg = find_message_from_db(&state, message_id).await?
+    let mut msg = find_message_from_db(&state, message_id)
+        .await?
         .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
 
     // Verify the message belongs to an account owned by this user
@@ -210,10 +214,14 @@ pub async fn get_message(
     // On-demand body fetching (Task 2.2)
     if msg.body_text.is_none() && msg.body_html.is_none() {
         if let Some(account) = find_account_from_db(&state, msg.account_id.0).await? {
-            if let Some(token) = account.access_token {
+            if let Some(token) = &account.access_token {
                 let plugin_manager = state.plugin_manager.read().await;
                 if let Some(plugin) = plugin_manager.find_by_id(&account.provider) {
-                    if let Ok(body) = plugin.as_mail_provider().fetch_message_body(&token, &msg.external_id).await {
+                    if let Ok(body) = plugin
+                        .as_mail_provider()
+                        .fetch_message_body(token, &msg.external_id)
+                        .await
+                    {
                         msg.body_text = body.body_text;
                         msg.body_html = body.body_html;
                         // Save back to DB
@@ -277,9 +285,9 @@ async fn find_account_from_db(
     state: &AppState,
     account_id: Uuid,
 ) -> Result<Option<crate::core::models::Account>, KestrelError> {
-    use crate::db::sqlite::account_repository::SqliteAccountRepository;
-    use crate::db::postgres::account_repository::PostgresAccountRepository;
     use crate::core::repository::AccountRepository;
+    use crate::db::postgres::account_repository::PostgresAccountRepository;
+    use crate::db::sqlite::account_repository::SqliteAccountRepository;
 
     match &state.db {
         DbPool::Sqlite(pool) => {
@@ -402,8 +410,8 @@ async fn verify_account_ownership(
     account_id: Uuid,
 ) -> Result<bool, KestrelError> {
     use crate::core::repository::AccountRepository;
-    use crate::db::sqlite::account_repository::SqliteAccountRepository;
     use crate::db::postgres::account_repository::PostgresAccountRepository;
+    use crate::db::sqlite::account_repository::SqliteAccountRepository;
 
     match &state.db {
         DbPool::Sqlite(pool) => {
@@ -442,22 +450,23 @@ pub async fn toggle_star(
     axum::Json(params): axum::Json<StarParams>,
 ) -> Result<StatusCode, KestrelError> {
     verify_message_ownership(&state, user_id, message_id).await?;
-    
+
     let msg = find_message_from_db(&state, message_id).await?.unwrap();
-    let mut labels: Vec<String> = msg.labels
+    let mut labels: Vec<String> = msg
+        .labels
         .and_then(|l| serde_json::from_str(&l).ok())
         .unwrap_or_default();
-        
+
     let star_label = "STARRED".to_string();
-    
+
     if params.is_starred && !labels.contains(&star_label) {
         labels.push(star_label);
     } else if !params.is_starred {
         labels.retain(|l| l != "STARRED");
     }
-    
+
     let labels_json = serde_json::to_string(&labels).ok();
-    
+
     match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteMessageRepository::new(pool.clone());
@@ -468,7 +477,7 @@ pub async fn toggle_star(
             repo.set_labels(message_id, labels_json).await?;
         }
     }
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -481,9 +490,9 @@ pub async fn update_labels(
     axum::Json(params): axum::Json<LabelParams>,
 ) -> Result<StatusCode, KestrelError> {
     verify_message_ownership(&state, user_id, message_id).await?;
-    
+
     let labels_json = serde_json::to_string(&params.labels).ok();
-    
+
     match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteMessageRepository::new(pool.clone());
@@ -494,7 +503,7 @@ pub async fn update_labels(
             repo.set_labels(message_id, labels_json).await?;
         }
     }
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -506,10 +515,13 @@ pub async fn bulk_action(
     axum::Json(params): axum::Json<BulkActionParams>,
 ) -> Result<StatusCode, KestrelError> {
     for msg_id in &params.message_ids {
-        if verify_message_ownership(&state, user_id, *msg_id).await.is_err() {
+        if verify_message_ownership(&state, user_id, *msg_id)
+            .await
+            .is_err()
+        {
             continue; // Skip messages they don't own
         }
-        
+
         match params.action {
             BulkActionType::MarkRead => {
                 let val = params.action_value.unwrap_or(true);
@@ -526,19 +538,20 @@ pub async fn bulk_action(
             BulkActionType::ToggleStar => {
                 let val = params.action_value.unwrap_or(true);
                 let msg = find_message_from_db(&state, *msg_id).await?.unwrap();
-                let mut labels: Vec<String> = msg.labels
+                let mut labels: Vec<String> = msg
+                    .labels
                     .and_then(|l| serde_json::from_str(&l).ok())
                     .unwrap_or_default();
-                    
+
                 let star_label = "STARRED".to_string();
                 if val && !labels.contains(&star_label) {
                     labels.push(star_label);
                 } else if !val {
                     labels.retain(|l| l != "STARRED");
                 }
-                
+
                 let labels_json = serde_json::to_string(&labels).ok();
-                
+
                 match &state.db {
                     DbPool::Sqlite(pool) => {
                         let repo = SqliteMessageRepository::new(pool.clone());
@@ -552,7 +565,7 @@ pub async fn bulk_action(
             }
         }
     }
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -564,53 +577,89 @@ pub async fn download_attachment(
     Path((message_id, filename)): Path<(Uuid, String)>,
 ) -> Result<axum::response::Response, KestrelError> {
     // 1. Verify ownership and fetch message
-    let msg = find_message_from_db(&state, message_id).await?
+    let msg = find_message_from_db(&state, message_id)
+        .await?
         .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
     verify_account_ownership(&state, user_id, msg.account_id.0).await?;
 
     // 2. Fetch the attachment metadata from DB
-    let attachment_repo = crate::db::sqlite::attachment_repository::AttachmentRepository::new(match &state.db {
-        DbPool::Sqlite(pool) => std::sync::Arc::new(pool.clone()),
-        _ => return Err(KestrelError::Internal(Box::new(crate::core::error::SimpleError("Postgres not implemented for attachments".into()))))
-    });
-    
-    let attachments = attachment_repo.get_attachments_for_message(crate::core::types::DbUuid(message_id)).await?;
-    let attachment = attachments.iter().find(|a| a.filename == filename)
+    let attachment_repo =
+        crate::db::sqlite::attachment_repository::AttachmentRepository::new(match &state.db {
+            DbPool::Sqlite(pool) => std::sync::Arc::new(pool.clone()),
+            _ => {
+                return Err(KestrelError::Internal(Box::new(
+                    crate::core::error::SimpleError(
+                        "Postgres not implemented for attachments".into(),
+                    ),
+                )));
+            }
+        });
+
+    let attachments = attachment_repo
+        .get_attachments_for_message(crate::core::types::DbUuid(message_id))
+        .await?;
+    let attachment = attachments
+        .iter()
+        .find(|a| a.filename == filename)
         .ok_or_else(|| KestrelError::NotFound("Attachment not found".into()))?;
-        
-    let external_attachment_id = attachment.external_id.as_ref()
+
+    let external_attachment_id = attachment
+        .external_id
+        .as_ref()
         .ok_or_else(|| KestrelError::BadRequest("Attachment has no external ID".into()))?;
 
     // 3. Fetch account and tokens
     let account = match &state.db {
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
-                .find_by_id(msg.account_id.0).await?
+                .find_by_id(msg.account_id.0)
+                .await?
         }
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
-                .find_by_id(msg.account_id.0).await?
+                .find_by_id(msg.account_id.0)
+                .await?
         }
-    }.ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
-    
+    }
+    .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+
     let auth_token = account.access_token.ok_or_else(|| {
         KestrelError::BadRequest("Account is missing an access token".to_string())
     })?;
 
     // 4. Download via plugin
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager.find_by_id(&account.provider)
-        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+    let plugin = plugin_manager
+        .find_by_id(&account.provider)
+        .ok_or_else(|| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin {} not loaded",
+                account.provider
+            ))))
+        })?;
 
-    let bytes = plugin.as_mail_provider().download_attachment(&auth_token, &msg.external_id, external_attachment_id)
+    let bytes = plugin
+        .as_mail_provider()
+        .download_attachment(&auth_token, &msg.external_id, external_attachment_id)
         .await
-        .map_err(|e| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin error: {:?}", e)))))?;
+        .map_err(|e| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin error: {:?}",
+                e
+            ))))
+        })?;
 
     // 5. Stream to client
     Ok(axum::response::Response::builder()
         .status(StatusCode::OK)
-        .header(axum::http::header::CONTENT_TYPE, attachment.content_type.clone())
-        .header(axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", attachment.filename))
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            attachment.content_type.clone(),
+        )
+        .header(
+            axum::http::header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", attachment.filename),
+        )
         .body(axum::body::Body::from(bytes))
         .unwrap())
 }
@@ -676,7 +725,10 @@ pub async fn send_message(
             for a in atts {
                 // Remove data uri prefix if present
                 let b64_str = if a.base64_content.contains(",") {
-                    a.base64_content.split(",").nth(1).unwrap_or(&a.base64_content)
+                    a.base64_content
+                        .split(",")
+                        .nth(1)
+                        .unwrap_or(&a.base64_content)
                 } else {
                     &a.base64_content
                 };
@@ -705,12 +757,25 @@ pub async fn send_message(
 
     // 3. Dispatch to plugin manager
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager.find_by_id(&account.provider)
-        .ok_or_else(|| KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Plugin {} not loaded", account.provider)))))?;
+    let plugin = plugin_manager
+        .find_by_id(&account.provider)
+        .ok_or_else(|| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin {} not loaded",
+                account.provider
+            ))))
+        })?;
 
-    plugin.as_mail_provider().send_message(&auth_token, wit_payload).await.map_err(|e| {
-        KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!("Dispatch failed: {:?}", e))))
-    })?;
+    plugin
+        .as_mail_provider()
+        .send_message(&auth_token, wit_payload)
+        .await
+        .map_err(|e| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Dispatch failed: {:?}",
+                e
+            ))))
+        })?;
 
     // 4. Return success response (UI expects SendMessageResponse)
     Ok(Json(SendMessageResponse {
@@ -726,12 +791,12 @@ pub async fn mute_thread(
     let msg = find_message_from_db(&state, message_id)
         .await?
         .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
-        
+
     let owns = verify_account_ownership(&state, user_id, msg.account_id.0).await?;
     if !owns {
         return Err(KestrelError::NotFound("Message not found".to_string()));
     }
-    
+
     match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteMessageRepository::new(pool.clone());
@@ -772,18 +837,27 @@ pub async fn get_raw_eml(
     let msg = find_message_from_db(&state, message_id)
         .await?
         .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
-        
+
     let owns = verify_account_ownership(&state, user_id, msg.account_id.0).await?;
     if !owns {
         return Err(KestrelError::NotFound("Message not found".to_string()));
     }
-    
-    let eml_content = format!("To: {}\nFrom: {}\nSubject: {}\n\n{}", msg.recipients, msg.sender_email, msg.subject.unwrap_or_default(), msg.body_text.unwrap_or_default());
-    
+
+    let eml_content = format!(
+        "To: {}\nFrom: {}\nSubject: {}\n\n{}",
+        msg.recipients,
+        msg.sender_email,
+        msg.subject.unwrap_or_default(),
+        msg.body_text.unwrap_or_default()
+    );
+
     Ok(axum::response::Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, "message/rfc822")
-        .header(axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"message-{}.eml\"", message_id))
+        .header(
+            axum::http::header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"message-{}.eml\"", message_id),
+        )
         .body(axum::body::Body::from(eml_content))
         .unwrap())
 }
@@ -802,20 +876,23 @@ pub async fn block_sender(
 
     match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            let filter_repo = crate::db::sqlite::filter_repository::SqliteFilterRepository::new(pool.clone());
+            let filter_repo =
+                crate::db::sqlite::filter_repository::SqliteFilterRepository::new(pool.clone());
             filter_repo.block_sender(user_id, &payload.email).await?;
-            let msg_repo = crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone());
+            let msg_repo =
+                crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone());
             msg_repo.trash_by_sender(user_id, &payload.email).await?;
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            let filter_repo = crate::db::postgres::filter_repository::PostgresFilterRepository::new(pool.clone());
+            let filter_repo =
+                crate::db::postgres::filter_repository::PostgresFilterRepository::new(pool.clone());
             filter_repo.block_sender(user_id, &payload.email).await?;
-            let msg_repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone());
+            let msg_repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(
+                pool.clone(),
+            );
             msg_repo.trash_by_sender(user_id, &payload.email).await?;
         }
     }
 
     Ok(StatusCode::NO_CONTENT)
 }
-
-

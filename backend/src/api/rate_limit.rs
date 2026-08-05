@@ -47,10 +47,12 @@ impl RateLimiter {
         let mut counters = self.inner.counters.lock().await;
         let now = Instant::now();
 
-        let entry = counters.entry(key.to_string()).or_insert_with(|| WindowEntry {
-            count: 0,
-            window_start: now,
-        });
+        let entry = counters
+            .entry(key.to_string())
+            .or_insert_with(|| WindowEntry {
+                count: 0,
+                window_start: now,
+            });
 
         // If the window has expired, reset it
         if now.duration_since(entry.window_start) >= self.inner.window_duration {
@@ -88,14 +90,13 @@ impl RateLimiter {
 /// Extract the client IP from the request.
 fn extract_client_ip(req: &Request<Body>) -> String {
     // Try X-Forwarded-For header first (for reverse proxies)
-    if let Some(forwarded) = req
+    if let Some(first_ip) = req
         .headers()
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
+        .and_then(|f| f.split(',').next())
     {
-        if let Some(first_ip) = forwarded.split(',').next() {
-            return first_ip.trim().to_string();
-        }
+        return first_ip.trim().to_string();
     }
 
     // Try connecting info (direct connections)
@@ -128,10 +129,9 @@ pub async fn auth_rate_limit_middleware(
                 })),
             )
                 .into_response();
-            response.headers_mut().insert(
-                "Retry-After",
-                retry_secs.to_string().parse().unwrap(),
-            );
+            response
+                .headers_mut()
+                .insert("Retry-After", retry_secs.to_string().parse().unwrap());
             response
         }
     }
@@ -158,10 +158,9 @@ pub async fn general_rate_limit_middleware(
                 })),
             )
                 .into_response();
-            response.headers_mut().insert(
-                "Retry-After",
-                retry_secs.to_string().parse().unwrap(),
-            );
+            response
+                .headers_mut()
+                .insert("Retry-After", retry_secs.to_string().parse().unwrap());
             response
         }
     }

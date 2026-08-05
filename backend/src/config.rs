@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use tracing::{info, warn};
+use tracing::warn;
 
 pub struct Config {
     pub database_url: String,
@@ -17,9 +16,8 @@ impl Config {
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| format!("sqlite:{}/data/kestrel.db", manifest_dir));
         let jwt_secret = Self::resolve_jwt_secret();
-        let bind_addr =
-            std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
-        
+        let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+
         let gmail_client_id = std::env::var("GMAIL_CLIENT_ID").ok();
         let gmail_client_secret = std::env::var("GMAIL_CLIENT_SECRET").ok();
         let outlook_client_id = std::env::var("OUTLOOK_CLIENT_ID").ok();
@@ -52,9 +50,7 @@ impl Config {
             .map(char::from)
             .collect();
 
-        warn!(
-            "JWT_SECRET not set — using random secret (tokens will not survive restarts)"
-        );
+        warn!("JWT_SECRET not set — using random secret (tokens will not survive restarts)");
         secret
     }
 }

@@ -70,9 +70,7 @@ impl Encode<'_, Sqlite> for DbUuid {
 // --- Postgres: decode from native UUID ---
 
 impl<'r> Decode<'r, sqlx::Postgres> for DbUuid {
-    fn decode(
-        value: <sqlx::Postgres as HasValueRef<'r>>::ValueRef,
-    ) -> Result<Self, BoxDynError> {
+    fn decode(value: <sqlx::Postgres as HasValueRef<'r>>::ValueRef) -> Result<Self, BoxDynError> {
         let uuid = <Uuid as Decode<'r, sqlx::Postgres>>::decode(value)?;
         Ok(DbUuid(uuid))
     }
