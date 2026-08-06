@@ -81,6 +81,19 @@ pub trait MailProvider: Send + Sync {
         external_attachment_id: &str,
     ) -> Result<Vec<u8>, PluginError>;
 
+    /// Fetch or construct a direct CDN download URL for an attachment.
+    async fn get_attachment_url(
+        &self,
+        _auth_token: &str,
+        external_message_id: &str,
+        external_attachment_id: &str,
+    ) -> Result<String, PluginError> {
+        Ok(format!(
+            "https://cdn.kestrel.dev/attachments/{}/{}",
+            external_message_id, external_attachment_id
+        ))
+    }
+
     /// Soft-delete a message on the provider (moves to Trash).
     async fn delete_message(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError>;
 

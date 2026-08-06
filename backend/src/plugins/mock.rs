@@ -78,6 +78,18 @@ impl MailProvider for MockProviderPlugin {
         Ok(b"mock attachment".to_vec())
     }
 
+    async fn get_attachment_url(
+        &self,
+        _auth_token: &str,
+        external_message_id: &str,
+        external_attachment_id: &str,
+    ) -> Result<String, PluginError> {
+        Ok(format!(
+            "https://cdn.kestrel.dev/attachments/{}/{}",
+            external_message_id, external_attachment_id
+        ))
+    }
+
     async fn delete_message(
         &self,
         _auth_token: &str,

@@ -40,3 +40,10 @@ test_api.sh
 
 # Reference prototypes (Ignore local React design prototype)
 prototype/
+
+# Agent workspace and task orchestration metadata
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
