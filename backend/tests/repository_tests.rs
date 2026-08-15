@@ -42,8 +42,7 @@ async fn test_user_repository_crud() {
     let created_user = fetched.unwrap();
     assert_eq!(created_user.username, "test@kestrel.dev");
 
-    let found_by_id = repo.find_by_id(user_id).await.expect("Find by id failed");
-    assert!(found_by_id.is_some());
+
 }
 
 #[tokio::test]

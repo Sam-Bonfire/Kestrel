@@ -16,7 +16,7 @@ pub fn start_token_worker(state: AppState) {
             let threshold = Utc::now().timestamp() + 600;
 
             // Let's implement the actual logic directly with sqlx since we need all accounts globally
-            let mut expiring_accounts = match &state.db {
+            let expiring_accounts = match &state.db {
                 DbPool::Sqlite(pool) => {
                     sqlx::query_as::<_, crate::core::models::Account>(
                         "SELECT * FROM accounts WHERE token_expires_at IS NOT NULL AND token_expires_at < ? AND refresh_token IS NOT NULL"
@@ -82,8 +82,8 @@ pub fn start_token_worker(state: AppState) {
 
                 match res {
                     Ok(resp) if resp.status().is_success() => {
-                        if let Ok(token_data) = resp.json::<serde_json::Value>().await {
-                            if let Some(access_token) = token_data["access_token"].as_str() {
+                        if let Ok(token_data) = resp.json::<serde_json::Value>().await
+                            && let Some(access_token) = token_data["access_token"].as_str() {
                                 account.access_token = Some(access_token.to_string());
                                 let expires_in = token_data["expires_in"].as_i64().unwrap_or(3600);
                                 account.token_expires_at =
@@ -136,7 +136,6 @@ pub fn start_token_worker(state: AppState) {
                                     }
                                 }
                             }
-                        }
                     }
                     Ok(resp) => {
                         let status = resp.status();

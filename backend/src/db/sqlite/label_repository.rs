@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use uuid::Uuid;
 
 use crate::core::models::Label;
 use crate::core::repository::LabelRepository;
@@ -16,17 +15,6 @@ impl SqliteLabelRepository {
 
 #[async_trait]
 impl LabelRepository for SqliteLabelRepository {
-    async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Label>, sqlx::Error> {
-        let account_id_str = account_id.to_string();
-        sqlx::query_as::<_, Label>(
-            r#"
-            SELECT * FROM labels WHERE account_id = ?
-            "#,
-        )
-        .bind(account_id_str)
-        .fetch_all(&self.pool)
-        .await
-    }
 
     async fn upsert(&self, label: &Label) -> Result<(), sqlx::Error> {
         sqlx::query(
@@ -51,12 +39,4 @@ impl LabelRepository for SqliteLabelRepository {
         Ok(())
     }
 
-    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error> {
-        let id_str = id.to_string();
-        sqlx::query("DELETE FROM labels WHERE id = ?")
-            .bind(id_str)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
 }

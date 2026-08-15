@@ -42,13 +42,13 @@ pub async fn update_label(
             let repo = SqliteLabelRepository::new(pool.clone());
             repo.upsert(&label)
                 .await
-                .map_err(|e| KestrelError::Database(e))?;
+                .map_err(KestrelError::Database)?;
         }
         crate::db::pool::DbPool::Postgres(pool) => {
             let repo = PostgresLabelRepository::new(pool.clone());
             repo.upsert(&label)
                 .await
-                .map_err(|e| KestrelError::Database(e))?;
+                .map_err(KestrelError::Database)?;
         }
     }
 

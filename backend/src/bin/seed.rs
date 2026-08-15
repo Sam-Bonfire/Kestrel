@@ -1,7 +1,7 @@
 use argon2::Argon2;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHasher, SaltString};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use rand::Rng;
 use rand::seq::SliceRandom;
 use sqlx::sqlite::SqlitePoolOptions;
@@ -119,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = rand::thread_rng();
 
     // Insert 100 fake emails
-    for i in 0..100 {
+    for _i in 0..100 {
         let msg_id = Uuid::new_v4().to_string();
         let thread_id = if rng.gen_bool(0.3) {
             Uuid::new_v4().to_string()

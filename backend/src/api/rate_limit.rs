@@ -71,20 +71,7 @@ impl RateLimiter {
         }
     }
 
-    /// Periodic cleanup of expired entries to prevent memory growth.
-    pub fn start_cleanup_task(self) {
-        let limiter = self.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(limiter.inner.window_duration).await;
-                let mut counters = limiter.inner.counters.lock().await;
-                let now = Instant::now();
-                counters.retain(|_, entry| {
-                    now.duration_since(entry.window_start) < limiter.inner.window_duration
-                });
-            }
-        });
-    }
+
 }
 
 /// Extract the client IP from the request.

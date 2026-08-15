@@ -13,26 +13,6 @@ impl AttachmentRepository {
         Self { pool }
     }
 
-    pub async fn create_attachment(&self, attachment: &Attachment) -> Result<(), KestrelError> {
-        sqlx::query(
-            r#"
-            INSERT INTO attachments (id, message_id, filename, content_type, size, external_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            "#,
-        )
-        .bind(attachment.id)
-        .bind(attachment.message_id)
-        .bind(&attachment.filename)
-        .bind(&attachment.content_type)
-        .bind(attachment.size)
-        .bind(&attachment.external_id)
-        .bind(attachment.created_at)
-        .execute(&*self.pool)
-        .await
-        .map_err(KestrelError::Database)?;
-
-        Ok(())
-    }
 
     pub async fn get_attachments_for_message(
         &self,

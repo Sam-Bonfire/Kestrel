@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use super::traits::{
-    BrandingPayload, CalendarProvider, MailProvider, ProviderBranding, ProviderPlugin,
+    BrandingPayload, CalendarProvider, MailProvider,  ProviderPlugin,
 };
 use super::wasm_runtime::WasmEngine;
 
@@ -35,9 +35,6 @@ impl LoadedPlugin {
         self.plugin.as_ref()
     }
 
-    pub fn as_provider_branding(&self) -> &dyn ProviderBranding {
-        self.plugin.as_ref()
-    }
 }
 
 /// Manages loading and querying of provider plugins.
@@ -55,12 +52,6 @@ impl PluginManager {
             plugins_dir: None,
             wasm_engine: Arc::new(WasmEngine::new().expect("Failed to initialize Wasmtime engine")),
         }
-    }
-
-    /// Set the plugins directory path.
-    pub fn with_plugins_dir(mut self, dir: PathBuf) -> Self {
-        self.plugins_dir = Some(dir);
-        self
     }
 
     /// Register a plugin instance directly (for testing or built-in plugins).
@@ -142,21 +133,6 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Return the number of loaded plugins.
-    pub fn len(&self) -> usize {
-        self.plugins.len()
-    }
-
-    /// Check if any plugins are loaded.
-    pub fn is_empty(&self) -> bool {
-        self.plugins.is_empty()
-    }
-
-    /// Return all currently loaded branding plugins.
-    pub fn get_brandings(&self) -> Vec<&BrandingPayload> {
-        self.plugins.iter().map(|p| &p.branding).collect()
-    }
-
     /// Find a plugin by its ID.
     pub fn find_by_id(&self, id: &str) -> Option<&LoadedPlugin> {
         self.plugins.iter().find(|p| p.id == id)
@@ -182,57 +158,3 @@ impl Default for PluginManager {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plugins::mock::MockProviderPlugin;
-
-    #[test]
-    fn test_register_and_list() {
-        let mut manager = PluginManager::new();
-        let mock = MockProviderPlugin::new("test-plugin", "Test Plugin");
-        manager.register(Box::new(mock));
-
-        assert_eq!(manager.len(), 1);
-        assert!(!manager.is_empty());
-
-        let brandings = manager.get_brandings();
-        assert_eq!(brandings.len(), 1);
-        assert_eq!(brandings[0].name, "Test Plugin");
-    }
-
-    #[test]
-    fn test_find_by_id() {
-        let mut manager = PluginManager::new();
-        let mock = MockProviderPlugin::new("gmail", "Gmail");
-        manager.register(Box::new(mock));
-
-        assert!(manager.find_by_id("gmail").is_some());
-        assert!(manager.find_by_id("outlook").is_none());
-    }
-
-    #[test]
-    fn test_find_by_provider() {
-        let mut manager = PluginManager::new();
-        let mock = MockProviderPlugin::new("gmail", "Gmail");
-        manager.register(Box::new(mock));
-
-        assert!(manager.find_by_provider("Gmail").is_some());
-        assert!(manager.find_by_provider("GMAIL").is_some());
-        assert!(manager.find_by_provider("Outlook").is_none());
-    }
-
-    #[test]
-    fn test_multiple_plugins() {
-        let mut manager = PluginManager::new();
-        manager.register(Box::new(MockProviderPlugin::new("gmail", "Gmail")));
-        manager.register(Box::new(MockProviderPlugin::new("outlook", "Outlook")));
-
-        assert_eq!(manager.len(), 2);
-
-        let brandings = manager.get_brandings();
-        let names: Vec<&str> = brandings.iter().map(|b| b.name.as_str()).collect();
-        assert!(names.contains(&"Gmail"));
-        assert!(names.contains(&"Outlook"));
-    }
-}

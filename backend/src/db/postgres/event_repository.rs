@@ -82,28 +82,6 @@ impl EventRepository for PostgresEventRepository {
         }
     }
 
-    async fn search(
-        &self,
-        user_id: Uuid,
-        query: &str,
-        limit: i64,
-    ) -> Result<Vec<CalendarEvent>, sqlx::Error> {
-        sqlx::query_as::<_, CalendarEvent>(&format!(
-            "SELECT {EVENT_COLUMNS} \
-             FROM calendar_events e \
-             JOIN accounts a ON e.account_id = a.id \
-             WHERE a.user_id = $1 \
-             AND (e.title ILIKE '%' || $2 || '%' \
-                  OR e.description ILIKE '%' || $2 || '%' \
-                  OR e.location ILIKE '%' || $2 || '%') \
-             ORDER BY e.start_time LIMIT $3"
-        ))
-        .bind(user_id)
-        .bind(query)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-    }
 
     async fn upsert(&self, event: &CalendarEvent) -> Result<(), sqlx::Error> {
         sqlx::query(
@@ -153,11 +131,4 @@ impl EventRepository for PostgresEventRepository {
         Ok(())
     }
 
-    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM calendar_events WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
 }

@@ -39,21 +39,6 @@ impl AccountRepository for SqliteAccountRepository {
         .await
     }
 
-    async fn find_by_provider(
-        &self,
-        user_id: Uuid,
-        provider: &str,
-    ) -> Result<Vec<Account>, sqlx::Error> {
-        sqlx::query_as::<_, Account>(
-            "SELECT id, user_id, provider, provider_account_id, display_name, \
-             access_token, refresh_token, token_expires_at, created_at, updated_at \
-             FROM accounts WHERE user_id = ? AND provider = ?",
-        )
-        .bind(user_id.to_string())
-        .bind(provider)
-        .fetch_all(&self.pool)
-        .await
-    }
 
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error> {
         sqlx::query(
