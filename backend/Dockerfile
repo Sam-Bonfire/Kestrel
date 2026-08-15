@@ -1,5 +1,5 @@
 # --- Builder Stage ---
-FROM rust:1.85-slim-bookworm AS builder
+FROM rust:1.92-slim-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Setup cargo-chef to cache dependency builds
-RUN cargo install cargo-chef --version ^0.1
+RUN cargo install cargo-chef --version ^0.1 --locked
 
 # Prepare chef recipe
 COPY . .
