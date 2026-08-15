@@ -10,8 +10,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validation & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Backend & Web Validation
+        run: |
+          mise run check
+          mise run setup
+          pnpm --filter frontend-mail build
+          pnpm --filter frontend-calendar build
+
   staging:
-    name: Staging
+    name: Build & Release
+    needs: validate
     strategy:
       fail-fast: false
       matrix:

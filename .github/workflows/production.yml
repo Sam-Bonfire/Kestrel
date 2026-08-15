@@ -18,7 +18,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validation & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag_name || github.ref }}
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Backend & Web Validation
+        run: |
+          mise run check
+          mise run setup
+          pnpm --filter frontend-mail build
+          pnpm --filter frontend-calendar build
+
   production:
+    name: Build & Publish
+    needs: validate
     strategy:
       fail-fast: false
       matrix:

@@ -10,8 +10,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  preview:
-    name: Validation
+  validate:
+    name: Validation & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Backend & Web Validation
+        run: |
+          mise run check
+          mise run setup
+          pnpm --filter frontend-mail build
+          pnpm --filter frontend-calendar build
+
+  build:
+    name: Desktop Builds
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
@@ -30,15 +51,6 @@ jobs:
         with:
           install: true
           cache: true
-
-      - name: Backend & Web Validation
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          mise run check
-          mise run build:backend
-          mise run setup
-          pnpm --filter frontend-mail build
-          pnpm --filter frontend-calendar build
 
       - name: Desktop Build Setup
         run: mise run setup
