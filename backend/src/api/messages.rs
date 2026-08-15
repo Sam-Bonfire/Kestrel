@@ -664,6 +664,92 @@ pub async fn download_attachment(
         .unwrap())
 }
 
+// --- Redirect Attachment (Task K-122) ---
+
+pub async fn redirect_attachment(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path((message_id, filename)): Path<(Uuid, String)>,
+) -> Result<axum::response::Response, KestrelError> {
+    // 1. Fetch message from DB
+    let msg = find_message_from_db(&state, message_id)
+        .await?
+        .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
+
+    // 2. Verify account ownership (return 403 Forbidden if not owned)
+    let owns = verify_account_ownership(&state, user_id, msg.account_id.0).await?;
+    if !owns {
+        return Err(KestrelError::Forbidden(
+            "You do not own this account".to_string(),
+        ));
+    }
+
+    // 3. Fetch attachment metadata from DB
+    let attachment_repo =
+        crate::db::sqlite::attachment_repository::AttachmentRepository::new(match &state.db {
+            DbPool::Sqlite(pool) => std::sync::Arc::new(pool.clone()),
+            _ => {
+                return Err(KestrelError::Internal(Box::new(
+                    crate::core::error::SimpleError(
+                        "Postgres not implemented for attachments".into(),
+                    ),
+                )));
+            }
+        });
+
+    let attachments = attachment_repo
+        .get_attachments_for_message(crate::core::types::DbUuid(message_id))
+        .await?;
+
+    let attachment = attachments
+        .iter()
+        .find(|a| a.filename == filename)
+        .ok_or_else(|| KestrelError::NotFound("Attachment not found".into()))?;
+
+    let external_attachment_id = attachment
+        .external_id
+        .as_ref()
+        .ok_or_else(|| KestrelError::BadRequest("Attachment has no external ID".into()))?;
+
+    // 4. Fetch account details
+    let account = find_account_from_db(&state, msg.account_id.0)
+        .await?
+        .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+
+    let auth_token = account.access_token.ok_or_else(|| {
+        KestrelError::BadRequest("Account is missing an access token".to_string())
+    })?;
+
+    // 5. Query plugin for CDN URL
+    let plugin_manager = state.plugin_manager.read().await;
+    let plugin = plugin_manager
+        .find_by_id(&account.provider)
+        .ok_or_else(|| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin {} not loaded",
+                account.provider
+            ))))
+        })?;
+
+    let cdn_url = plugin
+        .as_mail_provider()
+        .get_attachment_url(&auth_token, &msg.external_id, external_attachment_id)
+        .await
+        .map_err(|e| {
+            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                "Plugin error: {:?}",
+                e
+            ))))
+        })?;
+
+    // 6. Return 302 Redirect with Location header
+    Ok(axum::response::Response::builder()
+        .status(StatusCode::FOUND)
+        .header(axum::http::header::LOCATION, cdn_url)
+        .body(axum::body::Body::empty())
+        .unwrap())
+}
+
 // --- Outbound Send Logic (Task 37) ---
 
 #[derive(serde::Deserialize)]

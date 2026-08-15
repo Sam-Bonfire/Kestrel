@@ -75,6 +75,7 @@ pub fn create_router(state: AppState) -> Router {
 
     // Protected routes (auth middleware required)
     let protected = Router::new()
+        .route("/api/v1/auth/callback/{provider}", get(auth::callback))
         .route("/api/v1/auth/callback/:provider", get(auth::callback))
         .route("/api/v1/accounts", get(accounts::list_accounts))
         .route("/api/v1/accounts/{id}", delete(accounts::delete_account))
@@ -83,6 +84,26 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/v1/messages/{id}/attachments/{filename}",
             get(messages::download_attachment),
+        )
+        .route(
+            "/api/v1/messages/:id/attachments/:filename",
+            get(messages::download_attachment),
+        )
+        .route(
+            "/api/v1/messages/{id}/attachments/{filename}/redirect",
+            get(messages::redirect_attachment),
+        )
+        .route(
+            "/api/v1/messages/:id/attachments/:filename/redirect",
+            get(messages::redirect_attachment),
+        )
+        .route(
+            "/api/messages/{id}/attachments/{filename}/redirect",
+            get(messages::redirect_attachment),
+        )
+        .route(
+            "/api/messages/:id/attachments/:filename/redirect",
+            get(messages::redirect_attachment),
         )
         .route("/api/v1/messages/{id}/read", post(messages::mark_read))
         .route(

@@ -220,6 +220,18 @@ impl MailProvider for WasmPlugin {
         }
     }
 
+    async fn get_attachment_url(
+        &self,
+        _auth_token: &str,
+        external_message_id: &str,
+        external_attachment_id: &str,
+    ) -> Result<String, PluginError> {
+        Ok(format!(
+            "https://cdn.kestrel.dev/attachments/{}/{}",
+            external_message_id, external_attachment_id
+        ))
+    }
+
     async fn update_message_labels(
         &self,
         _auth_token: &str,

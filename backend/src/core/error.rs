@@ -20,6 +20,8 @@ pub enum KestrelError {
     NotFound(String),
     #[error("Unauthorized")]
     Unauthorized,
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
     #[error("Conflict: {0}")]
     Conflict(String),
     #[error("Bad request: {0}")]
@@ -36,6 +38,7 @@ impl IntoResponse for KestrelError {
             KestrelError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             KestrelError::NotFound(_) => StatusCode::NOT_FOUND,
             KestrelError::Unauthorized => StatusCode::UNAUTHORIZED,
+            KestrelError::Forbidden(_) => StatusCode::FORBIDDEN,
             KestrelError::Conflict(_) => StatusCode::CONFLICT,
             KestrelError::BadRequest(_) => StatusCode::BAD_REQUEST,
             KestrelError::NotImplemented(_) => StatusCode::NOT_IMPLEMENTED,
