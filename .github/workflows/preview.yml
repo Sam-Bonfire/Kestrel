@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   preview:
-    name: Preview
+
     strategy:
       fail-fast: false
       matrix:
