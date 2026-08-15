@@ -11,31 +11,18 @@ concurrency:
 
 jobs:
   preview:
-
+    name: Validation
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - task: backend
-            os: ubuntu-latest
-            name: Backend Validation & Unit Tests
-          - task: frontend
-            os: ubuntu-latest
-            name: Frontend Monorepo Validation
-          - task: desktop-windows
-            os: windows-latest
-            name: Desktop Windows Build
-          - task: desktop-linux
-            os: ubuntu-latest
-            name: Desktop Linux Build
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Linux dependencies
-        if: matrix.task == 'desktop-linux'
+        if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
 
       - name: Setup Mise
@@ -44,39 +31,25 @@ jobs:
           install: true
           cache: true
 
-      - name: Check & Build Backend
-        if: matrix.task == 'backend'
+      - name: Backend & Web Validation
+        if: matrix.os == 'ubuntu-latest'
         run: |
           mise run check
           mise run build:backend
-
-      - name: Upload Backend Artifact
-        if: matrix.task == 'backend'
-        uses: actions/upload-artifact@v4
-        with:
-          name: preview-backend-linux
-          path: backend/target/release/backend
-          retention-days: 3
-
-      - name: Setup & Build Frontend Web
-        if: matrix.task == 'frontend'
-        run: |
           mise run setup
           pnpm --filter frontend-mail build
           pnpm --filter frontend-calendar build
 
-      - name: Setup Desktop Build
-        if: matrix.task == 'desktop-windows' || matrix.task == 'desktop-linux'
+      - name: Desktop Build Setup
         run: mise run setup
 
       - name: Build Desktop Apps
-        if: matrix.task == 'desktop-windows' || matrix.task == 'desktop-linux'
         run: |
           mise run build:frontend-mail
           mise run build:frontend-calendar
 
       - name: Upload Windows MSI
-        if: matrix.task == 'desktop-windows'
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: preview-windows-msi
@@ -86,7 +59,7 @@ jobs:
           retention-days: 3
 
       - name: Upload Linux DEB
-        if: matrix.task == 'desktop-linux'
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: preview-linux-deb
