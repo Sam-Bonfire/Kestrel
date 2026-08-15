@@ -18,8 +18,8 @@ RUN cargo install cargo-chef --version ^0.1 --locked
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-# Build dependency cache
-RUN cargo chef cook --release --recipe-path recipe.json
+# Build dependency cache (scoped to backend only)
+RUN cargo chef cook --release --recipe-path recipe.json --bin backend
 
 # Copy remaining source code and build production binary
 COPY . .
