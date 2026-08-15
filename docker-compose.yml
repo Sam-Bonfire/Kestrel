@@ -3,8 +3,8 @@ version: '3.8'
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     image: kestrel-backend:latest
     container_name: kestrel-backend
     restart: unless-stopped
