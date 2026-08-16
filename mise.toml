@@ -1,10 +1,10 @@
 # Kestrel Tool & Task Configuration
 
 [env]
-RUSTUP_TOOLCHAIN = "{% if os() == 'windows' %}stable-x86_64-pc-windows-gnu{% else %}stable{% endif %}"
+RUSTUP_TOOLCHAIN = "stable"
 
 [tools]
-rust = "{% if os() == 'windows' %}stable-x86_64-pc-windows-gnu{% else %}stable{% endif %}"
+rust = "stable"
 node = "22"
 pnpm = "latest"
 jujutsu = "latest"
