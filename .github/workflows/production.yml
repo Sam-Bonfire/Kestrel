@@ -30,8 +30,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
 
       - name: Setup Mise
         uses: jdx/mise-action@v2
@@ -62,8 +62,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -91,8 +91,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -123,8 +123,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
 
       - name: Setup Mise
         uses: jdx/mise-action@v2
@@ -188,8 +188,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -238,12 +238,6 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag_name || github.ref }}
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -261,6 +255,12 @@ jobs:
           
       - name: Setup Rust Android targets
         run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-android-cache"
+          save-if: false
 
       - name: Setup Build
         run: mise run setup
@@ -296,8 +296,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -346,12 +346,6 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag_name || github.ref }}
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "kestrel-${{ github.job }}"
-          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -369,6 +363,12 @@ jobs:
           
       - name: Setup Rust Android targets
         run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-android-cache"
+          save-if: false
 
       - name: Setup Build
         run: mise run setup

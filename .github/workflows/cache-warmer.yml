@@ -1,0 +1,82 @@
+name: Cache Warmer
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**/Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/cache-warmer.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  warm-desktop:
+    name: Warm Desktop Caches
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Setup Build
+        run: mise run setup
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: true
+
+      - name: Build Dependencies
+        # Only checks dependencies to warm the cache quickly
+        run: cargo check --workspace --all-targets
+
+  warm-android:
+    name: Warm Android Caches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+          
+      - name: Setup Rust Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Setup Build
+        run: mise run setup
+        
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-android-cache"
+          save-if: true
+          
+      - name: Build Android Dependencies
+        run: |
+          cd frontend-mail
+          pnpm tauri android init
+          pnpm tauri android build || true
