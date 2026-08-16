@@ -72,12 +72,4 @@ impl CalendarRepository for PostgresCalendarRepository {
         .await?;
         Ok(())
     }
-
-    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM calendars WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
 }

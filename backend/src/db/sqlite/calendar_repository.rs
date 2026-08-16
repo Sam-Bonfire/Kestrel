@@ -71,12 +71,4 @@ impl CalendarRepository for SqliteCalendarRepository {
         .await?;
         Ok(())
     }
-
-    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM calendars WHERE id = ?")
-            .bind(id.to_string())
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
 }

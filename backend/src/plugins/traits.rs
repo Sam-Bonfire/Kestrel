@@ -94,34 +94,11 @@ pub trait MailProvider: Send + Sync {
         ))
     }
 
-    /// Soft-delete a message on the provider (moves to Trash).
-    async fn delete_message(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError>;
-
     /// Send an email message.
     async fn send_message(
         &self,
         auth_token: &str,
         payload: SendMessagePayload,
-    ) -> Result<(), PluginError>;
-
-    /// Archive a message on the provider.
-    async fn archive_message(&self, auth_token: &str, external_id: &str)
-    -> Result<(), PluginError>;
-
-    /// Update labels on the provider.
-    async fn update_message_labels(
-        &self,
-        auth_token: &str,
-        external_id: &str,
-        labels: Vec<String>,
-    ) -> Result<(), PluginError>;
-
-    /// Mark a message as read or unread on the provider.
-    async fn mark_as_read(
-        &self,
-        auth_token: &str,
-        external_id: &str,
-        is_read: bool,
     ) -> Result<(), PluginError>;
 }
 
@@ -136,14 +113,6 @@ pub struct CalendarPayload {
     pub name: String,
     pub color: Option<String>,
     pub is_primary: bool,
-}
-
-/// Attendee info.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Attendee {
-    pub email: String,
-    pub name: Option<String>,
-    pub response_status: Option<String>,
 }
 
 /// Calendar event payload.

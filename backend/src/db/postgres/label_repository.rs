@@ -1,9 +1,7 @@
 use async_trait::async_trait;
-use uuid::Uuid;
 
 use crate::core::models::Label;
 use crate::core::repository::LabelRepository;
-use crate::core::types::DbUuid;
 
 pub struct PostgresLabelRepository {
     pool: sqlx::PgPool,
@@ -17,18 +15,6 @@ impl PostgresLabelRepository {
 
 #[async_trait]
 impl LabelRepository for PostgresLabelRepository {
-    async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Label>, sqlx::Error> {
-        let account_id_db = DbUuid(account_id);
-        sqlx::query_as::<_, Label>(
-            r#"
-            SELECT * FROM labels WHERE account_id = $1
-            "#,
-        )
-        .bind(account_id_db)
-        .fetch_all(&self.pool)
-        .await
-    }
-
     async fn upsert(&self, label: &Label) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -49,15 +35,6 @@ impl LabelRepository for PostgresLabelRepository {
         .bind(label.updated_at)
         .execute(&self.pool)
         .await?;
-        Ok(())
-    }
-
-    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error> {
-        let id_db = DbUuid(id);
-        sqlx::query("DELETE FROM labels WHERE id = $1")
-            .bind(id_db)
-            .execute(&self.pool)
-            .await?;
         Ok(())
     }
 }

@@ -1,0 +1,36 @@
+name: Main Branch Validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-main:
+    name: Validation Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Run all checks and tests
+        run: mise run check
+
+      - name: Verify build artifacts
+        run: |
+          mise run build:backend
+          mise run build:frontend-mail
+          mise run build:frontend-calendar

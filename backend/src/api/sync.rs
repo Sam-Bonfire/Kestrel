@@ -101,7 +101,7 @@ pub async fn trigger_sync(
 
 pub async fn sync_stream(
     State(state): State<AppState>,
-    AuthUser { user_id }: AuthUser,
+    AuthUser { user_id: _ }: AuthUser,
 ) -> Sse<impl futures::Stream<Item = Result<Event, Infallible>>> {
     let rx = state.sync_tx.subscribe();
 

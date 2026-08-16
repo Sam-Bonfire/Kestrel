@@ -82,27 +82,6 @@ impl EventRepository for SqliteEventRepository {
         }
     }
 
-    async fn search(
-        &self,
-        user_id: Uuid,
-        query: &str,
-        limit: i64,
-    ) -> Result<Vec<CalendarEvent>, sqlx::Error> {
-        sqlx::query_as::<_, CalendarEvent>(&format!(
-            "SELECT {EVENT_COLUMNS} \
-             FROM calendar_events e \
-             JOIN accounts a ON e.account_id = a.id \
-             JOIN calendar_events_fts fts ON e.rowid = fts.rowid \
-             WHERE a.user_id = ? AND calendar_events_fts MATCH ? \
-             ORDER BY e.start_time LIMIT ?"
-        ))
-        .bind(user_id.to_string())
-        .bind(query)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-    }
-
     async fn upsert(&self, event: &CalendarEvent) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO calendar_events (id, account_id, calendar_id, external_id, title, description, \
@@ -148,14 +127,6 @@ impl EventRepository for SqliteEventRepository {
         .bind(id.to_string())
         .execute(&self.pool)
         .await?;
-        Ok(())
-    }
-
-    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM calendar_events WHERE id = ?")
-            .bind(id.to_string())
-            .execute(&self.pool)
-            .await?;
         Ok(())
     }
 }

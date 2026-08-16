@@ -190,22 +190,6 @@ impl MessageRepository for SqliteMessageRepository {
         Ok(())
     }
 
-    async fn list_by_thread(
-        &self,
-        thread_id: &str,
-        limit: i64,
-    ) -> Result<Vec<Message>, sqlx::Error> {
-        let limit = limit.min(50);
-        sqlx::query_as::<_, Message>(&format!(
-            "SELECT {MESSAGE_COLUMNS} FROM messages m \
-             WHERE m.thread_id = ? ORDER BY m.date_received ASC LIMIT ?"
-        ))
-        .bind(thread_id)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-    }
-
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {
         // Find current labels for the thread to append 'Muted'
         // For simplicity in SQLite we will just force append "Muted" if not present

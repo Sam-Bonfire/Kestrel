@@ -102,13 +102,6 @@ pub struct BulkActionParams {
     pub action_value: Option<bool>,
 }
 
-#[derive(Deserialize)]
-pub struct ThreadParams {
-    pub thread_id: String,
-    #[serde(default = "default_limit")]
-    pub limit: i64,
-}
-
 // --- K-039: GET /api/v1/messages ---
 
 pub async fn list_messages(
@@ -116,7 +109,7 @@ pub async fn list_messages(
     AuthUser { user_id }: AuthUser,
     Query(params): Query<MessageListParams>,
 ) -> Result<Json<MessageListResponse>, KestrelError> {
-    let limit = params.limit.min(50).max(1);
+    let limit = params.limit.clamp(1, 50);
     let folder = params.folder.as_deref();
     let cursor = params.cursor.as_deref();
 
@@ -212,30 +205,29 @@ pub async fn get_message(
     }
 
     // On-demand body fetching (Task 2.2)
-    if msg.body_text.is_none() && msg.body_html.is_none() {
-        if let Some(account) = find_account_from_db(&state, msg.account_id.0).await? {
-            if let Some(token) = &account.access_token {
-                let plugin_manager = state.plugin_manager.read().await;
-                if let Some(plugin) = plugin_manager.find_by_id(&account.provider) {
-                    if let Ok(body) = plugin
-                        .as_mail_provider()
-                        .fetch_message_body(token, &msg.external_id)
-                        .await
-                    {
-                        msg.body_text = body.body_text;
-                        msg.body_html = body.body_html;
-                        // Save back to DB
-                        match &state.db {
-                            DbPool::Sqlite(pool) => {
-                                let repo = SqliteMessageRepository::new(pool.clone());
-                                let _ = repo.upsert(&msg).await;
-                            }
-                            DbPool::Postgres(pool) => {
-                                let repo = PostgresMessageRepository::new(pool.clone());
-                                let _ = repo.upsert(&msg).await;
-                            }
-                        }
-                    }
+    if msg.body_text.is_none()
+        && msg.body_html.is_none()
+        && let Some(account) = find_account_from_db(&state, msg.account_id.0).await?
+        && let Some(token) = &account.access_token
+    {
+        let plugin_manager = state.plugin_manager.read().await;
+        if let Some(plugin) = plugin_manager.find_by_id(&account.provider)
+            && let Ok(body) = plugin
+                .as_mail_provider()
+                .fetch_message_body(token, &msg.external_id)
+                .await
+        {
+            msg.body_text = body.body_text;
+            msg.body_html = body.body_html;
+            // Save back to DB
+            match &state.db {
+                DbPool::Sqlite(pool) => {
+                    let repo = SqliteMessageRepository::new(pool.clone());
+                    let _ = repo.upsert(&msg).await;
+                }
+                DbPool::Postgres(pool) => {
+                    let repo = PostgresMessageRepository::new(pool.clone());
+                    let _ = repo.upsert(&msg).await;
                 }
             }
         }

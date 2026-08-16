@@ -134,21 +134,6 @@ impl MailProvider for WasmPlugin {
         }
     }
 
-    async fn delete_message(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError> {
-        let (mut store, instance) = self.instantiate().await?;
-
-        let result = instance
-            .kestrel_provider_mail_provider()
-            .call_delete_message(&mut store, auth_token, external_id)
-            .await
-            .map_err(|e| PluginError(e.to_string()))?;
-
-        match result {
-            Ok(_) => Ok(()),
-            Err(e) => Err(PluginError(e)),
-        }
-    }
-
     async fn send_message(
         &self,
         auth_token: &str,
@@ -187,14 +172,6 @@ impl MailProvider for WasmPlugin {
         }
     }
 
-    async fn archive_message(
-        &self,
-        _auth_token: &str,
-        _external_id: &str,
-    ) -> Result<(), PluginError> {
-        Err(PluginError("Not implemented for WASM yet".to_string()))
-    }
-
     async fn download_attachment(
         &self,
         auth_token: &str,
@@ -230,24 +207,6 @@ impl MailProvider for WasmPlugin {
             "https://cdn.kestrel.dev/attachments/{}/{}",
             external_message_id, external_attachment_id
         ))
-    }
-
-    async fn update_message_labels(
-        &self,
-        _auth_token: &str,
-        _external_id: &str,
-        _labels: Vec<String>,
-    ) -> Result<(), PluginError> {
-        Err(PluginError("Not implemented for WASM yet".to_string()))
-    }
-
-    async fn mark_as_read(
-        &self,
-        _auth_token: &str,
-        _external_id: &str,
-        _is_read: bool,
-    ) -> Result<(), PluginError> {
-        Err(PluginError("Not implemented for WASM yet".to_string()))
     }
 }
 

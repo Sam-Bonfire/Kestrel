@@ -3,14 +3,6 @@ use serde::{Deserialize, Serialize};
 use super::types::DbUuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct BlockedSender {
-    pub id: DbUuid,
-    pub user_id: DbUuid,
-    pub email_address: String,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
     pub id: DbUuid,
     pub username: String,
@@ -103,17 +95,6 @@ pub struct CalendarEvent {
     pub status: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct HistoricalRevision {
-    pub id: DbUuid,
-    pub entity_type: String,
-    pub entity_id: DbUuid,
-    pub external_id: String,
-    pub payload_json: String,
-    pub superseded_at: i64,
-    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

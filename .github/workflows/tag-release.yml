@@ -1,0 +1,73 @@
+name: Tag Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type (patch, minor, major, custom)'
+        required: true
+        default: 'patch'
+      custom_tag:
+        description: 'Custom tag (if version_type is custom, e.g., v1.0.0-rc.1)'
+        required: false
+
+jobs:
+  generate-tag:
+    name: Generate & Push Semantic Tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Next Tag
+        id: next_tag
+        run: |
+          # Retrieve latest tag or default to v0.0.0
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+          
+          # If custom, just use it
+          if [ "${{ github.event.inputs.version_type }}" == "custom" ]; then
+            if [ -z "${{ github.event.inputs.custom_tag }}" ]; then
+              echo "Error: custom_tag must be provided if version_type is custom."
+              exit 1
+            fi
+            NEXT_TAG="${{ github.event.inputs.custom_tag }}"
+          else
+            # Remove 'v' prefix for arithmetic
+            VERSION=${LATEST_TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            
+            case "${{ github.event.inputs.version_type }}" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+              *)
+                echo "Error: Unknown version_type."
+                exit 1
+                ;;
+            esac
+            NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          
+          echo "Next tag calculated: $NEXT_TAG"
+          echo "tag=$NEXT_TAG" >> $GITHUB_OUTPUT
+
+      - name: Push Tag
+        run: |
+          NEXT_TAG="${{ steps.next_tag.outputs.tag }}"
+          git tag "$NEXT_TAG"
+          git push origin "$NEXT_TAG"

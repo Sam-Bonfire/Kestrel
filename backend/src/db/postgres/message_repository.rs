@@ -211,22 +211,6 @@ impl MessageRepository for PostgresMessageRepository {
         Ok(())
     }
 
-    async fn list_by_thread(
-        &self,
-        thread_id: &str,
-        limit: i64,
-    ) -> Result<Vec<Message>, sqlx::Error> {
-        let limit = limit.min(50);
-        sqlx::query_as::<_, Message>(&format!(
-            "SELECT {MESSAGE_COLUMNS} FROM messages m \
-             WHERE m.thread_id = $1 ORDER BY m.date_received ASC LIMIT $2"
-        ))
-        .bind(thread_id)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-    }
-
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {
         sqlx::query(
             "UPDATE messages SET \

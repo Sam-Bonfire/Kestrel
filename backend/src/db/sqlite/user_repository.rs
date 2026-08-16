@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use sqlx::SqlitePool;
-use uuid::Uuid;
 
 use crate::core::models::User;
 use crate::core::repository::UserRepository;
@@ -17,15 +16,6 @@ impl SqliteUserRepository {
 
 #[async_trait]
 impl UserRepository for SqliteUserRepository {
-    async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>(
-            "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE id = ?",
-        )
-        .bind(id.to_string())
-        .fetch_optional(&self.pool)
-        .await
-    }
-
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
             "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE username = ?",
@@ -46,14 +36,6 @@ impl UserRepository for SqliteUserRepository {
         .bind(user.updated_at)
         .execute(&self.pool)
         .await?;
-        Ok(())
-    }
-
-    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM users WHERE id = ?")
-            .bind(id.to_string())
-            .execute(&self.pool)
-            .await?;
         Ok(())
     }
 }
