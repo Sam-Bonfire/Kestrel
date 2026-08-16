@@ -10,12 +10,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Validation & Tests
+
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      mail: ${{ steps.filter.outputs.mail }}
+      calendar: ${{ steps.filter.outputs.calendar }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/**'
+              - 'mise.toml'
+            mail:
+              - 'frontend-mail/**'
+              - 'frontend-shared/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/**'
+              - 'mise.toml'
+            calendar:
+              - 'frontend-calendar/**'
+              - 'frontend-shared/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/**'
+              - 'mise.toml'
+
+  validate-backend:
+    name: Validate Backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Setup Mise
         uses: jdx/mise-action@v2
@@ -23,27 +72,33 @@ jobs:
           install: true
           cache: true
 
-      - name: Backend & Web Validation
+      - name: Run Backend Checks
         run: |
-          mise run check
           mise run setup
-          pnpm --filter frontend-mail build
-          pnpm --filter frontend-calendar build
+          mise run check:backend
 
-  build:
-    name: Desktop Builds
-    needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+      - name: Build release binary for Docker validation
+        run: mise run build:backend
+
+      - name: Verify Dockerfile Build
+        run: docker build -f backend/Dockerfile.ci .
+
+  validate-mail:
+    name: Validate Mail
+    needs: changes
+    if: needs.changes.outputs.mail == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+
       - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
 
       - name: Setup Mise
@@ -52,30 +107,36 @@ jobs:
           install: true
           cache: true
 
-      - name: Desktop Build Setup
-        run: mise run setup
-
-      - name: Build Desktop Apps
+      - name: Run Mail Checks
         run: |
-          mise run build:frontend-mail
-          mise run build:frontend-calendar
+          mise run setup
+          mise run check:frontend-mail
 
-      - name: Upload Windows MSI
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: preview-windows-msi
-          path: |
-            frontend-mail/src-tauri/target/release/bundle/msi/*.msi
-            frontend-calendar/src-tauri/target/release/bundle/msi/*.msi
-          retention-days: 3
+  validate-calendar:
+    name: Validate Calendar
+    needs: changes
+    if: needs.changes.outputs.calendar == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Upload Linux DEB
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          name: preview-linux-deb
-          path: |
-            frontend-mail/src-tauri/target/release/bundle/deb/*.deb
-            frontend-calendar/src-tauri/target/release/bundle/deb/*.deb
-          retention-days: 3
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
+
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Run Calendar Checks
+        run: |
+          mise run setup
+          mise run check:frontend-calendar
