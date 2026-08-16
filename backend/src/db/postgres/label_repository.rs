@@ -15,7 +15,6 @@ impl PostgresLabelRepository {
 
 #[async_trait]
 impl LabelRepository for PostgresLabelRepository {
-
     async fn upsert(&self, label: &Label) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -38,5 +37,4 @@ impl LabelRepository for PostgresLabelRepository {
         .await?;
         Ok(())
     }
-
 }

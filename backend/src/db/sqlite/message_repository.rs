@@ -190,7 +190,6 @@ impl MessageRepository for SqliteMessageRepository {
         Ok(())
     }
 
-
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {
         // Find current labels for the thread to append 'Muted'
         // For simplicity in SQLite we will just force append "Muted" if not present

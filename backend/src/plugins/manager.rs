@@ -2,9 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::traits::{
-    BrandingPayload, CalendarProvider, MailProvider,  ProviderPlugin,
-};
+use super::traits::{BrandingPayload, CalendarProvider, MailProvider, ProviderPlugin};
 use super::wasm_runtime::WasmEngine;
 
 /// Represents a loaded plugin and its capabilities.
@@ -34,7 +32,6 @@ impl LoadedPlugin {
     pub fn as_calendar_provider(&self) -> &dyn CalendarProvider {
         self.plugin.as_ref()
     }
-
 }
 
 /// Manages loading and querying of provider plugins.
@@ -157,4 +154,3 @@ impl Default for PluginManager {
         Self::new()
     }
 }
-

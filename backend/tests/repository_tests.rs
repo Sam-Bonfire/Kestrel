@@ -41,8 +41,6 @@ async fn test_user_repository_crud() {
     assert!(fetched.is_some());
     let created_user = fetched.unwrap();
     assert_eq!(created_user.username, "test@kestrel.dev");
-
-
 }
 
 #[tokio::test]

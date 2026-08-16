@@ -70,8 +70,6 @@ impl RateLimiter {
             Ok(())
         }
     }
-
-
 }
 
 /// Extract the client IP from the request.

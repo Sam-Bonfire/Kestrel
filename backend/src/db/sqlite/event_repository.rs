@@ -82,7 +82,6 @@ impl EventRepository for SqliteEventRepository {
         }
     }
 
-
     async fn upsert(&self, event: &CalendarEvent) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO calendar_events (id, account_id, calendar_id, external_id, title, description, \
@@ -130,5 +129,4 @@ impl EventRepository for SqliteEventRepository {
         .await?;
         Ok(())
     }
-
 }

@@ -134,7 +134,6 @@ impl MailProvider for WasmPlugin {
         }
     }
 
-
     async fn send_message(
         &self,
         auth_token: &str,
@@ -173,7 +172,6 @@ impl MailProvider for WasmPlugin {
         }
     }
 
-
     async fn download_attachment(
         &self,
         auth_token: &str,
@@ -210,8 +208,6 @@ impl MailProvider for WasmPlugin {
             external_message_id, external_attachment_id
         ))
     }
-
-
 }
 
 #[async_trait]

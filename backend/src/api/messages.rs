@@ -205,31 +205,33 @@ pub async fn get_message(
     }
 
     // On-demand body fetching (Task 2.2)
-    if msg.body_text.is_none() && msg.body_html.is_none()
+    if msg.body_text.is_none()
+        && msg.body_html.is_none()
         && let Some(account) = find_account_from_db(&state, msg.account_id.0).await?
-            && let Some(token) = &account.access_token {
-                let plugin_manager = state.plugin_manager.read().await;
-                if let Some(plugin) = plugin_manager.find_by_id(&account.provider)
-                    && let Ok(body) = plugin
-                        .as_mail_provider()
-                        .fetch_message_body(token, &msg.external_id)
-                        .await
-                    {
-                        msg.body_text = body.body_text;
-                        msg.body_html = body.body_html;
-                        // Save back to DB
-                        match &state.db {
-                            DbPool::Sqlite(pool) => {
-                                let repo = SqliteMessageRepository::new(pool.clone());
-                                let _ = repo.upsert(&msg).await;
-                            }
-                            DbPool::Postgres(pool) => {
-                                let repo = PostgresMessageRepository::new(pool.clone());
-                                let _ = repo.upsert(&msg).await;
-                            }
-                        }
-                    }
+        && let Some(token) = &account.access_token
+    {
+        let plugin_manager = state.plugin_manager.read().await;
+        if let Some(plugin) = plugin_manager.find_by_id(&account.provider)
+            && let Ok(body) = plugin
+                .as_mail_provider()
+                .fetch_message_body(token, &msg.external_id)
+                .await
+        {
+            msg.body_text = body.body_text;
+            msg.body_html = body.body_html;
+            // Save back to DB
+            match &state.db {
+                DbPool::Sqlite(pool) => {
+                    let repo = SqliteMessageRepository::new(pool.clone());
+                    let _ = repo.upsert(&msg).await;
+                }
+                DbPool::Postgres(pool) => {
+                    let repo = PostgresMessageRepository::new(pool.clone());
+                    let _ = repo.upsert(&msg).await;
+                }
             }
+        }
+    }
 
     Ok(Json(MessageDetail {
         id: msg.id.0,

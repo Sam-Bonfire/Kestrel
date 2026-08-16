@@ -72,5 +72,4 @@ impl CalendarRepository for PostgresCalendarRepository {
         .await?;
         Ok(())
     }
-
 }

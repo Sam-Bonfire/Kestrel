@@ -15,7 +15,6 @@ impl SqliteLabelRepository {
 
 #[async_trait]
 impl LabelRepository for SqliteLabelRepository {
-
     async fn upsert(&self, label: &Label) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -38,5 +37,4 @@ impl LabelRepository for SqliteLabelRepository {
         .await?;
         Ok(())
     }
-
 }

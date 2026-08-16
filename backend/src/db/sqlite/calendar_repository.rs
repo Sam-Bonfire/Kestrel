@@ -71,5 +71,4 @@ impl CalendarRepository for SqliteCalendarRepository {
         .await?;
         Ok(())
     }
-
 }

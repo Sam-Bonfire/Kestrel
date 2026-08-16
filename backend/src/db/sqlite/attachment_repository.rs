@@ -13,7 +13,6 @@ impl AttachmentRepository {
         Self { pool }
     }
 
-
     pub async fn get_attachments_for_message(
         &self,
         message_id: DbUuid,

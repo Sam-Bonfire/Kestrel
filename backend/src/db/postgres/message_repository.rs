@@ -211,7 +211,6 @@ impl MessageRepository for PostgresMessageRepository {
         Ok(())
     }
 
-
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {
         sqlx::query(
             "UPDATE messages SET \

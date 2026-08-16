@@ -23,9 +23,10 @@ impl Config {
 
     fn resolve_jwt_secret() -> String {
         if let Ok(secret) = std::env::var("JWT_SECRET")
-            && !secret.is_empty() {
-                return secret;
-            }
+            && !secret.is_empty()
+        {
+            return secret;
+        }
 
         // Generate a random secret when none is configured.
         // Tokens won't survive restarts — acceptable for development.

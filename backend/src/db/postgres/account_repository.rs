@@ -39,7 +39,6 @@ impl AccountRepository for PostgresAccountRepository {
         .await
     }
 
-
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO accounts (id, user_id, provider, provider_account_id, display_name, \

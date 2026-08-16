@@ -16,7 +16,6 @@ impl PostgresUserRepository {
 
 #[async_trait]
 impl UserRepository for PostgresUserRepository {
-
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
             "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE username = $1",
@@ -40,5 +39,4 @@ impl UserRepository for PostgresUserRepository {
         .await?;
         Ok(())
     }
-
 }

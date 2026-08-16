@@ -94,16 +94,12 @@ pub trait MailProvider: Send + Sync {
         ))
     }
 
-
-
     /// Send an email message.
     async fn send_message(
         &self,
         auth_token: &str,
         payload: SendMessagePayload,
     ) -> Result<(), PluginError>;
-
-
 }
 
 // ─────────────────────────────────────────────
@@ -118,8 +114,6 @@ pub struct CalendarPayload {
     pub color: Option<String>,
     pub is_primary: bool,
 }
-
-
 
 /// Calendar event payload.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

@@ -5,10 +5,8 @@ use super::models::{Account, Calendar, CalendarEvent, Message, User};
 
 #[async_trait]
 pub trait UserRepository: Send + Sync {
-
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error>;
     async fn create(&self, user: &User) -> Result<(), sqlx::Error>;
-
 }
 
 #[async_trait]
@@ -88,6 +86,5 @@ pub trait EventRepository: Send + Sync {
 
 #[async_trait]
 pub trait LabelRepository: Send + Sync {
-
     async fn upsert(&self, label: &crate::core::models::Label) -> Result<(), sqlx::Error>;
 }

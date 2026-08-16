@@ -121,14 +121,15 @@ pub async fn auth_middleware(
 fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
     // 1. Try Cookie header
     if let Some(cookie) = req.headers().get(axum::http::header::COOKIE)
-        && let Ok(cookie_str) = cookie.to_str() {
-            for part in cookie_str.split(';') {
-                let part = part.trim();
-                if let Some(token) = part.strip_prefix("kestrel_token=") {
-                    return Some(token.to_string());
-                }
+        && let Ok(cookie_str) = cookie.to_str()
+    {
+        for part in cookie_str.split(';') {
+            let part = part.trim();
+            if let Some(token) = part.strip_prefix("kestrel_token=") {
+                return Some(token.to_string());
             }
         }
+    }
 
     // 2. Fallback to Authorization header
     req.headers()

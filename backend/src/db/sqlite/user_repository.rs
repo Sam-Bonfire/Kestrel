@@ -16,7 +16,6 @@ impl SqliteUserRepository {
 
 #[async_trait]
 impl UserRepository for SqliteUserRepository {
-
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
             "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE username = ?",
@@ -39,5 +38,4 @@ impl UserRepository for SqliteUserRepository {
         .await?;
         Ok(())
     }
-
 }
