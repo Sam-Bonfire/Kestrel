@@ -30,7 +30,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Setup Mise
@@ -62,7 +62,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Install Linux dependencies
@@ -91,7 +91,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Install Linux dependencies
@@ -123,7 +123,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Setup Mise
@@ -188,7 +188,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Install Linux dependencies
@@ -241,7 +241,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Setup Java
@@ -296,7 +296,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Install Linux dependencies
@@ -349,7 +349,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "kestrel-rust-shared-cache"
+          shared-key: "kestrel-${{ github.job }}"
           save-if: ${{ github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' }}
 
       - name: Setup Java
