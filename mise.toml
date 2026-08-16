@@ -43,10 +43,20 @@ description = "Build Kestrel Mail native packages using Tauri"
 dir = "frontend-mail"
 run = "pnpm tauri build"
 
+[tasks."build:frontend-mail:android"]
+description = "Build Kestrel Mail Android APK/AAB using Tauri"
+dir = "frontend-mail"
+run = "pnpm tauri android build"
+
 [tasks."build:frontend-calendar"]
 description = "Build Kestrel Calendar native packages using Tauri"
 dir = "frontend-calendar"
 run = "pnpm tauri build"
+
+[tasks."build:frontend-calendar:android"]
+description = "Build Kestrel Calendar Android APK/AAB using Tauri"
+dir = "frontend-calendar"
+run = "pnpm tauri android build"
 
 [tasks."test:backend"]
 description = "Run backend cargo tests"
@@ -84,23 +94,43 @@ run = [
     "echo \"==> Setup complete!\""
 ]
 
-[tasks.check]
-description = "Run all linters, tests, and build checks"
+[tasks."check:backend"]
+description = "Run backend linters and tests"
 run = [
     "echo \"==> Backend: fmt check...\"",
     "cargo fmt --manifest-path backend/Cargo.toml -- --check",
     "echo \"==> Backend: clippy...\"",
     "cargo clippy --manifest-path backend/Cargo.toml -- -D warnings",
     "echo \"==> Backend: tests...\"",
-    "cargo test --manifest-path backend/Cargo.toml",
-    "echo \"==> Frontend: build shared...\"",
-    "pnpm --filter @kestrel/shared build",
-    "echo \"==> Frontend: build mail...\"",
-    "pnpm --filter frontend-mail build",
-    "echo \"==> Frontend: build calendar...\"",
-    "pnpm --filter frontend-calendar build",
-    "echo \"==> All checks passed!\""
+    "cargo test --manifest-path backend/Cargo.toml"
 ]
+
+[tasks."check:frontend-mail"]
+description = "Run Mail frontend linters and build"
+run = [
+    "echo \"==> Frontend Mail: fmt check...\"",
+    "cargo fmt --manifest-path frontend-mail/src-tauri/Cargo.toml -- --check",
+    "echo \"==> Frontend Mail: clippy...\"",
+    "cargo clippy --manifest-path frontend-mail/src-tauri/Cargo.toml -- -D warnings",
+    "echo \"==> Frontend Mail: build...\"",
+    "pnpm --filter frontend-mail build"
+]
+
+[tasks."check:frontend-calendar"]
+description = "Run Calendar frontend linters and build"
+run = [
+    "echo \"==> Frontend Calendar: fmt check...\"",
+    "cargo fmt --manifest-path frontend-calendar/src-tauri/Cargo.toml -- --check",
+    "echo \"==> Frontend Calendar: clippy...\"",
+    "cargo clippy --manifest-path frontend-calendar/src-tauri/Cargo.toml -- -D warnings",
+    "echo \"==> Frontend Calendar: build...\"",
+    "pnpm --filter frontend-calendar build"
+]
+
+[tasks.check]
+description = "Run all linters, tests, and build checks"
+depends = ["check:backend", "check:frontend-mail", "check:frontend-calendar"]
+run = "echo \"==> All checks passed!\""
 
 [tasks.clean]
 description = "Remove all build artifacts and caches"
@@ -115,4 +145,3 @@ run = [
     "rm -rf frontend-shared/dist",
     "echo \"==> Clean complete.\""
 ]
-
