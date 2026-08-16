@@ -241,6 +241,9 @@ jobs:
       - name: Setup Build
         run: mise run setup
 
+      - name: Initialize Tauri Android
+        run: cd frontend-mail && pnpm tauri android init
+
       - name: Build Mail Android App
         run: mise run build:frontend-mail:android
 
@@ -342,6 +345,9 @@ jobs:
 
       - name: Setup Build
         run: mise run setup
+
+      - name: Initialize Tauri Android
+        run: cd frontend-calendar && pnpm tauri android init
 
       - name: Build Calendar Android App
         run: mise run build:frontend-calendar:android
