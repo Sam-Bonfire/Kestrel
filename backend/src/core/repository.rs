@@ -15,6 +15,7 @@ pub trait AccountRepository: Send + Sync {
     async fn find_by_user_id(&self, user_id: Uuid) -> Result<Vec<Account>, sqlx::Error>;
 
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error>;
+    async fn update_tokens_and_error(&self, id: Uuid, access_token: Option<&str>, expires_at: Option<i64>, error: Option<&str>) -> Result<(), sqlx::Error>;
     async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error>;
 }
 

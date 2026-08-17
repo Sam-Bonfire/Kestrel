@@ -74,6 +74,7 @@ async fn test_account_repository_crud() {
         access_token: Some("access_token_123".to_string()),
         refresh_token: Some("refresh_token_123".to_string()),
         token_expires_at: None,
+        sync_error: None,
         created_at: now,
         updated_at: now,
     };

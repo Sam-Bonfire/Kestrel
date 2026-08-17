@@ -501,6 +501,7 @@ pub async fn callback(
         access_token: Some(access_token.clone()),
         refresh_token,
         token_expires_at: Some(token_expires_at),
+        sync_error: None,
         created_at: now,
         updated_at: now,
     };
