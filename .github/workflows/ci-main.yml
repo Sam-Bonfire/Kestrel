@@ -63,11 +63,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "kestrel-rust-shared-cache"
-          save-if: false
 
       - name: Setup Mise
         uses: jdx/mise-action@v2
@@ -75,6 +70,12 @@ jobs:
           install: true
           cache: true
 
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
       - name: Run Backend Checks
         run: |
           mise run setup
@@ -95,11 +96,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "kestrel-rust-shared-cache"
-          save-if: false
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -110,6 +106,12 @@ jobs:
           install: true
           cache: true
 
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
       - name: Run Mail Checks
         run: |
           mise run setup
@@ -124,11 +126,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "kestrel-rust-shared-cache"
-          save-if: false
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -139,6 +136,12 @@ jobs:
           install: true
           cache: true
 
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: false
       - name: Run Calendar Checks
         run: |
           mise run setup
