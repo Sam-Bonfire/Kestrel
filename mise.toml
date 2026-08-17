@@ -21,7 +21,7 @@ run = [
 [tasks."dev:backend"]
 description = "Start the Axum daemon in development mode"
 dir = "backend"
-run = 'cargo watch -x "run --bin backend"'
+run = 'cargo watch -x "run --bin kestrel-server"'
 
 [tasks."dev:frontend-mail"]
 description = "Start the Kestrel Mail Tauri dev server"
