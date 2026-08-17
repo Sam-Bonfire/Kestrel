@@ -3,6 +3,9 @@ name: Cache Warmer
 on:
   workflow_dispatch:
   push:
+    branches:
+      - dev
+      - main
     paths:
       - '**/Cargo.toml'
       - 'Cargo.lock'
