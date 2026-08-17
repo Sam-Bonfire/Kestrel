@@ -10,7 +10,7 @@ frontend-*/src-tauri/target/
 
 # Ignore backend local builds
 target/
-!target/release/backend
+!target/release/kestrel-server
 backend/target/
 
 # Ignore editor/IDE folders
