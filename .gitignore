@@ -16,6 +16,10 @@ kestrel.db
 kestrel_queue.db
 *.log
 
+# Plugin build artifacts
+*.wasm
+plugins/**/*.log
+
 # Configuration secrets & env profiles
 .env
 .env.*
