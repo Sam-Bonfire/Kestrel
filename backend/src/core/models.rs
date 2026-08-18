@@ -35,6 +35,7 @@ pub struct Account {
     #[serde(skip_serializing)]
     pub refresh_token: Option<String>,
     pub token_expires_at: Option<i64>,
+    pub sync_error: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
