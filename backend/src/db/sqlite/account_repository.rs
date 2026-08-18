@@ -61,7 +61,13 @@ impl AccountRepository for SqliteAccountRepository {
         Ok(())
     }
 
-    async fn update_tokens_and_error(&self, id: Uuid, access_token: Option<&str>, expires_at: Option<i64>, error: Option<&str>) -> Result<(), sqlx::Error> {
+    async fn update_tokens_and_error(
+        &self,
+        id: Uuid,
+        access_token: Option<&str>,
+        expires_at: Option<i64>,
+        error: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
         let updated_at = chrono::Utc::now().timestamp();
         sqlx::query(
             "UPDATE accounts SET access_token = ?, token_expires_at = ?, sync_error = ?, updated_at = ? WHERE id = ?"

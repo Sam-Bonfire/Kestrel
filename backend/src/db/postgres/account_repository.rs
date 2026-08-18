@@ -61,7 +61,13 @@ impl AccountRepository for PostgresAccountRepository {
         Ok(())
     }
 
-    async fn update_tokens_and_error(&self, id: Uuid, access_token: Option<&str>, expires_at: Option<i64>, error: Option<&str>) -> Result<(), sqlx::Error> {
+    async fn update_tokens_and_error(
+        &self,
+        id: Uuid,
+        access_token: Option<&str>,
+        expires_at: Option<i64>,
+        error: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
         let updated_at = chrono::Utc::now().timestamp();
         sqlx::query(
             "UPDATE accounts SET access_token = $1, token_expires_at = $2, sync_error = $3, updated_at = $4 WHERE id = $5"

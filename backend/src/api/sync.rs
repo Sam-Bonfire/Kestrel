@@ -34,7 +34,10 @@ pub struct SyncEvent {
 
 #[async_trait::async_trait]
 pub trait TokenRefresher: Send + Sync {
-    async fn refresh(&self, account: &crate::core::models::Account) -> Result<serde_json::Value, String>;
+    async fn refresh(
+        &self,
+        account: &crate::core::models::Account,
+    ) -> Result<serde_json::Value, String>;
 }
 
 pub struct ReqwestTokenRefresher {
@@ -57,7 +60,10 @@ impl ReqwestTokenRefresher {
 
 #[async_trait::async_trait]
 impl TokenRefresher for ReqwestTokenRefresher {
-    async fn refresh(&self, account: &crate::core::models::Account) -> Result<serde_json::Value, String> {
+    async fn refresh(
+        &self,
+        account: &crate::core::models::Account,
+    ) -> Result<serde_json::Value, String> {
         let (token_url, client_id, client_secret) = match account.provider.as_str() {
             "gmail" => (
                 "https://oauth2.googleapis.com/token",
@@ -81,7 +87,8 @@ impl TokenRefresher for ReqwestTokenRefresher {
             None => return Err("No refresh token available".to_string()),
         };
 
-        let res = self.client
+        let res = self
+            .client
             .post(token_url)
             .form(&[
                 ("client_id", client_id.as_str()),
@@ -113,7 +120,8 @@ pub async fn ensure_valid_token(
     // 5 minutes = 300 seconds
     let threshold = now + 300;
 
-    let needs_refresh = account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
+    let needs_refresh =
+        account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
 
     if !needs_refresh {
         return Ok(account.access_token.clone().unwrap());
@@ -132,13 +140,29 @@ pub async fn ensure_valid_token(
                 match &state.db {
                     DbPool::Sqlite(pool) => {
                         if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(account.id.0, Some(access_token), account.token_expires_at, None)
-                            .await { tracing::error!("DB update failed: {}", e); }
+                            .update_tokens_and_error(
+                                account.id.0,
+                                Some(access_token),
+                                account.token_expires_at,
+                                None,
+                            )
+                            .await
+                        {
+                            tracing::error!("DB update failed: {}", e);
+                        }
                     }
                     DbPool::Postgres(pool) => {
                         if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(account.id.0, Some(access_token), account.token_expires_at, None)
-                            .await { tracing::error!("DB update failed: {}", e); }
+                            .update_tokens_and_error(
+                                account.id.0,
+                                Some(access_token),
+                                account.token_expires_at,
+                                None,
+                            )
+                            .await
+                        {
+                            tracing::error!("DB update failed: {}", e);
+                        }
                     }
                 }
                 Ok(access_token.to_string())
@@ -148,13 +172,29 @@ pub async fn ensure_valid_token(
                 match &state.db {
                     DbPool::Sqlite(pool) => {
                         if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(account.id.0, account.access_token.as_deref(), account.token_expires_at, Some(&err_msg))
-                            .await { tracing::error!("DB update failed: {}", e); }
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&err_msg),
+                            )
+                            .await
+                        {
+                            tracing::error!("DB update failed: {}", e);
+                        }
                     }
                     DbPool::Postgres(pool) => {
                         if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(account.id.0, account.access_token.as_deref(), account.token_expires_at, Some(&err_msg))
-                            .await { tracing::error!("DB update failed: {}", e); }
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&err_msg),
+                            )
+                            .await
+                        {
+                            tracing::error!("DB update failed: {}", e);
+                        }
                     }
                 }
                 Err(err_msg)
@@ -165,13 +205,29 @@ pub async fn ensure_valid_token(
             match &state.db {
                 DbPool::Sqlite(pool) => {
                     if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                        .update_tokens_and_error(account.id.0, account.access_token.as_deref(), account.token_expires_at, Some(&e))
-                        .await { tracing::error!("DB update failed: {}", e); }
+                        .update_tokens_and_error(
+                            account.id.0,
+                            account.access_token.as_deref(),
+                            account.token_expires_at,
+                            Some(&e),
+                        )
+                        .await
+                    {
+                        tracing::error!("DB update failed: {}", e);
+                    }
                 }
                 DbPool::Postgres(pool) => {
                     if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                        .update_tokens_and_error(account.id.0, account.access_token.as_deref(), account.token_expires_at, Some(&e))
-                        .await { tracing::error!("DB update failed: {}", e); }
+                        .update_tokens_and_error(
+                            account.id.0,
+                            account.access_token.as_deref(),
+                            account.token_expires_at,
+                            Some(&e),
+                        )
+                        .await
+                    {
+                        tracing::error!("DB update failed: {}", e);
+                    }
                 }
             }
             Err(e)
@@ -223,7 +279,11 @@ pub async fn trigger_sync(
         let token = match ensure_valid_token(&state, &mut account, &refresher).await {
             Ok(t) => t,
             Err(e) => {
-                tracing::warn!("Sync trigger token refresh failed for {}: {}", account.id.0, e);
+                tracing::warn!(
+                    "Sync trigger token refresh failed for {}: {}",
+                    account.id.0,
+                    e
+                );
                 continue;
             }
         };
@@ -243,11 +303,7 @@ pub async fn trigger_sync(
 
     Ok(Json(SyncTriggerResponse {
         status: "ok".to_string(),
-        message: format!(
-            "Synced {} messages across {} account(s)",
-            synced_count,
-            len
-        ),
+        message: format!("Synced {} messages across {} account(s)", synced_count, len),
     }))
 }
 
@@ -318,10 +374,16 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
 
                     async move {
                         let refresher = ReqwestTokenRefresher::new();
-                        let token = match ensure_valid_token(&state_clone, &mut account, &refresher).await {
+                        let token = match ensure_valid_token(&state_clone, &mut account, &refresher)
+                            .await
+                        {
                             Ok(t) => t,
                             Err(e) => {
-                                tracing::warn!("Sync daemon token refresh failed for {}: {}", account.id.0, e);
+                                tracing::warn!(
+                                    "Sync daemon token refresh failed for {}: {}",
+                                    account.id.0,
+                                    e
+                                );
                                 return;
                             }
                         };
@@ -698,7 +760,7 @@ pub async fn sync_account_calendars(
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+    use crate::core::models::Account;
 
     // Mocking the threshold check
     #[tokio::test]
@@ -720,17 +782,20 @@ mod tests {
         // If it's valid, it shouldn't need a refresh.
         let now = chrono::Utc::now().timestamp();
         let threshold = now + 300;
-        let needs_refresh = account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
+        let needs_refresh =
+            account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
         assert_eq!(needs_refresh, false);
 
         // If it's within 5 minutes (300s), it needs a refresh
         account.token_expires_at = Some(now + 200);
-        let needs_refresh = account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
+        let needs_refresh =
+            account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
         assert_eq!(needs_refresh, true);
 
         // If it's already expired, it needs a refresh
         account.token_expires_at = Some(now - 100);
-        let needs_refresh = account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
+        let needs_refresh =
+            account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
         assert_eq!(needs_refresh, true);
     }
 }
