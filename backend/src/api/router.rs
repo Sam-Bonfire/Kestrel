@@ -34,6 +34,8 @@ pub fn create_router(state: AppState) -> Router {
         .allow_origin(vec![
             "http://localhost:1420".parse::<HeaderValue>().unwrap(),
             "http://127.0.0.1:1420".parse::<HeaderValue>().unwrap(),
+            "http://localhost:1421".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:1421".parse::<HeaderValue>().unwrap(),
             "http://localhost:5173".parse::<HeaderValue>().unwrap(),
             "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
             "tauri://localhost".parse::<HeaderValue>().unwrap(),
