@@ -1,13 +1,13 @@
+use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use base64::Engine;
 use chrono::Utc;
 use serde::Deserialize;
 
 use crate::api::router::AppState;
-use crate::api::sync::{sync_account_messages, SyncEvent};
+use crate::api::sync::{SyncEvent, sync_account_messages};
 use crate::core::error::KestrelError;
 use crate::core::repository::AccountRepository;
 
@@ -37,7 +37,8 @@ pub async fn handle_google_webhook(
     Query(query): Query<GoogleWebhookQuery>,
     Json(payload): Json<GoogleWebhookPayload>,
 ) -> Result<impl IntoResponse, KestrelError> {
-    let expected_secret = std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| state.jwt_secret.clone());
+    let expected_secret =
+        std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| state.jwt_secret.clone());
 
     // Verify the authentication token
     if query.token.as_deref() != Some(expected_secret.as_str()) {
@@ -62,11 +63,17 @@ pub async fn handle_google_webhook(
 
     let repo = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            let r: Box<dyn AccountRepository> = Box::new(crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone()));
+            let r: Box<dyn AccountRepository> = Box::new(
+                crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone()),
+            );
             r
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            let r: Box<dyn AccountRepository> = Box::new(crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone()));
+            let r: Box<dyn AccountRepository> = Box::new(
+                crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                    pool.clone(),
+                ),
+            );
             r
         }
     };
@@ -93,10 +100,19 @@ pub async fn handle_google_webhook(
 
     // Spawn task to enqueue sync job via tx
     tokio::spawn(async move {
-        tracing::info!("Starting background sync for Google webhook account: {}", account_id);
+        tracing::info!(
+            "Starting background sync for Google webhook account: {}",
+            account_id
+        );
 
         let refresher = crate::api::sync::ReqwestTokenRefresher::new();
-        let token = match crate::api::sync::ensure_valid_token(&state_clone, &mut account, &refresher).await {
+        let token = match crate::api::sync::ensure_valid_token(
+            &state_clone,
+            &mut account,
+            &refresher,
+        )
+        .await
+        {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!("Webhook token refresh failed for {}: {}", account_id, e);
@@ -106,7 +122,11 @@ pub async fn handle_google_webhook(
 
         match sync_account_messages(&state_clone, &account, &token).await {
             Ok(count) => {
-                tracing::info!("Webhook sync complete for {}, {} messages", account_id, count);
+                tracing::info!(
+                    "Webhook sync complete for {}, {} messages",
+                    account_id,
+                    count
+                );
                 let _ = state_clone.sync_tx.send(SyncEvent {
                     event_type: "sync_complete".to_string(),
                     account_id: Some(account_id),
@@ -159,7 +179,8 @@ pub async fn handle_microsoft_webhook(
         return Ok(response.into_response());
     }
 
-    let expected_secret = std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| state.jwt_secret.clone());
+    let expected_secret =
+        std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| state.jwt_secret.clone());
 
     // 2. Handle actual notification
     if let Some(bytes) = body {
@@ -197,13 +218,17 @@ pub async fn handle_microsoft_webhook(
             let repo = match &state.db {
                 crate::db::pool::DbPool::Sqlite(pool) => {
                     let r: Box<dyn AccountRepository> = Box::new(
-                        crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone()),
+                        crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                            pool.clone(),
+                        ),
                     );
                     r
                 }
                 crate::db::pool::DbPool::Postgres(pool) => {
                     let r: Box<dyn AccountRepository> = Box::new(
-                        crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone()),
+                        crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                            pool.clone(),
+                        ),
                     );
                     r
                 }
@@ -224,7 +249,10 @@ pub async fn handle_microsoft_webhook(
                     match repo.find_by_provider_account_id("microsoft", &email).await {
                         Ok(Some(a)) => a,
                         _ => {
-                            tracing::warn!("No account found for Microsoft webhook email: {}", email);
+                            tracing::warn!(
+                                "No account found for Microsoft webhook email: {}",
+                                email
+                            );
                             continue;
                         }
                     }
@@ -235,9 +263,18 @@ pub async fn handle_microsoft_webhook(
             let account_id = account.id.0;
 
             tokio::spawn(async move {
-                tracing::info!("Starting background sync for Microsoft webhook account: {}", account_id);
+                tracing::info!(
+                    "Starting background sync for Microsoft webhook account: {}",
+                    account_id
+                );
                 let refresher = crate::api::sync::ReqwestTokenRefresher::new();
-                let token = match crate::api::sync::ensure_valid_token(&state_clone, &mut account, &refresher).await {
+                let token = match crate::api::sync::ensure_valid_token(
+                    &state_clone,
+                    &mut account,
+                    &refresher,
+                )
+                .await
+                {
                     Ok(t) => t,
                     Err(e) => {
                         tracing::warn!("Webhook token refresh failed for {}: {}", account_id, e);
@@ -247,7 +284,11 @@ pub async fn handle_microsoft_webhook(
 
                 match sync_account_messages(&state_clone, &account, &token).await {
                     Ok(count) => {
-                        tracing::info!("Webhook sync complete for {}, {} messages", account_id, count);
+                        tracing::info!(
+                            "Webhook sync complete for {}, {} messages",
+                            account_id,
+                            count
+                        );
                         let _ = state_clone.sync_tx.send(SyncEvent {
                             event_type: "sync_complete".to_string(),
                             account_id: Some(account_id),
@@ -301,8 +342,8 @@ fn extract_email_from_resource(resource: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::StatusCode;
     use crate::db::pool::DbPool;
+    use axum::http::StatusCode;
     use sqlx::sqlite::SqlitePoolOptions;
     use std::sync::Arc;
     use tokio::sync::RwLock;
@@ -357,7 +398,10 @@ mod tests {
             validation_token: Some("test_token_123".to_string()),
         };
 
-        let response = handle_microsoft_webhook(State(state), Query(query), None).await.unwrap().into_response();
+        let response = handle_microsoft_webhook(State(state), Query(query), None)
+            .await
+            .unwrap()
+            .into_response();
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -381,8 +425,8 @@ mod tests {
 #[cfg(test)]
 mod payload_tests {
     use super::*;
-    use axum::http::StatusCode;
     use crate::db::pool::DbPool;
+    use axum::http::StatusCode;
     use sqlx::sqlite::SqlitePoolOptions;
     use std::sync::Arc;
     use tokio::sync::RwLock;
@@ -445,7 +489,7 @@ mod payload_tests {
 
         let result = handle_google_webhook(State(state), Query(query), Json(payload)).await;
         match result {
-            Err(KestrelError::Unauthorized) => {},
+            Err(KestrelError::Unauthorized) => {}
             _ => panic!("Expected Unauthorized"),
         }
     }
@@ -472,7 +516,7 @@ mod payload_tests {
         let bytes = axum::body::Bytes::from(payload);
         let result = handle_microsoft_webhook(State(state), Query(query), Some(bytes)).await;
         match result {
-            Err(KestrelError::Unauthorized) => {},
+            Err(KestrelError::Unauthorized) => {}
             _ => panic!("Expected Unauthorized"),
         }
     }
