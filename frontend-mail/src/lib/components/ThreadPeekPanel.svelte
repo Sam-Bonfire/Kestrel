@@ -19,12 +19,26 @@
     previousThreadId = thread.id;
   }
 
-  $: processedHtmlBody = (() => {
-    if (!thread) return '';
-    const imgSrc = allowImages ? "img-src * data: blob:;" : "img-src 'none';";
+  $: processedHtmlBody = thread ? injectCSP(thread.htmlBody, allowImages) : '';
+
+  function injectCSP(html: string, allow: boolean): string {
+    const imgSrc = allow ? "img-src * data: blob: cid:;" : "img-src data: blob: cid:;";
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' *; font-src * data:; ${imgSrc}">`;
-    return csp + thread.htmlBody;
-  })();
+
+    // Inject into head if it exists, otherwise prepend
+    const headMatch = html.match(/<head\b[^>]*>/i);
+    if (headMatch) {
+      return html.replace(headMatch[0], `${headMatch[0]}\n${csp}`);
+    }
+
+    // Check for html tag
+    const htmlMatch = html.match(/<html\b[^>]*>/i);
+    if (htmlMatch) {
+      return html.replace(htmlMatch[0], `${htmlMatch[0]}\n<head>${csp}</head>`);
+    }
+
+    return `${csp}\n${html}`;
+  }
 </script>
 
 {#if thread}
