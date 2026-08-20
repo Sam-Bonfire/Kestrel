@@ -43,6 +43,7 @@ run = "cargo build --release"
 [tasks."build:plugins"]
 description = "Build all WASM plugins and copy them to the backend plugins directory"
 run = [
+    "rustup target add wasm32-wasip1",
     "echo \"==> Building gmail plugin...\"",
     "cargo component build --release --manifest-path plugins/gmail/Cargo.toml",
     "echo \"==> Building outlook plugin...\"",
