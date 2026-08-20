@@ -375,7 +375,7 @@
   function snooze(id: string) {
     const ts = Math.floor(Date.now() / 1000) + 3600; // Snooze for 1 hour
     advanceSelectionAndModify(id, { isArchived: false, snoozed_until: ts });
-    import('@kestrel/shared/api').then(api => { api.apiClient.post(`/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error); });
+    apiClient.post(`/api/v1/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error);
   }
 
   function reportSpam(id: string) {
@@ -640,7 +640,8 @@
     />
   {/snippet}
 
-  <!-- Mail panel: full width thread list, no reader pane -->
+  {#snippet children()}
+    <!-- Mail panel: full width thread list, no reader pane -->
     <ThreadList
       threads={finalThreads}
       {currentView}
@@ -764,4 +765,5 @@
     isOpen={isMailSettingsOpen}
     onClose={() => isMailSettingsOpen = false}
   />
+  {/snippet}
 </AppShell>

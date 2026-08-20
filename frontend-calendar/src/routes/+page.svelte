@@ -190,7 +190,7 @@
           const now = new Date();
           const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
           const end = new Date(now.getFullYear(), now.getMonth() + 2, 1).toISOString();
-          getEvents(start, end).then((res: any) => {
+          getEvents(start, end).then(res => {
             if (res && res.events && res.events.length > 0) {
               const expandedEvents: any[] = [];
               res.events.forEach((e: any) => {
@@ -256,7 +256,7 @@
     if (authState.isAuthenticated) {
       import('@tauri-apps/plugin-notification').then(({ sendNotification, onAction }) => {
         
-        onAction((event: any) => {
+        onAction((event) => {
           if (event.actionId === 'snooze' && event.notification.id) {
             // Snooze for 10 minutes
             snoozedEvents[event.notification.id] = Date.now() + 10 * 60 * 1000;
@@ -278,8 +278,7 @@
             
             if (is10MinWarning || isSnoozeUp) {
               sendNotification({
-                id: parseInt(ev.id, 10) || Date.now(),
-
+                id: ev.id,
                 title: `Upcoming: ${ev.title}`,
                 body: `Starts at ${ev.startTime} ${ev.location ? `in ${ev.location}` : ''}`,
               });

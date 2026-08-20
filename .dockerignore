@@ -11,6 +11,7 @@ frontend-*/src-tauri/target/
 # Ignore backend local builds
 target/
 !target/release/kestrel-server
+!target/wasm32-wasip1/release/*.wasm
 backend/target/
 
 # Ignore editor/IDE folders
