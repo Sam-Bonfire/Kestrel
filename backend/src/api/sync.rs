@@ -42,6 +42,7 @@ pub trait TokenRefresher: Send + Sync {
 
 pub struct ReqwestTokenRefresher {
     client: reqwest::Client,
+    override_urls: HashMap<String, String>,
 }
 
 impl Default for ReqwestTokenRefresher {
@@ -54,7 +55,15 @@ impl ReqwestTokenRefresher {
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
+            override_urls: HashMap::new(),
         }
+    }
+
+    #[cfg(test)]
+    pub fn with_override_url(mut self, provider: &str, url: &str) -> Self {
+        self.override_urls
+            .insert(provider.to_string(), url.to_string());
+        self
     }
 }
 
@@ -64,7 +73,7 @@ impl TokenRefresher for ReqwestTokenRefresher {
         &self,
         account: &crate::core::models::Account,
     ) -> Result<serde_json::Value, String> {
-        let (token_url, client_id, client_secret) = match account.provider.as_str() {
+        let (default_token_url, client_id, client_secret) = match account.provider.as_str() {
             "gmail" => (
                 "https://oauth2.googleapis.com/token",
                 std::env::var("GMAIL_CLIENT_ID").unwrap_or_default(),
@@ -77,6 +86,12 @@ impl TokenRefresher for ReqwestTokenRefresher {
             ),
             _ => return Err("Unknown provider".to_string()),
         };
+
+        let token_url = self
+            .override_urls
+            .get(&account.provider)
+            .map(|s| s.as_str())
+            .unwrap_or(default_token_url);
 
         if client_id.is_empty() || client_secret.is_empty() {
             return Err("Missing OAuth credentials in env".to_string());
@@ -797,5 +812,101 @@ mod tests {
         let needs_refresh =
             account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
         assert_eq!(needs_refresh, true);
+    }
+
+    #[tokio::test]
+    async fn test_reqwest_token_refresher_success() {
+        use crate::api::sync::TokenRefresher;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "real_new_token",
+                "expires_in": 3600
+            })))
+            .mount(&mock_server)
+            .await;
+
+        unsafe {
+            std::env::set_var("GMAIL_CLIENT_ID", "test_id");
+        }
+        unsafe {
+            std::env::set_var("GMAIL_CLIENT_SECRET", "test_secret");
+        }
+
+        let account = Account {
+            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            provider: "gmail".to_string(),
+            provider_account_id: "test@gmail.com".to_string(),
+            display_name: "Test Account".to_string(),
+            access_token: Some("old_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            token_expires_at: Some(chrono::Utc::now().timestamp() - 100),
+            sync_error: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        let url = format!("{}/token", mock_server.uri());
+        let refresher =
+            crate::api::sync::ReqwestTokenRefresher::new().with_override_url("gmail", &url);
+
+        let res = refresher.refresh(&account).await;
+        assert!(res.is_ok());
+        let val = res.unwrap();
+        assert_eq!(val["access_token"], "real_new_token");
+        assert_eq!(val["expires_in"], 3600);
+    }
+
+    #[tokio::test]
+    async fn test_reqwest_token_refresher_failure() {
+        use crate::api::sync::TokenRefresher;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("invalid_grant"))
+            .mount(&mock_server)
+            .await;
+
+        unsafe {
+            std::env::set_var("GMAIL_CLIENT_ID", "test_id");
+        }
+        unsafe {
+            std::env::set_var("GMAIL_CLIENT_SECRET", "test_secret");
+        }
+
+        let account = Account {
+            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            provider: "gmail".to_string(),
+            provider_account_id: "test@gmail.com".to_string(),
+            display_name: "Test Account".to_string(),
+            access_token: Some("old_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            token_expires_at: Some(chrono::Utc::now().timestamp() - 100),
+            sync_error: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        let url = format!("{}/token", mock_server.uri());
+        let refresher =
+            crate::api::sync::ReqwestTokenRefresher::new().with_override_url("gmail", &url);
+
+        let res = refresher.refresh(&account).await;
+        assert!(res.is_err());
+        assert!(
+            res.unwrap_err()
+                .contains("Provider error (400 Bad Request): invalid_grant")
+        );
     }
 }
