@@ -139,7 +139,7 @@ pub async fn ensure_valid_token(
                 // Save back to database
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
+                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 Some(access_token),
@@ -152,7 +152,7 @@ pub async fn ensure_valid_token(
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
+                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 Some(access_token),
@@ -171,7 +171,7 @@ pub async fn ensure_valid_token(
                 account.sync_error = Some(err_msg.clone());
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
+                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 account.access_token.as_deref(),
@@ -184,7 +184,7 @@ pub async fn ensure_valid_token(
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
+                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 account.access_token.as_deref(),
@@ -204,7 +204,7 @@ pub async fn ensure_valid_token(
             account.sync_error = Some(e.clone());
             match &state.db {
                 DbPool::Sqlite(pool) => {
-                    if let Err(e) = SqliteAccountRepository::new(pool.clone())
+                    if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                         .update_tokens_and_error(
                             account.id.0,
                             account.access_token.as_deref(),
@@ -217,7 +217,7 @@ pub async fn ensure_valid_token(
                     }
                 }
                 DbPool::Postgres(pool) => {
-                    if let Err(e) = PostgresAccountRepository::new(pool.clone())
+                    if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                         .update_tokens_and_error(
                             account.id.0,
                             account.access_token.as_deref(),
@@ -464,11 +464,11 @@ pub async fn list_user_accounts(
 ) -> Result<Vec<crate::core::models::Account>, KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
-            let repo = SqliteAccountRepository::new(pool.clone());
+            let repo = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
         DbPool::Postgres(pool) => {
-            let repo = PostgresAccountRepository::new(pool.clone());
+            let repo = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
     }
@@ -915,7 +915,7 @@ mod tests {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            });
+            }, "test_secret".to_string());
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();
@@ -955,7 +955,7 @@ mod tests {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            });
+            }, "test_secret".to_string());
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();

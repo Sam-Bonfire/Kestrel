@@ -508,12 +508,12 @@ pub async fn callback(
 
     let db_res = match &state.db {
         DbPool::Sqlite(pool) => {
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone())
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                 .create(&account)
                 .await
         }
         DbPool::Postgres(pool) => {
-            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone())
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                 .create(&account)
                 .await
         }
