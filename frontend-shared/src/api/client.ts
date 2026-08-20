@@ -25,11 +25,11 @@ interface RequestOptions extends Omit<RequestInit, 'method' | 'body'> {
 
 // ── Internal helpers ─────────────────────────────────────────────
 
-function buildHeaders(): HeadersInit {
+function buildHeaders(token?: string): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  return headers;
+  const activeToken = token || authState.token; if (activeToken) { headers["Authorization"] = `Bearer ${activeToken}`; } return headers;
 }
 
 import { enqueueMutation, dequeuePending, acknowledgeMutation } from '../offline/queue.js';
@@ -49,7 +49,7 @@ async function request<T>(
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method,
-      headers: buildHeaders(),
+      headers: buildHeaders(token),
       credentials: 'include',
       body: body != null ? JSON.stringify(body) : undefined,
       ...init,
