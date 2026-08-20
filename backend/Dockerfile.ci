@@ -9,8 +9,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY target/release/kestrel-server /usr/local/bin/kestrel-server
-COPY target/wasm32-wasip1/release/gmail.wasm /app/plugins/gmail.wasm
-COPY target/wasm32-wasip1/release/outlook.wasm /app/plugins/outlook.wasm
+COPY target/wasm32-wasip1/release/*.wasm /app/plugins/
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
