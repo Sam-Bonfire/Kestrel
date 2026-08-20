@@ -1,11 +1,20 @@
 import { getMe } from '../api/client.js';
+import { invoke } from '@tauri-apps/api/core';
+
+declare global {
+    interface Window {
+        __TAURI_INTERNALS__?: Record<string, unknown>;
+    }
+}
 
 export const authState = $state<{
     userId: string | null;
+    token: string | null;
     isInitialized: boolean;
     isAuthenticated: boolean;
 }>({
     userId: null,
+    token: null,
     isInitialized: false,
     get isAuthenticated() {
         return !!this.userId;
@@ -14,6 +23,16 @@ export const authState = $state<{
 
 export async function initAuth() {
     try {
+        if (window.__TAURI_INTERNALS__) {
+            try {
+                const keychainToken = await invoke<string>('get_keychain_token');
+                if (keychainToken) {
+                    authState.token = keychainToken;
+                }
+            } catch (e) {
+                console.error("Failed to get keychain token", e);
+            }
+        }
         const { user_id } = await getMe();
         authState.userId = user_id;
     } catch {
@@ -41,6 +60,16 @@ export async function login(username: string, password: string) {
         const data = await res.json();
         
         authState.userId = data.user_id;
+        if (data.token) {
+            authState.token = data.token;
+            if (window.__TAURI_INTERNALS__) {
+                try {
+                    await invoke('set_keychain_token', { token: data.token });
+                } catch (e) {
+                    console.error("Failed to set keychain token", e);
+                }
+            }
+        }
         authState.isInitialized = true;
         
         return { success: true };
@@ -53,4 +82,10 @@ export function logout() {
     // For cookies, we might need a /auth/logout endpoint to clear it, 
     // but clearing state ensures the app drops them
     authState.userId = null;
+    authState.token = null;
+    if (window.__TAURI_INTERNALS__) {
+        invoke('delete_keychain_token').catch(e => {
+            console.error("Failed to delete keychain token", e);
+        });
+    }
 }
