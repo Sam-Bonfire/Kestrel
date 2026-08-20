@@ -48,7 +48,7 @@ async fn test_account_repository_crud() {
     let pool = setup_test_db().await;
     let sqlite_pool = get_sqlite_pool(&pool);
     let user_repo = SqliteUserRepository::new(sqlite_pool.clone());
-    let account_repo = SqliteAccountRepository::new(sqlite_pool);
+    let account_repo = SqliteAccountRepository::new(sqlite_pool, "test_secret".to_string());
 
     let user_id = Uuid::new_v4();
     let now = chrono::Utc::now().timestamp();
