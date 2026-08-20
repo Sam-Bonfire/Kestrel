@@ -51,12 +51,18 @@ async fn find_account(
     account_id: Uuid,
 ) -> Result<Option<crate::core::models::Account>, KestrelError> {
     match &state.db {
-        DbPool::Sqlite(pool) => Ok(SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-            .find_by_id(account_id)
-            .await?),
-        DbPool::Postgres(pool) => Ok(PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-            .find_by_id(account_id)
-            .await?),
+        DbPool::Sqlite(pool) => Ok(SqliteAccountRepository::new(
+            pool.clone(),
+            state.jwt_secret.clone(),
+        )
+        .find_by_id(account_id)
+        .await?),
+        DbPool::Postgres(pool) => Ok(PostgresAccountRepository::new(
+            pool.clone(),
+            state.jwt_secret.clone(),
+        )
+        .find_by_id(account_id)
+        .await?),
     }
 }
 

@@ -603,14 +603,20 @@ pub async fn download_attachment(
     // 3. Fetch account and tokens
     let account = match &state.db {
         DbPool::Sqlite(pool) => {
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(msg.account_id.0)
-                .await?
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(msg.account_id.0)
+            .await?
         }
         DbPool::Postgres(pool) => {
-            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(msg.account_id.0)
-                .await?
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(msg.account_id.0)
+            .await?
         }
     }
     .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
@@ -775,14 +781,20 @@ pub async fn send_message(
     // 1. Fetch account and verify ownership
     let account = match &state.db {
         DbPool::Sqlite(pool) => {
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(payload.account_id)
-                .await?
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(payload.account_id)
+            .await?
         }
         DbPool::Postgres(pool) => {
-            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(payload.account_id)
-                .await?
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(payload.account_id)
+            .await?
         }
     };
 

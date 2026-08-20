@@ -1,9 +1,9 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
+    aead::{Aead, KeyInit},
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
 use rand::RngCore;
-use base64::{engine::general_purpose::STANDARD, Engine};
 use sha2::{Digest, Sha256};
 
 use crate::core::error::{KestrelError, SimpleError};
@@ -25,9 +25,9 @@ pub fn encrypt(plaintext: &str, master_key: &str) -> Result<String, KestrelError
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
-        .map_err(|e| KestrelError::Internal(Box::new(SimpleError(format!("Encryption failed: {}", e)))))?;
+    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes()).map_err(|e| {
+        KestrelError::Internal(Box::new(SimpleError(format!("Encryption failed: {}", e))))
+    })?;
 
     let nonce_b64 = STANDARD.encode(nonce);
     let ciphertext_b64 = STANDARD.encode(ciphertext);
@@ -48,16 +48,26 @@ pub fn decrypt(encrypted: &str, master_key: &str) -> Result<String, KestrelError
 
     let parts: Vec<&str> = encrypted.split(':').collect();
     if parts.len() != 3 {
-        return Err(KestrelError::Internal(Box::new(SimpleError("Invalid encrypted format".to_string()))));
+        return Err(KestrelError::Internal(Box::new(SimpleError(
+            "Invalid encrypted format".to_string(),
+        ))));
     }
 
     let nonce_b64 = parts[1];
     let ciphertext_b64 = parts[2];
 
-    let nonce_bytes = STANDARD.decode(nonce_b64)
-        .map_err(|e| KestrelError::Internal(Box::new(SimpleError(format!("Base64 decode failed for nonce: {}", e)))))?;
-    let ciphertext_bytes = STANDARD.decode(ciphertext_b64)
-        .map_err(|e| KestrelError::Internal(Box::new(SimpleError(format!("Base64 decode failed for ciphertext: {}", e)))))?;
+    let nonce_bytes = STANDARD.decode(nonce_b64).map_err(|e| {
+        KestrelError::Internal(Box::new(SimpleError(format!(
+            "Base64 decode failed for nonce: {}",
+            e
+        ))))
+    })?;
+    let ciphertext_bytes = STANDARD.decode(ciphertext_b64).map_err(|e| {
+        KestrelError::Internal(Box::new(SimpleError(format!(
+            "Base64 decode failed for ciphertext: {}",
+            e
+        ))))
+    })?;
 
     let mut hasher = Sha256::new();
     hasher.update(master_key.as_bytes());
@@ -68,10 +78,16 @@ pub fn decrypt(encrypted: &str, master_key: &str) -> Result<String, KestrelError
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext_bytes.as_ref())
-        .map_err(|e| KestrelError::Internal(Box::new(SimpleError(format!("Decryption failed: {}", e)))))?;
+        .map_err(|e| {
+            KestrelError::Internal(Box::new(SimpleError(format!("Decryption failed: {}", e))))
+        })?;
 
-    String::from_utf8(plaintext)
-        .map_err(|e| KestrelError::Internal(Box::new(SimpleError(format!("Invalid UTF-8 in decrypted string: {}", e)))))
+    String::from_utf8(plaintext).map_err(|e| {
+        KestrelError::Internal(Box::new(SimpleError(format!(
+            "Invalid UTF-8 in decrypted string: {}",
+            e
+        ))))
+    })
 }
 
 #[cfg(test)]

@@ -356,14 +356,20 @@ pub async fn create_event(
 
     let account = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(cal.account_id.0)
-                .await?
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(cal.account_id.0)
+            .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(cal.account_id.0)
-                .await?
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(cal.account_id.0)
+            .await?
         }
     }
     .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
@@ -519,14 +525,20 @@ pub async fn update_event(
 
     let account = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(event.account_id.0)
-                .await?
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(event.account_id.0)
+            .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(event.account_id.0)
-                .await?
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(event.account_id.0)
+            .await?
         }
     }
     .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
@@ -609,14 +621,20 @@ pub async fn delete_event(
 
     let account = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(event.account_id.0)
-                .await?
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(event.account_id.0)
+            .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                .find_by_id(event.account_id.0)
-                .await?
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_id(event.account_id.0)
+            .await?
         }
     }
     .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;

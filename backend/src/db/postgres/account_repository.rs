@@ -30,12 +30,16 @@ impl AccountRepository for PostgresAccountRepository {
 
         if let Some(ref mut acc) = account {
             if let Some(ref at) = acc.access_token {
-                acc.access_token = Some(crate::core::crypto::decrypt(at, &self.master_key)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?);
+                acc.access_token = Some(
+                    crate::core::crypto::decrypt(at, &self.master_key)
+                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                );
             }
             if let Some(ref rt) = acc.refresh_token {
-                acc.refresh_token = Some(crate::core::crypto::decrypt(rt, &self.master_key)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?);
+                acc.refresh_token = Some(
+                    crate::core::crypto::decrypt(rt, &self.master_key)
+                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                );
             }
         }
 
@@ -54,12 +58,16 @@ impl AccountRepository for PostgresAccountRepository {
 
         for acc in accounts.iter_mut() {
             if let Some(ref at) = acc.access_token {
-                acc.access_token = Some(crate::core::crypto::decrypt(at, &self.master_key)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?);
+                acc.access_token = Some(
+                    crate::core::crypto::decrypt(at, &self.master_key)
+                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                );
             }
             if let Some(ref rt) = acc.refresh_token {
-                acc.refresh_token = Some(crate::core::crypto::decrypt(rt, &self.master_key)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?);
+                acc.refresh_token = Some(
+                    crate::core::crypto::decrypt(rt, &self.master_key)
+                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                );
             }
         }
 
@@ -68,13 +76,17 @@ impl AccountRepository for PostgresAccountRepository {
 
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error> {
         let enc_access_token = match &account.access_token {
-            Some(at) => Some(crate::core::crypto::encrypt(at, &self.master_key)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?),
+            Some(at) => Some(
+                crate::core::crypto::encrypt(at, &self.master_key)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+            ),
             None => None,
         };
         let enc_refresh_token = match &account.refresh_token {
-            Some(rt) => Some(crate::core::crypto::encrypt(rt, &self.master_key)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?),
+            Some(rt) => Some(
+                crate::core::crypto::encrypt(rt, &self.master_key)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+            ),
             None => None,
         };
 
@@ -107,8 +119,10 @@ impl AccountRepository for PostgresAccountRepository {
         error: Option<&str>,
     ) -> Result<(), sqlx::Error> {
         let enc_access_token = match access_token {
-            Some(at) => Some(crate::core::crypto::encrypt(at, &self.master_key)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?),
+            Some(at) => Some(
+                crate::core::crypto::encrypt(at, &self.master_key)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+            ),
             None => None,
         };
 

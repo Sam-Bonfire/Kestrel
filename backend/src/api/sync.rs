@@ -139,27 +139,29 @@ pub async fn ensure_valid_token(
                 // Save back to database
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                Some(access_token),
-                                account.token_expires_at,
-                                None,
-                            )
-                            .await
+                        if let Err(e) =
+                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    Some(access_token),
+                                    account.token_expires_at,
+                                    None,
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                Some(access_token),
-                                account.token_expires_at,
-                                None,
-                            )
-                            .await
+                        if let Err(e) =
+                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    Some(access_token),
+                                    account.token_expires_at,
+                                    None,
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
@@ -171,27 +173,29 @@ pub async fn ensure_valid_token(
                 account.sync_error = Some(err_msg.clone());
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&err_msg),
-                            )
-                            .await
+                        if let Err(e) =
+                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    account.access_token.as_deref(),
+                                    account.token_expires_at,
+                                    Some(&err_msg),
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&err_msg),
-                            )
-                            .await
+                        if let Err(e) =
+                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    account.access_token.as_deref(),
+                                    account.token_expires_at,
+                                    Some(&err_msg),
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
@@ -204,27 +208,29 @@ pub async fn ensure_valid_token(
             account.sync_error = Some(e.clone());
             match &state.db {
                 DbPool::Sqlite(pool) => {
-                    if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                        .update_tokens_and_error(
-                            account.id.0,
-                            account.access_token.as_deref(),
-                            account.token_expires_at,
-                            Some(&e),
-                        )
-                        .await
+                    if let Err(e) =
+                        SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&e),
+                            )
+                            .await
                     {
                         tracing::error!("DB update failed: {}", e);
                     }
                 }
                 DbPool::Postgres(pool) => {
-                    if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                        .update_tokens_and_error(
-                            account.id.0,
-                            account.access_token.as_deref(),
-                            account.token_expires_at,
-                            Some(&e),
-                        )
-                        .await
+                    if let Err(e) =
+                        PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&e),
+                            )
+                            .await
                     {
                         tracing::error!("DB update failed: {}", e);
                     }
@@ -911,11 +917,13 @@ mod tests {
         };
 
         // Insert account so DB update works and doesn't log error
-        let repo =
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
+        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+            match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            }, "test_secret".to_string());
+            },
+            "test_secret".to_string(),
+        );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();
@@ -951,11 +959,13 @@ mod tests {
         };
 
         // Insert account
-        let repo =
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
+        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+            match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            }, "test_secret".to_string());
+            },
+            "test_secret".to_string(),
+        );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();
