@@ -23,6 +23,8 @@ pub struct AppState {
     pub jwt_secret: String,
     pub plugin_manager: std::sync::Arc<tokio::sync::RwLock<PluginManager>>,
     pub sync_tx: broadcast::Sender<SyncEvent>,
+    #[allow(dead_code)]
+    pub sync_job_tx: tokio::sync::mpsc::Sender<uuid::Uuid>,
     pub auth_rate_limiter: RateLimiter,
     pub general_rate_limiter: RateLimiter,
 }
