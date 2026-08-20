@@ -100,3 +100,16 @@ pub trait EventRepository: Send + Sync {
 pub trait LabelRepository: Send + Sync {
     async fn upsert(&self, label: &crate::core::models::Label) -> Result<(), sqlx::Error>;
 }
+
+#[async_trait]
+pub trait UserPreferencesRepository: Send + Sync {
+    async fn get_preferences(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<crate::core::models::UserPreferences>, sqlx::Error>;
+    async fn update_preferences(
+        &self,
+        user_id: Uuid,
+        preferences_json: &str,
+    ) -> Result<(), sqlx::Error>;
+}

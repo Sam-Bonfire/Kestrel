@@ -64,7 +64,10 @@ pub async fn handle_google_webhook(
     let repo = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
             let r: Box<dyn AccountRepository> = Box::new(
-                crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone()),
+                crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                    pool.clone(),
+                    state.jwt_secret.clone(),
+                ),
             );
             r
         }
@@ -72,6 +75,7 @@ pub async fn handle_google_webhook(
             let r: Box<dyn AccountRepository> = Box::new(
                 crate::db::postgres::account_repository::PostgresAccountRepository::new(
                     pool.clone(),
+                    state.jwt_secret.clone(),
                 ),
             );
             r
@@ -220,6 +224,7 @@ pub async fn handle_microsoft_webhook(
                     let r: Box<dyn AccountRepository> = Box::new(
                         crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                             pool.clone(),
+                            state.jwt_secret.clone(),
                         ),
                     );
                     r
@@ -228,6 +233,7 @@ pub async fn handle_microsoft_webhook(
                     let r: Box<dyn AccountRepository> = Box::new(
                         crate::db::postgres::account_repository::PostgresAccountRepository::new(
                             pool.clone(),
+                            state.jwt_secret.clone(),
                         ),
                     );
                     r
@@ -374,11 +380,13 @@ mod tests {
         .unwrap();
 
         let (sync_tx, _) = tokio::sync::broadcast::channel(100);
+        let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
         AppState {
             db: DbPool::Sqlite(pool),
             jwt_secret: "test_secret".to_string(),
             plugin_manager: Arc::new(RwLock::new(crate::plugins::manager::PluginManager::new())),
             sync_tx,
+            sync_job_tx,
             auth_rate_limiter: crate::api::rate_limit::RateLimiter::new(
                 10,
                 std::time::Duration::from_secs(60),
@@ -457,11 +465,13 @@ mod payload_tests {
         .unwrap();
 
         let (sync_tx, _) = tokio::sync::broadcast::channel(100);
+        let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
         AppState {
             db: DbPool::Sqlite(pool),
             jwt_secret: "test_secret".to_string(),
             plugin_manager: Arc::new(RwLock::new(crate::plugins::manager::PluginManager::new())),
             sync_tx,
+            sync_job_tx,
             auth_rate_limiter: crate::api::rate_limit::RateLimiter::new(
                 10,
                 std::time::Duration::from_secs(60),
