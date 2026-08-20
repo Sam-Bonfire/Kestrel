@@ -43,6 +43,8 @@ pub trait TokenRefresher: Send + Sync {
 pub struct ReqwestTokenRefresher {
     client: reqwest::Client,
     override_urls: HashMap<String, String>,
+    #[cfg(test)]
+    override_credentials: HashMap<String, (String, String)>,
 }
 
 impl Default for ReqwestTokenRefresher {
@@ -56,6 +58,8 @@ impl ReqwestTokenRefresher {
         Self {
             client: reqwest::Client::new(),
             override_urls: HashMap::new(),
+            #[cfg(test)]
+            override_credentials: HashMap::new(),
         }
     }
 
@@ -63,6 +67,13 @@ impl ReqwestTokenRefresher {
     pub fn with_override_url(mut self, provider: &str, url: &str) -> Self {
         self.override_urls
             .insert(provider.to_string(), url.to_string());
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_override_credentials(mut self, provider: &str, id: &str, secret: &str) -> Self {
+        self.override_credentials
+            .insert(provider.to_string(), (id.to_string(), secret.to_string()));
         self
     }
 }
@@ -73,7 +84,9 @@ impl TokenRefresher for ReqwestTokenRefresher {
         &self,
         account: &crate::core::models::Account,
     ) -> Result<serde_json::Value, String> {
-        let (default_token_url, client_id, client_secret) = match account.provider.as_str() {
+        #[allow(unused_mut)]
+        let (default_token_url, mut client_id, mut client_secret) = match account.provider.as_str()
+        {
             "gmail" => (
                 "https://oauth2.googleapis.com/token",
                 std::env::var("GMAIL_CLIENT_ID").unwrap_or_default(),
@@ -92,6 +105,12 @@ impl TokenRefresher for ReqwestTokenRefresher {
             .get(&account.provider)
             .map(|s| s.as_str())
             .unwrap_or(default_token_url);
+
+        #[cfg(test)]
+        if let Some((id, secret)) = self.override_credentials.get(&account.provider) {
+            client_id = id.clone();
+            client_secret = secret.clone();
+        }
 
         if client_id.is_empty() || client_secret.is_empty() {
             return Err("Missing OAuth credentials in env".to_string());
@@ -500,7 +519,7 @@ async fn get_all_accounts_with_tokens(
             // For now we use a raw query
             let accounts = sqlx::query_as::<_, crate::core::models::Account>(
                 "SELECT id, user_id, provider, provider_account_id, display_name, \
-                 access_token, refresh_token, token_expires_at, created_at, updated_at \
+                 access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
                  FROM accounts WHERE access_token IS NOT NULL",
             )
             .fetch_all(pool)
@@ -510,7 +529,7 @@ async fn get_all_accounts_with_tokens(
         DbPool::Postgres(pool) => {
             let accounts = sqlx::query_as::<_, crate::core::models::Account>(
                 "SELECT id, user_id, provider, provider_account_id, display_name, \
-                 access_token, refresh_token, token_expires_at, created_at, updated_at \
+                 access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
                  FROM accounts WHERE access_token IS NOT NULL",
             )
             .fetch_all(pool)
@@ -831,13 +850,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        unsafe {
-            std::env::set_var("GMAIL_CLIENT_ID", "test_id");
-        }
-        unsafe {
-            std::env::set_var("GMAIL_CLIENT_SECRET", "test_secret");
-        }
-
         let account = Account {
             id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
             user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
@@ -853,8 +865,9 @@ mod tests {
         };
 
         let url = format!("{}/token", mock_server.uri());
-        let refresher =
-            crate::api::sync::ReqwestTokenRefresher::new().with_override_url("gmail", &url);
+        let refresher = crate::api::sync::ReqwestTokenRefresher::new()
+            .with_override_url("gmail", &url)
+            .with_override_credentials("gmail", "test_id", "test_secret");
 
         let res = refresher.refresh(&account).await;
         assert!(res.is_ok());
@@ -877,13 +890,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        unsafe {
-            std::env::set_var("GMAIL_CLIENT_ID", "test_id");
-        }
-        unsafe {
-            std::env::set_var("GMAIL_CLIENT_SECRET", "test_secret");
-        }
-
         let account = Account {
             id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
             user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
@@ -899,8 +905,9 @@ mod tests {
         };
 
         let url = format!("{}/token", mock_server.uri());
-        let refresher =
-            crate::api::sync::ReqwestTokenRefresher::new().with_override_url("gmail", &url);
+        let refresher = crate::api::sync::ReqwestTokenRefresher::new()
+            .with_override_url("gmail", &url)
+            .with_override_credentials("gmail", "test_id", "test_secret");
 
         let res = refresher.refresh(&account).await;
         assert!(res.is_err());
