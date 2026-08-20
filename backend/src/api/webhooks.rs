@@ -89,7 +89,7 @@ pub async fn handle_google_webhook(
 
     // Trigger sync job in background
     let state_clone = state.clone();
-    let account_id = *account.id;
+    let account_id = account.id.0;
 
     // Spawn task to enqueue sync job via tx
     tokio::spawn(async move {
@@ -144,18 +144,37 @@ pub struct MicrosoftWebhookPayload {
 pub async fn handle_microsoft_webhook(
     State(state): State<AppState>,
     Query(query): Query<MicrosoftWebhookQuery>,
-    body: Option<Json<MicrosoftWebhookPayload>>,
+    body: Option<axum::body::Bytes>,
 ) -> Result<impl IntoResponse, KestrelError> {
     // 1. Handle validation handshake
     if let Some(token) = query.validation_token {
         tracing::info!("Microsoft webhook validation handshake");
-        return Ok((StatusCode::OK, token).into_response());
+        // Must return text/plain for validation token
+        use axum::response::Response;
+        let response = Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "text/plain")
+            .body(axum::body::Body::from(token))
+            .unwrap();
+        return Ok(response.into_response());
     }
 
     let expected_secret = std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| state.jwt_secret.clone());
 
     // 2. Handle actual notification
-    if let Some(Json(payload)) = body {
+    if let Some(bytes) = body {
+        if bytes.is_empty() {
+            return Ok((StatusCode::ACCEPTED, "Accepted").into_response());
+        }
+
+        let payload: MicrosoftWebhookPayload = match serde_json::from_slice(&bytes) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Failed to parse Microsoft webhook payload: {}", e);
+                return Err(KestrelError::BadRequest("Invalid JSON".to_string()));
+            }
+        };
+
         for notification in payload.value {
             // Verify the client state matches our expected webhook secret
             if notification.client_state.as_deref() != Some(expected_secret.as_str()) {
@@ -213,7 +232,7 @@ pub async fn handle_microsoft_webhook(
             };
 
             let state_clone = state.clone();
-            let account_id = *account.id;
+            let account_id = account.id.0;
 
             tokio::spawn(async move {
                 tracing::info!("Starting background sync for Microsoft webhook account: {}", account_id);
@@ -356,5 +375,105 @@ mod tests {
             extract_email_from_resource(Some("user@domain.com")),
             "user@domain.com"
         );
+    }
+}
+
+#[cfg(test)]
+mod payload_tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use crate::db::pool::DbPool;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    async fn create_test_app_state() -> AppState {
+        let pool = SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE accounts (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                provider_account_id TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                access_token TEXT,
+                refresh_token TEXT,
+                token_expires_at BIGINT,
+                sync_error TEXT,
+                created_at BIGINT NOT NULL,
+                updated_at BIGINT NOT NULL
+            );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let (sync_tx, _) = tokio::sync::broadcast::channel(100);
+        AppState {
+            db: DbPool::Sqlite(pool),
+            jwt_secret: "test_secret".to_string(),
+            plugin_manager: Arc::new(RwLock::new(crate::plugins::manager::PluginManager::new())),
+            sync_tx,
+            auth_rate_limiter: crate::api::rate_limit::RateLimiter::new(
+                10,
+                std::time::Duration::from_secs(60),
+            ),
+            general_rate_limiter: crate::api::rate_limit::RateLimiter::new(
+                10,
+                std::time::Duration::from_secs(60),
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_google_webhook_invalid_token() {
+        let state = create_test_app_state().await;
+
+        let query = GoogleWebhookQuery {
+            token: Some("invalid_token".to_string()),
+        };
+
+        let payload = GoogleWebhookPayload {
+            message: GooglePubSubMessage {
+                data: "ewogICJlbWFpbEFkZHJlc3MiOiAidGVzdEBnbWFpbC5jb20iLAogICJoaXN0b3J5SWQiOiAxMjM0NQp9".to_string(),
+            }
+        };
+
+        let result = handle_google_webhook(State(state), Query(query), Json(payload)).await;
+        match result {
+            Err(KestrelError::Unauthorized) => {},
+            _ => panic!("Expected Unauthorized"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_microsoft_webhook_invalid_client_state() {
+        let state = create_test_app_state().await;
+
+        let query = MicrosoftWebhookQuery {
+            validation_token: None,
+        };
+
+        let payload = r#"
+        {
+            "value": [
+                {
+                    "clientState": "wrong_secret",
+                    "resource": "Users/test@outlook.com/Messages"
+                }
+            ]
+        }
+        "#;
+
+        let bytes = axum::body::Bytes::from(payload);
+        let result = handle_microsoft_webhook(State(state), Query(query), Some(bytes)).await;
+        match result {
+            Err(KestrelError::Unauthorized) => {},
+            _ => panic!("Expected Unauthorized"),
+        }
     }
 }

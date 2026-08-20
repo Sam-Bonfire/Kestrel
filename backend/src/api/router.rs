@@ -14,6 +14,7 @@ use super::providers;
 use super::rate_limit::RateLimiter;
 use super::search;
 use super::sync;
+use super::webhooks;
 use crate::api::sync::SyncEvent;
 use crate::plugins::manager::PluginManager;
 
@@ -72,6 +73,11 @@ pub fn create_router(state: AppState) -> Router {
             state.auth_rate_limiter.clone(),
             super::rate_limit::auth_rate_limit_middleware,
         ));
+
+    // Webhook routes
+    let webhooks = Router::new()
+        .route("/api/webhooks/google", post(webhooks::handle_google_webhook))
+        .route("/api/webhooks/microsoft", post(webhooks::handle_microsoft_webhook));
 
     // Protected routes (auth middleware required)
     let protected = Router::new()
@@ -154,6 +160,7 @@ pub fn create_router(state: AppState) -> Router {
         ));
 
     public
+        .merge(webhooks)
         .merge(protected)
         // Request logging with X-Request-Id
         .layer(middleware::from_fn_with_state(

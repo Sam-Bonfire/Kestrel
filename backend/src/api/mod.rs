@@ -11,3 +11,4 @@ pub mod router;
 pub mod search;
 pub mod sync;
 pub mod token_worker;
+pub mod webhooks;

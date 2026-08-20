@@ -13,6 +13,7 @@ pub trait UserRepository: Send + Sync {
 pub trait AccountRepository: Send + Sync {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Account>, sqlx::Error>;
     async fn find_by_user_id(&self, user_id: Uuid) -> Result<Vec<Account>, sqlx::Error>;
+    async fn find_by_provider_account_id(&self, provider: &str, provider_account_id: &str) -> Result<Option<Account>, sqlx::Error>;
 
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error>;
     async fn update_tokens_and_error(
