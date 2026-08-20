@@ -20,12 +20,14 @@ async fn test_auth_registration_and_token_flow() {
     let jwt_secret = "super_secret_jwt_key_for_testing_12345".to_string();
     let plugin_manager = Arc::new(RwLock::new(PluginManager::new()));
     let (sync_tx, _) = broadcast::channel(100);
+    let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
 
     let state = AppState {
         db,
         jwt_secret,
         plugin_manager,
         sync_tx,
+        sync_job_tx,
         auth_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
         general_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
     };
