@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Reply, Archive, Trash2, ShieldAlert } from 'lucide-svelte';
+  import { X, Reply, Archive, Trash2, ShieldAlert, ShieldCheck } from 'lucide-svelte';
 
   export let thread: {
     id: string;
@@ -10,6 +10,35 @@
   } | null = null;
 
   export let onClose: () => void = () => {};
+
+  let allowImages = false;
+  let previousThreadId: string | undefined = undefined;
+
+  $: if (thread && thread.id !== previousThreadId) {
+    allowImages = false;
+    previousThreadId = thread.id;
+  }
+
+  $: processedHtmlBody = thread ? injectCSP(thread.htmlBody, allowImages) : '';
+
+  function injectCSP(html: string, allow: boolean): string {
+    const imgSrc = allow ? "img-src * data: blob: cid:;" : "img-src data: blob: cid:;";
+    const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' *; font-src * data:; ${imgSrc}">`;
+
+    // Inject into head if it exists, otherwise prepend
+    const headMatch = html.match(/<head\b[^>]*>/i);
+    if (headMatch) {
+      return html.replace(headMatch[0], `${headMatch[0]}\n${csp}`);
+    }
+
+    // Check for html tag
+    const htmlMatch = html.match(/<html\b[^>]*>/i);
+    if (htmlMatch) {
+      return html.replace(htmlMatch[0], `${htmlMatch[0]}\n<head>${csp}</head>`);
+    }
+
+    return `${csp}\n${html}`;
+  }
 </script>
 
 {#if thread}
@@ -25,6 +54,20 @@
         </button>
         <button class="p-1.5 rounded hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-red-400 transition-colors">
           <Trash2 class="w-4 h-4" />
+        </button>
+
+        <div class="w-px h-4 bg-[var(--color-border-hairline)] mx-1"></div>
+
+        <button
+          onclick={() => allowImages = !allowImages}
+          class="p-1.5 rounded hover:bg-[var(--color-canvas-hover)] transition-colors {allowImages ? 'text-green-400' : 'text-yellow-400'}"
+          title={allowImages ? "External images allowed" : "External images blocked. Click to allow."}
+        >
+          {#if allowImages}
+            <ShieldCheck class="w-4 h-4" />
+          {:else}
+            <ShieldAlert class="w-4 h-4" />
+          {/if}
         </button>
       </div>
 
@@ -47,7 +90,7 @@
       <iframe
         title="Email content"
         sandbox="allow-same-origin"
-        srcdoc={thread.htmlBody}
+        srcdoc={processedHtmlBody}
         class="w-full h-full border-none"
       ></iframe>
     </div>
