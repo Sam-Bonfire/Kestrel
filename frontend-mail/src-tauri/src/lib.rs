@@ -6,8 +6,7 @@ fn greet(name: &str) -> String {
 
 #[tauri::command]
 fn get_keychain_token() -> Result<String, String> {
-    let entry = keyring::Entry::new("kestrel_auth", "user")
-        .map_err(|e| e.to_string())?;
+    let entry = keyring::Entry::new("kestrel_auth", "user").map_err(|e| e.to_string())?;
     match entry.get_password() {
         Ok(password) => Ok(password),
         Err(keyring::Error::NoEntry) => Ok(String::new()),
@@ -17,15 +16,13 @@ fn get_keychain_token() -> Result<String, String> {
 
 #[tauri::command]
 fn set_keychain_token(token: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new("kestrel_auth", "user")
-        .map_err(|e| e.to_string())?;
+    let entry = keyring::Entry::new("kestrel_auth", "user").map_err(|e| e.to_string())?;
     entry.set_password(token).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_keychain_token() -> Result<(), String> {
-    let entry = keyring::Entry::new("kestrel_auth", "user")
-        .map_err(|e| e.to_string())?;
+    let entry = keyring::Entry::new("kestrel_auth", "user").map_err(|e| e.to_string())?;
     match entry.delete_credential() {
         Ok(_) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()),
