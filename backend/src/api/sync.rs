@@ -26,6 +26,7 @@ use crate::db::sqlite::account_repository::SqliteAccountRepository;
 pub struct SyncEvent {
     pub event_type: String,
     pub account_id: Option<Uuid>,
+    pub provider: Option<String>,
     pub message: String,
     pub timestamp: i64,
 }
@@ -197,11 +198,27 @@ pub async fn ensure_valid_token(
                         }
                     }
                 }
+                let event = SyncEvent {
+                    event_type: "auth_revocation".to_string(),
+                    account_id: Some(account.id.0),
+                    provider: Some(account.provider.clone()),
+                    message: "Token refresh permanently failed (e.g. revoked)".to_string(),
+                    timestamp: chrono::Utc::now().timestamp(),
+                };
+                let _ = state.sync_tx.send(event);
                 Err(err_msg)
             }
         }
         Err(e) => {
             account.sync_error = Some(e.clone());
+            let event = SyncEvent {
+                event_type: "auth_revocation".to_string(),
+                account_id: Some(account.id.0),
+                provider: Some(account.provider.clone()),
+                message: "Token refresh permanently failed (e.g. revoked)".to_string(),
+                timestamp: chrono::Utc::now().timestamp(),
+            };
+            let _ = state.sync_tx.send(event);
             match &state.db {
                 DbPool::Sqlite(pool) => {
                     if let Err(e) = SqliteAccountRepository::new(pool.clone())
@@ -407,6 +424,7 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
                                     let event = SyncEvent {
                                         event_type: "sync_complete".to_string(),
                                         account_id: Some(account.id.0),
+                                        provider: Some(account.provider.clone()),
                                         message: format!("Synced {} new messages", count),
                                         timestamp: Utc::now().timestamp(),
                                     };

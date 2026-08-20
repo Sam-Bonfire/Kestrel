@@ -6,8 +6,8 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
-  import { AppShell } from '@kestrel/shared/components';
-  import { authState, initAuth, logout } from '@kestrel/shared/stores';
+  import { AppShell, ReauthBanner } from '@kestrel/shared/components';
+  import { authState, initAuth, logout, addRevokedAccount } from '@kestrel/shared/stores';
   import { replayOfflineQueue, searchMessages } from '@kestrel/shared/api';
   import { registerNotificationCategories } from '$lib/notifications';
   import { onMount, untrack } from 'svelte';
@@ -23,8 +23,8 @@
     // Register interactive notification category (Reply / Mark as Read / Archive)
     registerNotificationCategories().catch(console.error);
 
-    import('@tauri-apps/plugin-notification').then(({ onNotificationAction }) => {
-      onNotificationAction(async (event) => {
+    import('@tauri-apps/plugin-notification').then(({ onAction }) => {
+      onAction(async (event: any) => {
         const messageId = event.notification?.id;
         if (!messageId) return;
         try {
@@ -133,7 +133,11 @@
         eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.type === 'new_mail' || data.type === 'sync_complete') {
+            if (data.event_type === 'auth_revocation') {
+              if (data.account_id && data.provider) {
+                addRevokedAccount(data.account_id, data.provider);
+              }
+            } else if (data.type === 'new_mail' || data.type === 'sync_complete') {
               console.log('SSE Sync event received, refreshing messages...');
               // Just refetch the list for now
               getMessages().then(res => {
@@ -256,7 +260,7 @@
           senderEmail: e.sender_email,
           subject: e.subject || '(no subject)',
           snippet: e.snippet || '',
-          date: formatDate(e.date_received * 1000),
+          date: formatDate(new Date(e.date_received * 1000).toISOString()),
           isUnread: !e.is_read,
           isStarred: false,
           hasAttachment: false,
@@ -371,7 +375,7 @@
   function snooze(id: string) {
     const ts = Math.floor(Date.now() / 1000) + 3600; // Snooze for 1 hour
     advanceSelectionAndModify(id, { isArchived: false, snoozed_until: ts });
-    apiClient.post(`/api/v1/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error);
+    import('@kestrel/shared/api').then(api => { api.apiClient.post(`/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error); });
   }
 
   function reportSpam(id: string) {
@@ -549,7 +553,7 @@
       to: parent.senderEmail,
       subject: replyMsg.subject,
       body: text,
-      threadId: id
+      thread_id: id
     }));
   }
 
@@ -616,6 +620,7 @@
 </script>
 
 <AppShell bind:isMobileSidebarOpen>
+  <ReauthBanner />
   {#snippet sidebar()}
     <Sidebar
       {currentView}
@@ -635,8 +640,7 @@
     />
   {/snippet}
 
-  {#snippet children()}
-    <!-- Mail panel: full width thread list, no reader pane -->
+  <!-- Mail panel: full width thread list, no reader pane -->
     <ThreadList
       threads={finalThreads}
       {currentView}
@@ -760,5 +764,4 @@
     isOpen={isMailSettingsOpen}
     onClose={() => isMailSettingsOpen = false}
   />
-  {/snippet}
 </AppShell>

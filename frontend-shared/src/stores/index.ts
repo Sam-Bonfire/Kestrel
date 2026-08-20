@@ -2,7 +2,9 @@ export {
   authState,
   login,
   logout,
-  initAuth
+  initAuth,
+  revokedAccounts,
+  addRevokedAccount
 } from './auth.svelte.js';
 
 export {

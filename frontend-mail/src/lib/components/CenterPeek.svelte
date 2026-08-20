@@ -53,7 +53,6 @@
     isStarred: boolean;
     isArchived: boolean;
     isTrash: boolean;
-    isTrash: boolean;
     labels: string[];
     avatar?: string;
     attachments?: { filename: string; size: number }[];
