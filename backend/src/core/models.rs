@@ -119,3 +119,28 @@ pub struct Attachment {
     pub external_id: Option<String>,
     pub created_at: i64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct UserPreferences {
+    pub user_id: DbUuid,
+    pub preferences_json: String,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsPayload {
+    pub mail_dense_mode: Option<bool>,
+    pub mail_default_landing_view: Option<String>,
+    pub mail_signature: Option<String>,
+    pub label_customizations: Option<std::collections::HashMap<String, LabelCustomization>>,
+    pub sync_interval: Option<i32>,
+    pub theme: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LabelCustomization {
+    pub icon_name: String,
+    pub color_name: String,
+}

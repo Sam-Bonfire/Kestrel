@@ -13,6 +13,7 @@ use super::messages;
 use super::providers;
 use super::rate_limit::RateLimiter;
 use super::search;
+use super::settings;
 use super::sync;
 use crate::api::sync::SyncEvent;
 use crate::plugins::manager::PluginManager;
@@ -145,6 +146,10 @@ pub fn create_router(state: AppState) -> Router {
             get(calendars::get_event)
                 .patch(calendars::update_event)
                 .delete(calendars::delete_event),
+        )
+        .route(
+            "/api/settings",
+            get(settings::get_settings).put(settings::update_settings),
         )
         .route("/api/v1/sync/stream", get(sync::sync_stream))
         .route("/api/v1/sync/trigger", post(sync::trigger_sync))
