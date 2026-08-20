@@ -74,6 +74,22 @@ impl AccountRepository for PostgresAccountRepository {
         Ok(accounts)
     }
 
+    async fn find_by_provider_account_id(
+        &self,
+        provider: &str,
+        provider_account_id: &str,
+    ) -> Result<Option<Account>, sqlx::Error> {
+        sqlx::query_as::<_, Account>(
+            "SELECT id, user_id, provider, provider_account_id, display_name, \
+             access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
+             FROM accounts WHERE provider = $1 AND provider_account_id = $2",
+        )
+        .bind(provider)
+        .bind(provider_account_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error> {
         let enc_access_token = match &account.access_token {
             Some(at) => Some(
