@@ -3,10 +3,10 @@
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { EmailPillInput } from '@kestrel/shared/components';
-  import { apiClient } from '@kestrel/shared/api/client';
+  import { apiClient } from '@kestrel/shared/api';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { mailSignature } from '@kestrel/shared/stores/settings';
+  import { mailSignature } from '@kestrel/shared/stores';
 
   let {
     isOpen = false,

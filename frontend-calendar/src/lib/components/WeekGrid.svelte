@@ -503,7 +503,7 @@
                  const newStartTime = `${exactHour.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
                  
                  // Get old event to calculate duration and new end time
-                 const ev = events.find(e => e.id === id);
+                 const ev = events.find((e: any) => e.id === id);
                  if (ev) {
                    const [sh, sm] = ev.startTime.split(':').map(Number);
                    const [eh, em] = ev.endTime.split(':').map(Number);
