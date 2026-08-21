@@ -68,6 +68,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create broadcast channel for sync events
     let (sync_tx, _) = broadcast::channel::<SyncEvent>(256);
 
+    use crate::api::proxy::SafeDnsResolver;
+
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .dns_resolver(std::sync::Arc::new(SafeDnsResolver))
+        .build()?;
+
     let state = AppState {
         db: db.clone(),
         jwt_secret: config.jwt_secret,
@@ -75,6 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         sync_tx: sync_tx.clone(),
         auth_rate_limiter: RateLimiter::new(10, std::time::Duration::from_secs(60)),
         general_rate_limiter: RateLimiter::new(100, std::time::Duration::from_secs(60)),
+        http_client,
     };
 
     // Start background sync daemon

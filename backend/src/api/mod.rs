@@ -8,6 +8,7 @@ pub mod messages;
 pub mod providers;
 pub mod rate_limit;
 pub mod router;
+pub mod proxy;
 pub mod search;
 pub mod sync;
 pub mod token_worker;

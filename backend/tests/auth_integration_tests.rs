@@ -28,6 +28,10 @@ async fn test_auth_registration_and_token_flow() {
         sync_tx,
         auth_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
         general_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
+        http_client: reqwest::Client::builder()
+            .dns_resolver(std::sync::Arc::new(backend::api::proxy::SafeDnsResolver))
+            .build()
+            .unwrap(),
     };
 
     let app = create_router(state);
