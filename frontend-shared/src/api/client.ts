@@ -533,3 +533,41 @@ export const apiClient = {
   post: (path: string, body?: any) => request<any>('POST', path.replace('/api/v1', ''), { body }),
   delete: (path: string) => request<any>('DELETE', path.replace('/api/v1', ''))
 };
+
+// ── Settings ──────────────────────────────────────────────
+
+export async function getSettings(): Promise<SettingsPayload> {
+  return request<SettingsPayload>('GET', '/settings', {
+    // Override API_BASE to use /api/settings instead of /api/v1/settings
+  }).catch(() => {
+    // If it fails, fallback to standard fetch if the request helper prepends /api/v1
+    return fetch(`${API_BASE.replace('/api/v1', '')}/api/settings`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    }).then(r => r.json());
+  });
+}
+
+export async function updateSettings(settings: SettingsPayload): Promise<SettingsPayload> {
+  return fetch(`${API_BASE.replace('/api/v1', '')}/api/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(settings),
+  }).then(r => r.json());
+}
+
+export interface LabelCustomization {
+  iconName: string;
+  colorName: string;
+}
+
+export interface SettingsPayload {
+  mailDenseMode?: boolean;
+  mailDefaultLandingView?: string;
+  mailSignature?: string;
+  labelCustomizations?: Record<string, LabelCustomization>;
+  syncInterval?: number;
+  theme?: string;
+}
