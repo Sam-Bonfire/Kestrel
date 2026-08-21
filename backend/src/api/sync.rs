@@ -139,7 +139,7 @@ pub async fn ensure_valid_token(
                 // Save back to database
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
+                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 Some(access_token),
@@ -152,7 +152,7 @@ pub async fn ensure_valid_token(
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
+                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 Some(access_token),
@@ -171,7 +171,7 @@ pub async fn ensure_valid_token(
                 account.sync_error = Some(err_msg.clone());
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
+                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 account.access_token.as_deref(),
@@ -184,7 +184,7 @@ pub async fn ensure_valid_token(
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
+                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 account.access_token.as_deref(),
@@ -204,7 +204,7 @@ pub async fn ensure_valid_token(
             account.sync_error = Some(e.clone());
             match &state.db {
                 DbPool::Sqlite(pool) => {
-                    if let Err(e) = SqliteAccountRepository::new(pool.clone())
+                    if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                         .update_tokens_and_error(
                             account.id.0,
                             account.access_token.as_deref(),
@@ -217,7 +217,7 @@ pub async fn ensure_valid_token(
                     }
                 }
                 DbPool::Postgres(pool) => {
-                    if let Err(e) = PostgresAccountRepository::new(pool.clone())
+                    if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
                         .update_tokens_and_error(
                             account.id.0,
                             account.access_token.as_deref(),
@@ -464,11 +464,11 @@ pub async fn list_user_accounts(
 ) -> Result<Vec<crate::core::models::Account>, KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
-            let repo = SqliteAccountRepository::new(pool.clone());
+            let repo = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
         DbPool::Postgres(pool) => {
-            let repo = PostgresAccountRepository::new(pool.clone());
+            let repo = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
     }
@@ -846,11 +846,13 @@ mod tests {
         .unwrap();
 
         let (sync_tx, _) = tokio::sync::broadcast::channel(100);
+        let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
         AppState {
             db: DbPool::Sqlite(pool),
             jwt_secret: "test_secret".to_string(),
             plugin_manager: Arc::new(RwLock::new(crate::plugins::manager::PluginManager::new())),
             sync_tx,
+            sync_job_tx,
             auth_rate_limiter: crate::api::rate_limit::RateLimiter::new(
                 10,
                 std::time::Duration::from_secs(60),
@@ -915,7 +917,7 @@ mod tests {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            });
+            }, state.jwt_secret.clone());
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();
@@ -955,7 +957,7 @@ mod tests {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            });
+            }, state.jwt_secret.clone());
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();

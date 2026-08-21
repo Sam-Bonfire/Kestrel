@@ -10,4 +10,6 @@ export {
   mailDefaultLandingView,
   mailSignature,
   labelCustomizations,
+  initializeSettings,
+  syncInterval,
 } from './settings.js';
