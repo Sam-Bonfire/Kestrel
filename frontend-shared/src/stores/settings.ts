@@ -1,5 +1,4 @@
-import { writable, get } from 'svelte/store';
-import { getSettings, updateSettings } from '../api/client.js';
+import { writable } from 'svelte/store';
 
 const DENSE_KEY = 'kestrel:settings:dense_mode';
 const LANDING_KEY = 'kestrel:settings:landing_view';
@@ -12,83 +11,12 @@ export const mailSignature = writable<string>(loadStr(SIG_KEY, ''));
 export const labelCustomizations = writable<Record<string, { iconName: string; colorName: string }>>(
   loadJson(LABELS_KEY, {})
 );
-const SYNC_INTERVAL_KEY = 'kestrel:settings:sync_interval';
-export const syncInterval = writable<number>(loadNumber(SYNC_INTERVAL_KEY, 300)); // Default 5 mins
-
-let isInitializing = false;
-let isUpdating = false;
-
-export async function initializeSettings() {
-  if (isInitializing) return;
-  isInitializing = true;
-  try {
-    const settings = await getSettings();
-    if (settings.mailDenseMode !== undefined) mailDenseMode.set(settings.mailDenseMode);
-    if (settings.mailDefaultLandingView !== undefined) mailDefaultLandingView.set(settings.mailDefaultLandingView);
-    if (settings.mailSignature !== undefined) mailSignature.set(settings.mailSignature);
-    if (settings.labelCustomizations !== undefined) labelCustomizations.set(settings.labelCustomizations);
-    if (settings.syncInterval !== undefined) syncInterval.set(settings.syncInterval);
-    // theme load is currently disabled as we only save it in localStorage directly, wait actually I should fix it down below
-    if ((settings as any).theme !== undefined) {
-       // but theme is declared below, let's just let it load from localStorage for now and we'll sync it, wait I appended theme below
-    }
-  } catch (err) {
-    console.error('Failed to load settings from backend', err);
-  } finally {
-    isInitializing = false;
-  }
-}
-
-async function syncToBackend() {
-  if (isInitializing || isUpdating) return;
-  isUpdating = true;
-  try {
-    await updateSettings({
-      mailDenseMode: get(mailDenseMode),
-      mailDefaultLandingView: get(mailDefaultLandingView),
-      mailSignature: get(mailSignature),
-      labelCustomizations: get(labelCustomizations),
-      syncInterval: get(syncInterval),
-      // we'll update theme too if available
-      theme: localStorage.getItem('kestrel:settings:theme') || 'system',
-    });
-  } catch (err) {
-    console.error('Failed to sync settings to backend', err);
-  } finally {
-    isUpdating = false;
-  }
-}
 
 // Subscribe & persist settings changes
-mailDenseMode.subscribe((val) => {
-  saveItem(DENSE_KEY, String(val));
-  syncToBackend();
-});
-mailDefaultLandingView.subscribe((val) => {
-  saveItem(LANDING_KEY, val);
-  syncToBackend();
-});
-mailSignature.subscribe((val) => {
-  saveItem(SIG_KEY, val);
-  syncToBackend();
-});
-labelCustomizations.subscribe((val) => {
-  saveItem(LABELS_KEY, JSON.stringify(val));
-  syncToBackend();
-});
-syncInterval.subscribe((val) => {
-  saveItem(SYNC_INTERVAL_KEY, String(val));
-  syncToBackend();
-});
-
-function loadNumber(key: string, def: number): number {
-  try {
-    const val = localStorage.getItem(key);
-    return val !== null ? Number(val) : def;
-  } catch {
-    return def;
-  }
-}
+mailDenseMode.subscribe((val) => saveItem(DENSE_KEY, String(val)));
+mailDefaultLandingView.subscribe((val) => saveItem(LANDING_KEY, val));
+mailSignature.subscribe((val) => saveItem(SIG_KEY, val));
+labelCustomizations.subscribe((val) => saveItem(LABELS_KEY, JSON.stringify(val)));
 
 function loadBool(key: string, def: boolean): boolean {
   try {
@@ -124,9 +52,3 @@ function saveItem(key: string, val: string): void {
     // Non-fatal
   }
 }
-const THEME_KEY = 'kestrel:settings:theme';
-export const theme = writable<string>(loadStr(THEME_KEY, 'system'));
-theme.subscribe((val) => {
-  saveItem(THEME_KEY, val);
-  syncToBackend();
-});

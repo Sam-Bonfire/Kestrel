@@ -1,10 +1,10 @@
 use axum::{
     body::Body,
     extract::{Query, State},
-    http::{header, Response, StatusCode},
+    http::{Response, StatusCode, header},
 };
-use serde::Deserialize;
 use futures::StreamExt;
+use serde::Deserialize;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use url::Url;
@@ -26,7 +26,8 @@ impl reqwest::dns::Resolve for SafeDnsResolver {
                     return Err(Box::new(std::io::Error::new(
                         std::io::ErrorKind::PermissionDenied,
                         "IP address is blocked",
-                    )) as Box<dyn std::error::Error + Send + Sync>);
+                    ))
+                        as Box<dyn std::error::Error + Send + Sync>);
                 }
                 valid_addrs.push(addr);
             }
@@ -35,10 +36,12 @@ impl reqwest::dns::Resolve for SafeDnsResolver {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::NotFound,
                     "No valid IP addresses found",
-                )) as Box<dyn std::error::Error + Send + Sync>);
+                ))
+                    as Box<dyn std::error::Error + Send + Sync>);
             }
 
-            let addrs_iter: Box<dyn Iterator<Item = SocketAddr> + Send> = Box::new(valid_addrs.into_iter());
+            let addrs_iter: Box<dyn Iterator<Item = SocketAddr> + Send> =
+                Box::new(valid_addrs.into_iter());
             Ok(addrs_iter)
         };
         Box::pin(fut)
@@ -59,14 +62,17 @@ pub async fn proxy_image(
     validate_url(&query.url)?;
 
     // 2. Fetch the image securely via the global client which uses the SafeDnsResolver
-    let res = state.http_client
+    let res = state
+        .http_client
         .get(&query.url)
         .send()
         .await
         .map_err(|e| KestrelError::BadRequest(format!("Failed to fetch external image: {}", e)))?;
 
     if !res.status().is_success() {
-        return Err(KestrelError::BadRequest("Failed to fetch external image".to_string()));
+        return Err(KestrelError::BadRequest(
+            "Failed to fetch external image".to_string(),
+        ));
     }
 
     // 3. Check content type
@@ -78,16 +84,17 @@ pub async fn proxy_image(
         .to_string();
 
     if !content_type.starts_with("image/") {
-        return Err(KestrelError::BadRequest("URL does not point to an image".to_string()));
+        return Err(KestrelError::BadRequest(
+            "URL does not point to an image".to_string(),
+        ));
     }
 
     // 4. Check content length (size limit)
-    if let Some(length) = res.headers().get(reqwest::header::CONTENT_LENGTH) {
-        if let Ok(len) = length.to_str().unwrap_or("0").parse::<u64>() {
-            if len > MAX_IMAGE_SIZE {
-                return Err(KestrelError::BadRequest("Image too large".to_string()));
-            }
-        }
+    if let Some(length) = res.headers().get(reqwest::header::CONTENT_LENGTH)
+        && let Ok(len) = length.to_str().unwrap_or("0").parse::<u64>()
+        && len > MAX_IMAGE_SIZE
+    {
+        return Err(KestrelError::BadRequest("Image too large".to_string()));
     }
 
     // 5. Build response and stream it securely (DoS protection)
@@ -98,12 +105,15 @@ pub async fn proxy_image(
                 total_bytes += bytes.len() as u64;
                 if total_bytes > MAX_IMAGE_SIZE {
                     // Truncate and return error in stream if limits exceeded during download
-                    Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Image exceeds size limit"))
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Image exceeds size limit",
+                    ))
                 } else {
                     Ok(bytes)
                 }
             }
-            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+            Err(e) => Err(std::io::Error::other(e)),
         }
     });
 
@@ -120,18 +130,25 @@ pub async fn proxy_image(
 }
 
 fn validate_url(url_str: &str) -> Result<(), KestrelError> {
-    let url = Url::parse(url_str).map_err(|_| KestrelError::BadRequest("Invalid URL".to_string()))?;
+    let url =
+        Url::parse(url_str).map_err(|_| KestrelError::BadRequest("Invalid URL".to_string()))?;
 
     match url.scheme() {
         "http" | "https" => {}
-        _ => return Err(KestrelError::BadRequest("Only HTTP/HTTPS allowed".to_string())),
+        _ => {
+            return Err(KestrelError::BadRequest(
+                "Only HTTP/HTTPS allowed".to_string(),
+            ));
+        }
     }
 
     // Direct IP bypassing check: if the host is explicitly an IP address, validate it.
     if let Some(host) = url.host_str() {
         if let Ok(ip) = host.parse::<IpAddr>() {
             if is_blocked_ip(&ip) {
-                return Err(KestrelError::Forbidden("Direct IP address is blocked".to_string()));
+                return Err(KestrelError::Forbidden(
+                    "Direct IP address is blocked".to_string(),
+                ));
             }
         } else if host == "localhost" {
             return Err(KestrelError::Forbidden("Localhost is blocked".to_string()));
@@ -176,17 +193,38 @@ mod tests {
 
     #[test]
     fn test_validate_url_invalid_scheme() {
-        assert!(matches!(validate_url("file:///etc/passwd"), Err(KestrelError::BadRequest(_))));
-        assert!(matches!(validate_url("ftp://example.com/image.png"), Err(KestrelError::BadRequest(_))));
-        assert!(matches!(validate_url("data:image/png;base64,iVBORw0KGgo"), Err(KestrelError::BadRequest(_))));
+        assert!(matches!(
+            validate_url("file:///etc/passwd"),
+            Err(KestrelError::BadRequest(_))
+        ));
+        assert!(matches!(
+            validate_url("ftp://example.com/image.png"),
+            Err(KestrelError::BadRequest(_))
+        ));
+        assert!(matches!(
+            validate_url("data:image/png;base64,iVBORw0KGgo"),
+            Err(KestrelError::BadRequest(_))
+        ));
     }
 
     #[test]
     fn test_validate_url_internal_ip() {
-        assert!(matches!(validate_url("http://localhost/image.png"), Err(KestrelError::BadRequest(_)) | Err(KestrelError::Forbidden(_))));
-        assert!(matches!(validate_url("http://127.0.0.1/image.png"), Err(KestrelError::Forbidden(_))));
-        assert!(matches!(validate_url("https://10.0.0.1/image.png"), Err(KestrelError::Forbidden(_))));
-        assert!(matches!(validate_url("https://192.168.1.1/image.png"), Err(KestrelError::Forbidden(_))));
+        assert!(matches!(
+            validate_url("http://localhost/image.png"),
+            Err(KestrelError::BadRequest(_)) | Err(KestrelError::Forbidden(_))
+        ));
+        assert!(matches!(
+            validate_url("http://127.0.0.1/image.png"),
+            Err(KestrelError::Forbidden(_))
+        ));
+        assert!(matches!(
+            validate_url("https://10.0.0.1/image.png"),
+            Err(KestrelError::Forbidden(_))
+        ));
+        assert!(matches!(
+            validate_url("https://192.168.1.1/image.png"),
+            Err(KestrelError::Forbidden(_))
+        ));
         // Note: localhost does not parse as IpAddr, so it gets through this check, but SafeDnsResolver will catch it if it resolves to 127.0.0.1.
         // We could also specifically block "localhost".
     }
