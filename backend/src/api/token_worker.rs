@@ -46,113 +46,74 @@ pub fn start_token_worker(state: AppState) {
                 expiring_accounts.len()
             );
 
-            let client = reqwest::Client::new();
-
             for mut account in expiring_accounts {
-                let (token_url, client_id, client_secret) = match account.provider.as_str() {
-                    "gmail" => (
-                        "https://oauth2.googleapis.com/token",
-                        std::env::var("GMAIL_CLIENT_ID").unwrap_or_default(),
-                        std::env::var("GMAIL_CLIENT_SECRET").unwrap_or_default(),
-                    ),
-                    "outlook" => (
-                        "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-                        std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default(),
-                        std::env::var("OUTLOOK_CLIENT_SECRET").unwrap_or_default(),
-                    ),
-                    _ => continue,
+                let plugin_manager = state.plugin_manager.read().await;
+                let plugin = match plugin_manager.find_by_provider(&account.provider) {
+                    Some(p) => p,
+                    None => {
+                        tracing::warn!("No plugin found for provider: {}", account.provider);
+                        continue;
+                    }
                 };
 
-                if client_id.is_empty() || client_secret.is_empty() {
-                    continue;
-                }
-
                 let refresh_token = account.refresh_token.as_ref().unwrap();
+                let auth_provider = plugin.as_auth_provider();
 
-                let res = client
-                    .post(token_url)
-                    .form(&[
-                        ("client_id", client_id.as_str()),
-                        ("client_secret", client_secret.as_str()),
-                        ("refresh_token", refresh_token.as_str()),
-                        ("grant_type", "refresh_token"),
-                    ])
-                    .send()
-                    .await;
+                match auth_provider.refresh_token(refresh_token).await {
+                    Ok(payload) => {
+                        account.access_token = Some(payload.access_token);
+                        account.token_expires_at =
+                            Some(Utc::now().timestamp() + payload.expires_in);
+                        account.updated_at = Utc::now().timestamp();
 
-                match res {
-                    Ok(resp) if resp.status().is_success() => {
-                        if let Ok(token_data) = resp.json::<serde_json::Value>().await
-                            && let Some(access_token) = token_data["access_token"].as_str()
-                        {
-                            account.access_token = Some(access_token.to_string());
-                            let expires_in = token_data["expires_in"].as_i64().unwrap_or(3600);
-                            account.token_expires_at = Some(Utc::now().timestamp() + expires_in);
-                            account.updated_at = Utc::now().timestamp();
-
-                            // Save back to database
-                            match &state.db {
-                                DbPool::Sqlite(pool) => {
-                                    let update_res = sqlx::query("UPDATE accounts SET access_token = ?, token_expires_at = ?, updated_at = ? WHERE id = ?")
-                                            .bind(&account.access_token)
-                                            .bind(account.token_expires_at)
-                                            .bind(account.updated_at)
-                                            .bind(account.id)
-                                            .execute(pool)
-                                            .await;
-                                    if let Err(e) = update_res {
-                                        tracing::error!(
-                                            "Failed to update refreshed token for account {}: {}",
-                                            account.id.0,
-                                            e
-                                        );
-                                    } else {
-                                        tracing::info!(
-                                            "Successfully refreshed token for account {}",
-                                            account.id.0
-                                        );
-                                    }
+                        // Save back to database
+                        match &state.db {
+                            DbPool::Sqlite(pool) => {
+                                let update_res = sqlx::query("UPDATE accounts SET access_token = ?, token_expires_at = ?, updated_at = ? WHERE id = ?")
+                                        .bind(&account.access_token)
+                                        .bind(account.token_expires_at)
+                                        .bind(account.updated_at)
+                                        .bind(account.id)
+                                        .execute(pool)
+                                        .await;
+                                if let Err(e) = update_res {
+                                    tracing::error!(
+                                        "Failed to update refreshed token for account {}: {}",
+                                        account.id.0,
+                                        e
+                                    );
+                                } else {
+                                    tracing::info!(
+                                        "Successfully refreshed token for account {}",
+                                        account.id.0
+                                    );
                                 }
-                                DbPool::Postgres(pool) => {
-                                    let update_res = sqlx::query("UPDATE accounts SET access_token = $1, token_expires_at = $2, updated_at = $3 WHERE id = $4")
-                                            .bind(&account.access_token)
-                                            .bind(account.token_expires_at)
-                                            .bind(account.updated_at)
-                                            .bind(account.id)
-                                            .execute(pool)
-                                            .await;
-                                    if let Err(e) = update_res {
-                                        tracing::error!(
-                                            "Failed to update refreshed token for account {}: {}",
-                                            account.id.0,
-                                            e
-                                        );
-                                    } else {
-                                        tracing::info!(
-                                            "Successfully refreshed token for account {}",
-                                            account.id.0
-                                        );
-                                    }
+                            }
+                            DbPool::Postgres(pool) => {
+                                let update_res = sqlx::query("UPDATE accounts SET access_token = $1, token_expires_at = $2, updated_at = $3 WHERE id = $4")
+                                        .bind(&account.access_token)
+                                        .bind(account.token_expires_at)
+                                        .bind(account.updated_at)
+                                        .bind(account.id)
+                                        .execute(pool)
+                                        .await;
+                                if let Err(e) = update_res {
+                                    tracing::error!(
+                                        "Failed to update refreshed token for account {}: {}",
+                                        account.id.0,
+                                        e
+                                    );
+                                } else {
+                                    tracing::info!(
+                                        "Successfully refreshed token for account {}",
+                                        account.id.0
+                                    );
                                 }
                             }
                         }
                     }
-                    Ok(resp) => {
-                        let status = resp.status();
-                        let body = resp.text().await.unwrap_or_default();
-                        tracing::error!(
-                            "Token refresh failed for account {} ({}): {}",
-                            account.id.0,
-                            status,
-                            body
-                        );
-                    }
                     Err(e) => {
-                        tracing::error!(
-                            "Network error refreshing token for account {}: {}",
-                            account.id.0,
-                            e
-                        );
+                        tracing::error!("Token refresh failed for account {}: {}", account.id.0, e);
                     }
                 }
             }

@@ -1,3 +1,7 @@
+#![allow(clippy::missing_safety_doc)]
+#![allow(unused_unsafe)]
+#![allow(unsafe_op_in_unsafe_fn)]
+
 use wit_bindgen::generate;
 use serde_json::{Value, json};
 use chrono::DateTime;
@@ -24,6 +28,7 @@ impl exports::kestrel::provider::provider_branding::Guest for GmailPlugin {
 use kestrel::provider::http_client::{HttpRequest, request};
 use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload, MessagePayload};
 use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload};
+use exports::kestrel::provider::auth_provider::{Guest as AuthGuest, TokenPayload};
 
 fn get_header<'a>(headers: &'a [Value], name: &str) -> Option<&'a str> {
     headers.iter().find(|h| {
@@ -392,6 +397,42 @@ fn parse_gmail_event(item: &Value) -> Option<EventPayload> {
         attendees,
         status,
     })
+}
+
+impl AuthGuest for GmailPlugin {
+    fn refresh_token(refresh_token: String) -> Result<TokenPayload, String> {
+        let creds = get_client_credentials("gmail")?;
+
+        let body = format!(
+            "client_id={}&client_secret={}&refresh_token={}&grant_type=refresh_token",
+            creds.client_id,
+            creds.client_secret,
+            refresh_token
+        );
+
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: "https://oauth2.googleapis.com/token".to_string(),
+            headers: vec![("Content-Type".to_string(), "application/x-www-form-urlencoded".to_string())],
+            body: Some(body.into_bytes()),
+        };
+
+        let res = request(&req)?;
+        if res.status != 200 {
+            let text = String::from_utf8_lossy(&res.body);
+            return Err(format!("Provider error ({}): {}", res.status, text));
+        }
+
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse token response")?;
+
+        let access_token = json["access_token"].as_str().ok_or("Missing access_token")?.to_string();
+        let expires_in = json["expires_in"].as_i64().unwrap_or(3600);
+
+        Ok(TokenPayload {
+            access_token,
+            expires_in,
+        })
+    }
 }
 
 impl CalendarGuest for GmailPlugin {

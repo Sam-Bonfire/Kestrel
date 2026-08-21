@@ -120,6 +120,20 @@ interface calendar-provider {
 }
 
 // ─────────────────────────────────────────────
+// Auth Provider Interface
+// ─────────────────────────────────────────────
+
+interface auth-provider {
+    record token-payload {
+        access-token: string,
+        expires-in: s64,
+    }
+
+    /// Refresh the OAuth token using a given refresh token.
+    refresh-token: func(refresh-token: string) -> result<token-payload, string>;
+}
+
+// ─────────────────────────────────────────────
 // Provider Branding Interface
 // ─────────────────────────────────────────────
 
@@ -182,4 +196,5 @@ world kestrel-plugin {
     export mail-provider;
     export calendar-provider;
     export provider-branding;
+    export auth-provider;
 }

@@ -160,6 +160,21 @@ pub trait CalendarProvider: Send + Sync {
 }
 
 // ─────────────────────────────────────────────
+// Auth Provider Interface (mirrors WIT)
+// ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TokenPayload {
+    pub access_token: String,
+    pub expires_in: i64,
+}
+
+#[async_trait]
+pub trait AuthProvider: Send + Sync {
+    async fn refresh_token(&self, refresh_token: &str) -> Result<TokenPayload, PluginError>;
+}
+
+// ─────────────────────────────────────────────
 // Provider Branding Interface (mirrors WIT)
 // ─────────────────────────────────────────────
 
@@ -184,7 +199,9 @@ pub trait ProviderBranding: Send + Sync {
 // ─────────────────────────────────────────────
 
 /// Combined trait that a full-featured provider plugin must implement.
-pub trait ProviderPlugin: ProviderBranding + MailProvider + CalendarProvider + Send + Sync {
+pub trait ProviderPlugin:
+    ProviderBranding + MailProvider + CalendarProvider + AuthProvider + Send + Sync
+{
     /// Unique identifier for this plugin (e.g. "gmail", "outlook").
     fn id(&self) -> &str;
 }

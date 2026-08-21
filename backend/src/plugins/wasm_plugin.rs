@@ -4,8 +4,9 @@ use wasmtime::component::Component;
 
 use super::bindings::KestrelPlugin;
 use super::traits::{
-    BrandingPayload, CalendarPayload, CalendarProvider, EventPayload, MailProvider, MessageBody,
-    MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload, SyncResult,
+    AuthProvider, BrandingPayload, CalendarPayload, CalendarProvider, EventPayload, MailProvider,
+    MessageBody, MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload,
+    SyncResult, TokenPayload,
 };
 use super::wasm_runtime::{WasmEngine, WasmState};
 
@@ -321,6 +322,27 @@ impl CalendarProvider for WasmPlugin {
 
         match result {
             Ok(_) => Ok(()),
+            Err(e) => Err(PluginError(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl AuthProvider for WasmPlugin {
+    async fn refresh_token(&self, refresh_token: &str) -> Result<TokenPayload, PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+
+        let result = instance
+            .kestrel_provider_auth_provider()
+            .call_refresh_token(&mut store, refresh_token)
+            .await
+            .map_err(|e| PluginError(e.to_string()))?;
+
+        match result {
+            Ok(payload) => Ok(TokenPayload {
+                access_token: payload.access_token,
+                expires_in: payload.expires_in,
+            }),
             Err(e) => Err(PluginError(e)),
         }
     }

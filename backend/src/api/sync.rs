@@ -30,125 +30,12 @@ pub struct SyncEvent {
     pub timestamp: i64,
 }
 
-// --- Token Refresher ---
-
-#[async_trait::async_trait]
-pub trait TokenRefresher: Send + Sync {
-    async fn refresh(
-        &self,
-        account: &crate::core::models::Account,
-    ) -> Result<serde_json::Value, String>;
-}
-
-pub struct ReqwestTokenRefresher {
-    client: reqwest::Client,
-    override_urls: HashMap<String, String>,
-    #[cfg(test)]
-    override_credentials: HashMap<String, (String, String)>,
-}
-
-impl Default for ReqwestTokenRefresher {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ReqwestTokenRefresher {
-    pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-            override_urls: HashMap::new(),
-            #[cfg(test)]
-            override_credentials: HashMap::new(),
-        }
-    }
-
-    #[cfg(test)]
-    pub fn with_override_url(mut self, provider: &str, url: &str) -> Self {
-        self.override_urls
-            .insert(provider.to_string(), url.to_string());
-        self
-    }
-
-    #[cfg(test)]
-    pub fn with_override_credentials(mut self, provider: &str, id: &str, secret: &str) -> Self {
-        self.override_credentials
-            .insert(provider.to_string(), (id.to_string(), secret.to_string()));
-        self
-    }
-}
-
-#[async_trait::async_trait]
-impl TokenRefresher for ReqwestTokenRefresher {
-    async fn refresh(
-        &self,
-        account: &crate::core::models::Account,
-    ) -> Result<serde_json::Value, String> {
-        #[allow(unused_mut)]
-        let (default_token_url, mut client_id, mut client_secret) = match account.provider.as_str()
-        {
-            "gmail" => (
-                "https://oauth2.googleapis.com/token",
-                std::env::var("GMAIL_CLIENT_ID").unwrap_or_default(),
-                std::env::var("GMAIL_CLIENT_SECRET").unwrap_or_default(),
-            ),
-            "outlook" => (
-                "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-                std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default(),
-                std::env::var("OUTLOOK_CLIENT_SECRET").unwrap_or_default(),
-            ),
-            _ => return Err("Unknown provider".to_string()),
-        };
-
-        let token_url = self
-            .override_urls
-            .get(&account.provider)
-            .map(|s| s.as_str())
-            .unwrap_or(default_token_url);
-
-        #[cfg(test)]
-        if let Some((id, secret)) = self.override_credentials.get(&account.provider) {
-            client_id = id.clone();
-            client_secret = secret.clone();
-        }
-
-        if client_id.is_empty() || client_secret.is_empty() {
-            return Err("Missing OAuth credentials in env".to_string());
-        }
-
-        let refresh_token = match &account.refresh_token {
-            Some(rt) => rt.as_str(),
-            None => return Err("No refresh token available".to_string()),
-        };
-
-        let res = self
-            .client
-            .post(token_url)
-            .form(&[
-                ("client_id", client_id.as_str()),
-                ("client_secret", client_secret.as_str()),
-                ("refresh_token", refresh_token),
-                ("grant_type", "refresh_token"),
-            ])
-            .send()
-            .await
-            .map_err(|e| format!("Network error: {}", e))?;
-
-        let status = res.status();
-        let text = res.text().await.unwrap_or_default();
-
-        if !status.is_success() {
-            return Err(format!("Provider error ({}): {}", status, text));
-        }
-
-        serde_json::from_str(&text).map_err(|e| format!("Invalid JSON from provider: {}", e))
-    }
-}
+use crate::plugins::traits::AuthProvider;
 
 pub async fn ensure_valid_token(
     state: &AppState,
     account: &mut crate::core::models::Account,
-    refresher: &dyn TokenRefresher,
+    refresher: &dyn AuthProvider,
 ) -> Result<String, String> {
     let now = chrono::Utc::now().timestamp();
     // 5 minutes = 300 seconds
@@ -161,80 +48,53 @@ pub async fn ensure_valid_token(
         return Ok(account.access_token.clone().unwrap());
     }
 
-    match refresher.refresh(account).await {
-        Ok(token_data) => {
-            if let Some(access_token) = token_data["access_token"].as_str() {
-                let expires_in = token_data["expires_in"].as_i64().unwrap_or(3600);
-                account.access_token = Some(access_token.to_string());
-                account.token_expires_at = Some(now + expires_in);
-                account.sync_error = None;
-                account.updated_at = chrono::Utc::now().timestamp();
+    let refresh_token = match &account.refresh_token {
+        Some(rt) => rt,
+        None => return Err("No refresh token available".to_string()),
+    };
 
-                // Save back to database
-                match &state.db {
-                    DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                Some(access_token),
-                                account.token_expires_at,
-                                None,
-                            )
-                            .await
-                        {
-                            tracing::error!("DB update failed: {}", e);
-                        }
-                    }
-                    DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                Some(access_token),
-                                account.token_expires_at,
-                                None,
-                            )
-                            .await
-                        {
-                            tracing::error!("DB update failed: {}", e);
-                        }
+    match refresher.refresh_token(refresh_token).await {
+        Ok(payload) => {
+            let access_token = payload.access_token;
+            let expires_in = payload.expires_in;
+            account.access_token = Some(access_token.clone());
+            account.token_expires_at = Some(now + expires_in);
+            account.sync_error = None;
+            account.updated_at = chrono::Utc::now().timestamp();
+
+            // Save back to database
+            match &state.db {
+                DbPool::Sqlite(pool) => {
+                    if let Err(e) = SqliteAccountRepository::new(pool.clone())
+                        .update_tokens_and_error(
+                            account.id.0,
+                            Some(access_token.as_str()),
+                            account.token_expires_at,
+                            None,
+                        )
+                        .await
+                    {
+                        tracing::error!("DB update failed: {}", e);
                     }
                 }
-                Ok(access_token.to_string())
-            } else {
-                let err_msg = "Invalid token payload received from provider".to_string();
-                account.sync_error = Some(err_msg.clone());
-                match &state.db {
-                    DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&err_msg),
-                            )
-                            .await
-                        {
-                            tracing::error!("DB update failed: {}", e);
-                        }
-                    }
-                    DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&err_msg),
-                            )
-                            .await
-                        {
-                            tracing::error!("DB update failed: {}", e);
-                        }
+                DbPool::Postgres(pool) => {
+                    if let Err(e) = PostgresAccountRepository::new(pool.clone())
+                        .update_tokens_and_error(
+                            account.id.0,
+                            Some(access_token.as_str()),
+                            account.token_expires_at,
+                            None,
+                        )
+                        .await
+                    {
+                        tracing::error!("DB update failed: {}", e);
                     }
                 }
-                Err(err_msg)
             }
+            Ok(access_token)
         }
         Err(e) => {
+            let e = e.to_string();
             account.sync_error = Some(e.clone());
             match &state.db {
                 DbPool::Sqlite(pool) => {
@@ -309,8 +169,16 @@ pub async fn trigger_sync(
     let mut synced_count = 0;
     let len = accounts_to_sync.len();
     for mut account in accounts_to_sync {
-        let refresher = ReqwestTokenRefresher::new();
-        let token = match ensure_valid_token(&state, &mut account, &refresher).await {
+        let plugin_manager = state.plugin_manager.read().await;
+        let plugin = match plugin_manager.find_by_provider(&account.provider) {
+            Some(p) => p,
+            None => {
+                tracing::warn!("No plugin found for provider: {}", account.provider);
+                continue;
+            }
+        };
+        let auth_provider = plugin.as_auth_provider();
+        let token = match ensure_valid_token(&state, &mut account, auth_provider).await {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!(
@@ -407,20 +275,26 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
                     let semaphore = limits.get(&account.provider).cloned();
 
                     async move {
-                        let refresher = ReqwestTokenRefresher::new();
-                        let token = match ensure_valid_token(&state_clone, &mut account, &refresher)
-                            .await
-                        {
-                            Ok(t) => t,
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Sync daemon token refresh failed for {}: {}",
-                                    account.id.0,
-                                    e
-                                );
-                                return;
-                            }
+                        let plugin_manager = state_clone.plugin_manager.read().await;
+                        let plugin = match plugin_manager.find_by_provider(&account.provider) {
+                            Some(p) => p,
+                            None => return,
                         };
+                        let auth_provider = plugin.as_auth_provider();
+                        let token =
+                            match ensure_valid_token(&state_clone, &mut account, auth_provider)
+                                .await
+                            {
+                                Ok(t) => t,
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Sync daemon token refresh failed for {}: {}",
+                                        account.id.0,
+                                        e
+                                    );
+                                    return;
+                                }
+                            };
 
                         // Acquire per-provider concurrency permit if available
                         let _permit = match semaphore {
@@ -833,64 +707,76 @@ mod tests {
         assert_eq!(needs_refresh, true);
     }
 
-    #[tokio::test]
-    async fn test_reqwest_token_refresher_success() {
-        use crate::api::sync::TokenRefresher;
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
+    struct MockAuthProvider {
+        should_succeed: bool,
+    }
 
-        let mock_server = MockServer::start().await;
+    #[async_trait::async_trait]
+    impl crate::plugins::traits::AuthProvider for MockAuthProvider {
+        async fn refresh_token(
+            &self,
+            _refresh_token: &str,
+        ) -> Result<crate::plugins::traits::TokenPayload, crate::plugins::traits::PluginError>
+        {
+            if self.should_succeed {
+                Ok(crate::plugins::traits::TokenPayload {
+                    access_token: "new_access_token".to_string(),
+                    expires_in: 3600,
+                })
+            } else {
+                Err(crate::plugins::traits::PluginError(
+                    "Token refresh permanently failed (e.g. revoked)".to_string(),
+                ))
+            }
+        }
+    }
 
-        Mock::given(method("POST"))
-            .and(path("/token"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "access_token": "real_new_token",
-                "expires_in": 3600
-            })))
-            .mount(&mock_server)
-            .await;
+    async fn create_test_app_state() -> crate::api::router::AppState {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
 
-        let account = Account {
-            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
-            user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
-            provider: "gmail".to_string(),
-            provider_account_id: "test@gmail.com".to_string(),
-            display_name: "Test Account".to_string(),
-            access_token: Some("old_token".to_string()),
-            refresh_token: Some("refresh_token".to_string()),
-            token_expires_at: Some(chrono::Utc::now().timestamp() - 100),
-            sync_error: None,
-            created_at: 0,
-            updated_at: 0,
-        };
+        // Setup initial schema for accounts table
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS accounts (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                provider_account_id TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                access_token TEXT,
+                refresh_token TEXT,
+                token_expires_at INTEGER,
+                sync_error TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
-        let url = format!("{}/token", mock_server.uri());
-        let refresher = crate::api::sync::ReqwestTokenRefresher::new()
-            .with_override_url("gmail", &url)
-            .with_override_credentials("gmail", "test_id", "test_secret");
-
-        let res = refresher.refresh(&account).await;
-        assert!(res.is_ok());
-        let val = res.unwrap();
-        assert_eq!(val["access_token"], "real_new_token");
-        assert_eq!(val["expires_in"], 3600);
+        let (sync_tx, _) = tokio::sync::broadcast::channel(100);
+        crate::api::router::AppState {
+            db: crate::db::pool::DbPool::Sqlite(pool),
+            jwt_secret: "test_secret".to_string(),
+            plugin_manager: std::sync::Arc::new(tokio::sync::RwLock::new(
+                crate::plugins::manager::PluginManager::new(),
+            )),
+            sync_tx,
+            auth_rate_limiter: crate::api::rate_limit::RateLimiter::new(
+                10,
+                std::time::Duration::from_secs(60),
+            ),
+            general_rate_limiter: crate::api::rate_limit::RateLimiter::new(
+                10,
+                std::time::Duration::from_secs(60),
+            ),
+        }
     }
 
     #[tokio::test]
-    async fn test_reqwest_token_refresher_failure() {
-        use crate::api::sync::TokenRefresher;
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("POST"))
-            .and(path("/token"))
-            .respond_with(ResponseTemplate::new(400).set_body_string("invalid_grant"))
-            .mount(&mock_server)
-            .await;
-
-        let account = Account {
+    async fn test_ensure_valid_token_no_refresh_needed() {
+        let state = create_test_app_state().await;
+        let mut account = Account {
             id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
             user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
             provider: "gmail".to_string(),
@@ -898,22 +784,103 @@ mod tests {
             display_name: "Test Account".to_string(),
             access_token: Some("old_token".to_string()),
             refresh_token: Some("refresh_token".to_string()),
-            token_expires_at: Some(chrono::Utc::now().timestamp() - 100),
+            token_expires_at: Some(chrono::Utc::now().timestamp() + 1000), // Valid for 1000s
             sync_error: None,
             created_at: 0,
             updated_at: 0,
         };
 
-        let url = format!("{}/token", mock_server.uri());
-        let refresher = crate::api::sync::ReqwestTokenRefresher::new()
-            .with_override_url("gmail", &url)
-            .with_override_credentials("gmail", "test_id", "test_secret");
+        let refresher = MockAuthProvider {
+            should_succeed: true,
+        };
 
-        let res = refresher.refresh(&account).await;
-        assert!(res.is_err());
-        assert!(
-            res.unwrap_err()
-                .contains("Provider error (400 Bad Request): invalid_grant")
+        let result = crate::api::sync::ensure_valid_token(&state, &mut account, &refresher).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "old_token");
+        assert_eq!(account.access_token.unwrap(), "old_token");
+    }
+
+    #[tokio::test]
+    async fn test_ensure_valid_token_refresh_successful() {
+        let state = create_test_app_state().await;
+        let mut account = Account {
+            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            provider: "gmail".to_string(),
+            provider_account_id: "test@gmail.com".to_string(),
+            display_name: "Test Account".to_string(),
+            access_token: Some("old_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            token_expires_at: Some(chrono::Utc::now().timestamp() - 100), // Expired
+            sync_error: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        // Insert account so DB update works and doesn't log error
+        let repo =
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
+                crate::db::pool::DbPool::Sqlite(pool) => pool.clone(),
+                _ => unreachable!(),
+            });
+        crate::core::repository::AccountRepository::create(&repo, &account)
+            .await
+            .unwrap();
+
+        let refresher = MockAuthProvider {
+            should_succeed: true,
+        };
+
+        let result = crate::api::sync::ensure_valid_token(&state, &mut account, &refresher).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "new_access_token");
+        assert_eq!(account.access_token.unwrap(), "new_access_token");
+        assert!(account.token_expires_at.unwrap() > chrono::Utc::now().timestamp());
+        assert!(account.sync_error.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_ensure_valid_token_refresh_failed() {
+        let state = create_test_app_state().await;
+        let mut account = Account {
+            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            provider: "gmail".to_string(),
+            provider_account_id: "test@gmail.com".to_string(),
+            display_name: "Test Account".to_string(),
+            access_token: Some("old_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            token_expires_at: Some(chrono::Utc::now().timestamp() - 100), // Expired
+            sync_error: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        // Insert account
+        let repo =
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
+                crate::db::pool::DbPool::Sqlite(pool) => pool.clone(),
+                _ => unreachable!(),
+            });
+        crate::core::repository::AccountRepository::create(&repo, &account)
+            .await
+            .unwrap();
+
+        let refresher = MockAuthProvider {
+            should_succeed: false,
+        };
+
+        let result = crate::api::sync::ensure_valid_token(&state, &mut account, &refresher).await;
+
+        assert!(result.is_err());
+        assert!(account.sync_error.is_some());
+        assert_eq!(
+            account.sync_error.unwrap(),
+            "Plugin error: Token refresh permanently failed (e.g. revoked)"
         );
+        // Ensure access token is left as is or updated (it doesn't clear access token, just sets sync_error)
+        assert_eq!(account.access_token.unwrap(), "old_token");
     }
 }
