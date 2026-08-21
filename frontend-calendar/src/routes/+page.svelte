@@ -241,6 +241,7 @@
 
   let snoozedEvents = $state<Record<string, number>>({});
 
+  // Map to link numeric notification IDs back to string event IDs
   const notificationIdToEventId = new Map<number, string>();
   function hashString(str: string): number {
     let hash = 0;
@@ -251,6 +252,8 @@
     }
     return Math.abs(hash);
   }
+
+
 
   $effect(() => {
     if (authState.isAuthenticated) {
