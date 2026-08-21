@@ -190,7 +190,7 @@
           const now = new Date();
           const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
           const end = new Date(now.getFullYear(), now.getMonth() + 2, 1).toISOString();
-          getEvents(start, end).then(res => {
+          getEvents(start, end).then((res: any) => {
             if (res && res.events && res.events.length > 0) {
               const expandedEvents: any[] = [];
               res.events.forEach((e: any) => {
@@ -256,15 +256,15 @@
     if (authState.isAuthenticated) {
       import('@tauri-apps/plugin-notification').then(({ sendNotification, onAction }) => {
         
-        onAction((event) => {
-          if (event.actionId === 'snooze' && event.notification.id) {
+        onAction((event: any) => {
+          if (event.actionId === 'snooze' && event.notification?.id) {
             // Snooze for 10 minutes
             snoozedEvents[event.notification.id] = Date.now() + 10 * 60 * 1000;
-          } else if (event.actionId === 'dismiss' && event.notification.id) {
+          } else if (event.actionId === 'dismiss' && event.notification?.id) {
             // Dismiss permanently
             snoozedEvents[event.notification.id] = Number.MAX_SAFE_INTEGER;
           }
-        }).catch(err => console.warn("Notification action listener error:", err));
+        }).catch((err: any) => console.warn("Notification action listener error:", err));
 
         const checkUpcomingEvents = () => {
           const now = new Date();
@@ -278,7 +278,8 @@
             
             if (is10MinWarning || isSnoozeUp) {
               sendNotification({
-                id: ev.id,
+                id: parseInt(ev.id.replace(/[^0-9]/g, ''), 10) || Date.now(),
+
                 title: `Upcoming: ${ev.title}`,
                 body: `Starts at ${ev.startTime} ${ev.location ? `in ${ev.location}` : ''}`,
               });

@@ -375,7 +375,7 @@
   function snooze(id: string) {
     const ts = Math.floor(Date.now() / 1000) + 3600; // Snooze for 1 hour
     advanceSelectionAndModify(id, { isArchived: false, snoozed_until: ts });
-    apiClient.post(`/api/v1/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error);
+    import('@kestrel/shared/api').then(api => { api.apiClient.post(`/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error); });
   }
 
   function reportSpam(id: string) {
@@ -624,7 +624,7 @@
   {#snippet sidebar()}
     <Sidebar
       {currentView}
-      onSelectView={(v) => { currentView = v; selectedThreadId = null; isMobileSidebarOpen = false; }}
+      onSelectView={(v: any) => { currentView = v; selectedThreadId = null; isMobileSidebarOpen = false; }}
       onComposeClick={() => { isComposeOpen = true; isMobileSidebarOpen = false; }}
       onOpenMailSettings={() => { isMailSettingsOpen = true; isMobileSidebarOpen = false; }}
       bind:searchQuery
@@ -640,7 +640,6 @@
     />
   {/snippet}
 
-  {#snippet children()}
     <!-- Mail panel: full width thread list, no reader pane -->
     <ThreadList
       threads={finalThreads}
@@ -765,5 +764,4 @@
     isOpen={isMailSettingsOpen}
     onClose={() => isMailSettingsOpen = false}
   />
-  {/snippet}
 </AppShell>
