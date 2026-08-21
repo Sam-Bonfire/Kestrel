@@ -79,7 +79,7 @@ impl AccountRepository for PostgresAccountRepository {
         provider: &str,
         provider_account_id: &str,
     ) -> Result<Option<Account>, sqlx::Error> {
-        sqlx::query_as::<_, Account>(
+        let mut account = sqlx::query_as::<_, Account>(
             "SELECT id, user_id, provider, provider_account_id, display_name, \
              access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
              FROM accounts WHERE provider = $1 AND provider_account_id = $2",
@@ -87,7 +87,24 @@ impl AccountRepository for PostgresAccountRepository {
         .bind(provider)
         .bind(provider_account_id)
         .fetch_optional(&self.pool)
-        .await
+        .await?;
+
+        if let Some(ref mut acc) = account {
+            if let Some(ref at) = acc.access_token {
+                acc.access_token = Some(
+                    crate::core::crypto::decrypt(at, &self.master_key)
+                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                );
+            }
+            if let Some(ref rt) = acc.refresh_token {
+                acc.refresh_token = Some(
+                    crate::core::crypto::decrypt(rt, &self.master_key)
+                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                );
+            }
+        }
+
+        Ok(account)
     }
 
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error> {

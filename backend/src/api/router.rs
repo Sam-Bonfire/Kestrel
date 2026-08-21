@@ -80,15 +80,10 @@ pub fn create_router(state: AppState) -> Router {
         ));
 
     // Webhook routes
-    let webhooks = Router::new()
-        .route(
-            "/api/webhooks/google",
-            post(webhooks::handle_google_webhook),
-        )
-        .route(
-            "/api/webhooks/microsoft",
-            post(webhooks::handle_microsoft_webhook),
-        );
+    let webhooks = Router::new().route(
+        "/api/webhooks/:provider",
+        post(webhooks::handle_generic_webhook),
+    );
 
     // Protected routes (auth middleware required)
     let protected = Router::new()

@@ -1096,13 +1096,11 @@ mod tests {
         };
 
         // Insert into DB
-        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
-            match &state.db {
+        let repo =
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            },
-            "test_secret".to_string(),
-        );
+            }, "test_secret".to_string());
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();

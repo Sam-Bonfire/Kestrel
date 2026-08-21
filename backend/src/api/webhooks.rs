@@ -1,20 +1,17 @@
-use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use base64::Engine;
 use chrono::Utc;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 use crate::api::router::AppState;
 use crate::api::sync::{SyncEvent, sync_account_messages};
 use crate::core::error::KestrelError;
 use crate::core::repository::AccountRepository;
 
-#[derive(Debug, Deserialize)]
-pub struct GoogleWebhookQuery {
-    pub token: Option<String>,
-}
+// --- DTOs ---
 
 #[derive(Debug, Deserialize)]
 pub struct GooglePubSubMessage {
@@ -32,19 +29,58 @@ pub struct GoogleWebhookData {
     pub email_address: String,
 }
 
-pub async fn handle_google_webhook(
+#[derive(Debug, Deserialize)]
+pub struct MicrosoftNotification {
+    #[serde(rename = "clientState")]
+    pub client_state: Option<String>,
+    pub resource: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MicrosoftWebhookPayload {
+    pub value: Vec<MicrosoftNotification>,
+}
+
+// --- Generic Router ---
+
+pub async fn handle_generic_webhook(
     State(state): State<AppState>,
-    Query(query): Query<GoogleWebhookQuery>,
-    Json(payload): Json<GoogleWebhookPayload>,
+    Path(provider): Path<String>,
+    Query(query_params): Query<HashMap<String, String>>,
+    body: Option<axum::body::Bytes>,
 ) -> Result<impl IntoResponse, KestrelError> {
+    match provider.as_str() {
+        "google" | "gmail" => handle_google_webhook(state, query_params, body).await,
+        "microsoft" | "outlook" => handle_microsoft_webhook(state, query_params, body).await,
+        _ => {
+            tracing::warn!("Webhook received for unknown provider: {}", provider);
+            Err(KestrelError::NotFound("Provider not found".to_string()))
+        }
+    }
+}
+
+// --- Provider Implementations ---
+
+async fn handle_google_webhook(
+    state: AppState,
+    query: HashMap<String, String>,
+    body: Option<axum::body::Bytes>,
+) -> Result<axum::response::Response, KestrelError> {
     let expected_secret =
         std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| state.jwt_secret.clone());
 
     // Verify the authentication token
-    if query.token.as_deref() != Some(expected_secret.as_str()) {
+    if query.get("token").map(|s| s.as_str()) != Some(expected_secret.as_str()) {
         tracing::warn!("Google webhook failed signature verification");
         return Err(KestrelError::Unauthorized);
     }
+
+    let bytes = body.ok_or_else(|| KestrelError::BadRequest("Missing body".to_string()))?;
+
+    let payload: GoogleWebhookPayload = serde_json::from_slice(&bytes).map_err(|e| {
+        tracing::warn!("Failed to parse Google webhook JSON: {}", e);
+        KestrelError::BadRequest("Invalid JSON".to_string())
+    })?;
 
     let decoded_data = base64::engine::general_purpose::STANDARD
         .decode(payload.message.data)
@@ -64,18 +100,14 @@ pub async fn handle_google_webhook(
     let repo = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
             let r: Box<dyn AccountRepository> = Box::new(
-                crate::db::sqlite::account_repository::SqliteAccountRepository::new(
-                    pool.clone(),
-                    state.jwt_secret.clone(),
-                ),
+                crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone()),
             );
             r
         }
         crate::db::pool::DbPool::Postgres(pool) => {
             let r: Box<dyn AccountRepository> = Box::new(
                 crate::db::postgres::account_repository::PostgresAccountRepository::new(
-                    pool.clone(),
-                    state.jwt_secret.clone(),
+                    pool.clone(), state.jwt_secret.clone()
                 ),
             );
             r
@@ -147,38 +179,20 @@ pub async fn handle_google_webhook(
     Ok((StatusCode::OK, "OK").into_response())
 }
 
-#[derive(Debug, Deserialize)]
-pub struct MicrosoftWebhookQuery {
-    #[serde(rename = "validationToken")]
-    pub validation_token: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MicrosoftNotification {
-    #[serde(rename = "clientState")]
-    pub client_state: Option<String>,
-    pub resource: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MicrosoftWebhookPayload {
-    pub value: Vec<MicrosoftNotification>,
-}
-
-pub async fn handle_microsoft_webhook(
-    State(state): State<AppState>,
-    Query(query): Query<MicrosoftWebhookQuery>,
+async fn handle_microsoft_webhook(
+    state: AppState,
+    query: HashMap<String, String>,
     body: Option<axum::body::Bytes>,
-) -> Result<impl IntoResponse, KestrelError> {
+) -> Result<axum::response::Response, KestrelError> {
     // 1. Handle validation handshake
-    if let Some(token) = query.validation_token {
+    if let Some(token) = query.get("validationToken") {
         tracing::info!("Microsoft webhook validation handshake");
         // Must return text/plain for validation token
         use axum::response::Response;
         let response = Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "text/plain")
-            .body(axum::body::Body::from(token))
+            .body(axum::body::Body::from(token.clone()))
             .unwrap();
         return Ok(response.into_response());
     }
@@ -223,8 +237,7 @@ pub async fn handle_microsoft_webhook(
                 crate::db::pool::DbPool::Sqlite(pool) => {
                     let r: Box<dyn AccountRepository> = Box::new(
                         crate::db::sqlite::account_repository::SqliteAccountRepository::new(
-                            pool.clone(),
-                            state.jwt_secret.clone(),
+                            pool.clone(), state.jwt_secret.clone()
                         ),
                     );
                     r
@@ -232,8 +245,7 @@ pub async fn handle_microsoft_webhook(
                 crate::db::pool::DbPool::Postgres(pool) => {
                     let r: Box<dyn AccountRepository> = Box::new(
                         crate::db::postgres::account_repository::PostgresAccountRepository::new(
-                            pool.clone(),
-                            state.jwt_secret.clone(),
+                            pool.clone(), state.jwt_secret.clone()
                         ),
                     );
                     r
@@ -348,8 +360,8 @@ fn extract_email_from_resource(resource: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::pool::DbPool;
     use axum::http::StatusCode;
+    use crate::db::pool::DbPool;
     use sqlx::sqlite::SqlitePoolOptions;
     use std::sync::Arc;
     use tokio::sync::RwLock;
@@ -402,14 +414,10 @@ mod tests {
     async fn test_microsoft_webhook_handshake() {
         let state = create_test_app_state().await;
 
-        let query = MicrosoftWebhookQuery {
-            validation_token: Some("test_token_123".to_string()),
-        };
+        let mut query = HashMap::new();
+        query.insert("validationToken".to_string(), "test_token_123".to_string());
 
-        let response = handle_microsoft_webhook(State(state), Query(query), None)
-            .await
-            .unwrap()
-            .into_response();
+        let response = handle_microsoft_webhook(state, query, None).await.unwrap().into_response();
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -433,8 +441,8 @@ mod tests {
 #[cfg(test)]
 mod payload_tests {
     use super::*;
-    use crate::db::pool::DbPool;
     use axum::http::StatusCode;
+    use crate::db::pool::DbPool;
     use sqlx::sqlite::SqlitePoolOptions;
     use std::sync::Arc;
     use tokio::sync::RwLock;
@@ -487,19 +495,20 @@ mod payload_tests {
     async fn test_google_webhook_invalid_token() {
         let state = create_test_app_state().await;
 
-        let query = GoogleWebhookQuery {
-            token: Some("invalid_token".to_string()),
-        };
+        let mut query = HashMap::new();
+        query.insert("token".to_string(), "invalid_token".to_string());
 
-        let payload = GoogleWebhookPayload {
-            message: GooglePubSubMessage {
-                data: "ewogICJlbWFpbEFkZHJlc3MiOiAidGVzdEBnbWFpbC5jb20iLAogICJoaXN0b3J5SWQiOiAxMjM0NQp9".to_string(),
+        let payload = r#"{
+            "message": {
+                "data": "ewogICJlbWFpbEFkZHJlc3MiOiAidGVzdEBnbWFpbC5jb20iLAogICJoaXN0b3J5SWQiOiAxMjM0NQp9"
             }
-        };
+        }"#;
 
-        let result = handle_google_webhook(State(state), Query(query), Json(payload)).await;
+        let bytes = axum::body::Bytes::from(payload);
+
+        let result = handle_google_webhook(state, query, Some(bytes)).await;
         match result {
-            Err(KestrelError::Unauthorized) => {}
+            Err(KestrelError::Unauthorized) => {},
             _ => panic!("Expected Unauthorized"),
         }
     }
@@ -508,9 +517,7 @@ mod payload_tests {
     async fn test_microsoft_webhook_invalid_client_state() {
         let state = create_test_app_state().await;
 
-        let query = MicrosoftWebhookQuery {
-            validation_token: None,
-        };
+        let query = HashMap::new();
 
         let payload = r#"
         {
@@ -524,9 +531,9 @@ mod payload_tests {
         "#;
 
         let bytes = axum::body::Bytes::from(payload);
-        let result = handle_microsoft_webhook(State(state), Query(query), Some(bytes)).await;
+        let result = handle_microsoft_webhook(state, query, Some(bytes)).await;
         match result {
-            Err(KestrelError::Unauthorized) => {}
+            Err(KestrelError::Unauthorized) => {},
             _ => panic!("Expected Unauthorized"),
         }
     }
