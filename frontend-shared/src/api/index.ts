@@ -48,4 +48,3 @@ export type {
   CalendarEvent,
   EventSearchResult,
 } from './client.js';
-export { getSettings, updateSettings } from './client.js';

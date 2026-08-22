@@ -74,8 +74,6 @@ export {
   mailDefaultLandingView,
   mailSignature,
   labelCustomizations,
-  initializeSettings,
-  syncInterval,
 } from './stores/index.js';
 
 // ── Offline queue ───────────────────────────────────────────────
