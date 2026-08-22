@@ -68,20 +68,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create broadcast channel for sync events
     let (sync_tx, _) = broadcast::channel::<SyncEvent>(256);
 
-    let (sync_job_tx, sync_job_rx) = tokio::sync::mpsc::channel::<uuid::Uuid>(1024);
+    use crate::api::proxy::SafeDnsResolver;
+
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .dns_resolver(std::sync::Arc::new(SafeDnsResolver))
+        .build()?;
 
     let state = AppState {
         db: db.clone(),
         jwt_secret: config.jwt_secret,
         plugin_manager,
         sync_tx: sync_tx.clone(),
-        sync_job_tx,
         auth_rate_limiter: RateLimiter::new(10, std::time::Duration::from_secs(60)),
         general_rate_limiter: RateLimiter::new(100, std::time::Duration::from_secs(60)),
+        http_client,
     };
 
     // Start background sync daemon
-    start_sync_daemon(state.clone(), sync_tx, sync_job_rx);
+    start_sync_daemon(state.clone(), sync_tx);
     start_offline_worker(db.clone());
     crate::api::token_worker::start_token_worker(state.clone());
 

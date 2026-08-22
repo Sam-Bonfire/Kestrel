@@ -11,10 +11,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Setup cargo-chef and WASM tools
-RUN rustup target add wasm32-wasip1 && \
-    cargo install cargo-chef --version ^0.1 --locked && \
-    cargo install cargo-component --locked
+# Setup cargo-chef to cache dependency builds
+RUN cargo install cargo-chef --version ^0.1 --locked
 
 # Prepare chef recipe
 COPY . .
@@ -23,11 +21,9 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Build dependency cache (scoped to backend only)
 RUN cargo chef cook --release --recipe-path recipe.json --bin kestrel-server
 
-# Copy remaining source code and build production binary + WASM plugins
+# Copy remaining source code and build production binary
 COPY . .
 RUN cargo build --release --bin kestrel-server
-RUN cargo component build --release --manifest-path plugins/gmail/Cargo.toml
-RUN cargo component build --release --manifest-path plugins/outlook/Cargo.toml
 
 # --- Runner Stage ---
 FROM debian:bookworm-slim AS runner
@@ -45,9 +41,6 @@ WORKDIR /app
 
 # Copy compiled binary from builder
 COPY --from=builder /app/target/release/kestrel-server /usr/local/bin/kestrel-server
-# Copy WASM plugins from builder
-COPY --from=builder /app/target/wasm32-wasip1/release/gmail.wasm /app/plugins/gmail.wasm
-COPY --from=builder /app/target/wasm32-wasip1/release/outlook.wasm /app/plugins/outlook.wasm
 
 # Expose backend port
 EXPOSE 8080

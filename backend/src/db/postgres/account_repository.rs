@@ -7,89 +7,39 @@ use crate::core::repository::AccountRepository;
 
 pub struct PostgresAccountRepository {
     pool: PgPool,
-    master_key: String,
 }
 
 impl PostgresAccountRepository {
-    pub fn new(pool: PgPool, master_key: String) -> Self {
-        Self { pool, master_key }
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 }
 
 #[async_trait]
 impl AccountRepository for PostgresAccountRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Account>, sqlx::Error> {
-        let mut account = sqlx::query_as::<_, Account>(
+        sqlx::query_as::<_, Account>(
             "SELECT id, user_id, provider, provider_account_id, display_name, \
              access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
              FROM accounts WHERE id = $1",
         )
         .bind(id)
         .fetch_optional(&self.pool)
-        .await?;
-
-        if let Some(ref mut acc) = account {
-            if let Some(ref at) = acc.access_token {
-                acc.access_token = Some(
-                    crate::core::crypto::decrypt(at, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
-            if let Some(ref rt) = acc.refresh_token {
-                acc.refresh_token = Some(
-                    crate::core::crypto::decrypt(rt, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
-        }
-
-        Ok(account)
+        .await
     }
 
     async fn find_by_user_id(&self, user_id: Uuid) -> Result<Vec<Account>, sqlx::Error> {
-        let mut accounts = sqlx::query_as::<_, Account>(
+        sqlx::query_as::<_, Account>(
             "SELECT id, user_id, provider, provider_account_id, display_name, \
              access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
              FROM accounts WHERE user_id = $1",
         )
         .bind(user_id)
         .fetch_all(&self.pool)
-        .await?;
-
-        for acc in accounts.iter_mut() {
-            if let Some(ref at) = acc.access_token {
-                acc.access_token = Some(
-                    crate::core::crypto::decrypt(at, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
-            if let Some(ref rt) = acc.refresh_token {
-                acc.refresh_token = Some(
-                    crate::core::crypto::decrypt(rt, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
-        }
-
-        Ok(accounts)
+        .await
     }
 
     async fn create(&self, account: &Account) -> Result<(), sqlx::Error> {
-        let enc_access_token = match &account.access_token {
-            Some(at) => Some(
-                crate::core::crypto::encrypt(at, &self.master_key)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-            ),
-            None => None,
-        };
-        let enc_refresh_token = match &account.refresh_token {
-            Some(rt) => Some(
-                crate::core::crypto::encrypt(rt, &self.master_key)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-            ),
-            None => None,
-        };
-
         sqlx::query(
             "INSERT INTO accounts (id, user_id, provider, provider_account_id, display_name, \
              access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at) \
@@ -100,8 +50,8 @@ impl AccountRepository for PostgresAccountRepository {
         .bind(&account.provider)
         .bind(&account.provider_account_id)
         .bind(&account.display_name)
-        .bind(enc_access_token)
-        .bind(enc_refresh_token)
+        .bind(&account.access_token)
+        .bind(&account.refresh_token)
         .bind(account.token_expires_at)
         .bind(&account.sync_error)
         .bind(account.created_at)
@@ -118,19 +68,11 @@ impl AccountRepository for PostgresAccountRepository {
         expires_at: Option<i64>,
         error: Option<&str>,
     ) -> Result<(), sqlx::Error> {
-        let enc_access_token = match access_token {
-            Some(at) => Some(
-                crate::core::crypto::encrypt(at, &self.master_key)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-            ),
-            None => None,
-        };
-
         let updated_at = chrono::Utc::now().timestamp();
         sqlx::query(
             "UPDATE accounts SET access_token = $1, token_expires_at = $2, sync_error = $3, updated_at = $4 WHERE id = $5"
         )
-        .bind(enc_access_token)
+        .bind(access_token)
         .bind(expires_at)
         .bind(error)
         .bind(updated_at)

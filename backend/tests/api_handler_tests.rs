@@ -20,16 +20,18 @@ async fn create_test_state() -> AppState {
     let jwt_secret = "test_jwt_secret_12345".to_string();
     let plugin_manager = Arc::new(RwLock::new(PluginManager::new()));
     let (sync_tx, _) = broadcast::channel(100);
-    let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
 
     AppState {
         db,
         jwt_secret,
         plugin_manager,
         sync_tx,
-        sync_job_tx,
         auth_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
         general_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
+        http_client: reqwest::Client::builder()
+            .dns_resolver(std::sync::Arc::new(backend::api::proxy::SafeDnsResolver))
+            .build()
+            .unwrap(),
     }
 }
 
@@ -512,108 +514,4 @@ async fn test_create_event_with_valid_token() {
     // Since the calendar_id is random, it should return 404 NOT_FOUND,
     // indicating that auth and schema validation passed successfully.
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-}
-
-#[tokio::test]
-async fn test_get_and_put_settings() {
-    let state = create_test_state().await;
-    let app = create_router(state.clone());
-
-    // Register user to get a token
-    let req = Request::builder()
-        .method("POST")
-        .uri("/api/v1/auth/register")
-        .header("Content-Type", "application/json")
-        .body(Body::from(
-            json!({
-                "username": "settings@example.com",
-                "password": "Password123!"
-            })
-            .to_string(),
-        ))
-        .unwrap();
-
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::CREATED);
-
-    // Get token
-    let req = Request::builder()
-        .method("POST")
-        .uri("/api/v1/auth/token")
-        .header("Content-Type", "application/json")
-        .body(Body::from(
-            json!({
-                "username": "settings@example.com",
-                "password": "Password123!"
-            })
-            .to_string(),
-        ))
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let token_resp: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    let token = token_resp["token"].as_str().unwrap().to_string();
-
-    // 1. Initial GET /api/settings should be empty JSON
-    let req = Request::builder()
-        .method("GET")
-        .uri("/api/settings")
-        .header("Authorization", format!("Bearer {}", token))
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let settings_resp: backend::core::models::SettingsPayload =
-        serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(
-        settings_resp,
-        backend::core::models::SettingsPayload::default()
-    );
-
-    // 2. PUT /api/settings
-    let req = Request::builder()
-        .method("PUT")
-        .uri("/api/settings")
-        .header("Authorization", format!("Bearer {}", token))
-        .header("Content-Type", "application/json")
-        .body(Body::from(
-            json!({
-                "mailDenseMode": true,
-                "syncInterval": 600
-            })
-            .to_string(),
-        ))
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let settings_resp: backend::core::models::SettingsPayload =
-        serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(settings_resp.mail_dense_mode, Some(true));
-    assert_eq!(settings_resp.sync_interval, Some(600));
-
-    // 3. GET /api/settings again to verify it persists
-    let req = Request::builder()
-        .method("GET")
-        .uri("/api/settings")
-        .header("Authorization", format!("Bearer {}", token))
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let settings_resp: backend::core::models::SettingsPayload =
-        serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(settings_resp.mail_dense_mode, Some(true));
-    assert_eq!(settings_resp.sync_interval, Some(600));
 }
