@@ -861,6 +861,10 @@ mod tests {
                 10,
                 std::time::Duration::from_secs(60),
             ),
+            http_client: reqwest::Client::builder()
+                .dns_resolver(std::sync::Arc::new(crate::api::proxy::SafeDnsResolver))
+                .build()
+                .unwrap(),
         }
     }
 

@@ -6,6 +6,7 @@ pub mod labels;
 pub mod logging;
 pub mod messages;
 pub mod providers;
+pub mod proxy;
 pub mod rate_limit;
 pub mod router;
 pub mod search;

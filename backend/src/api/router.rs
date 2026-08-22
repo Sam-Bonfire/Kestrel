@@ -11,6 +11,7 @@ use super::calendars;
 use super::health::health_check;
 use super::messages;
 use super::providers;
+use super::proxy;
 use super::rate_limit::RateLimiter;
 use super::search;
 use super::settings;
@@ -28,6 +29,7 @@ pub struct AppState {
     pub sync_job_tx: tokio::sync::mpsc::Sender<uuid::Uuid>,
     pub auth_rate_limiter: RateLimiter,
     pub general_rate_limiter: RateLimiter,
+    pub http_client: reqwest::Client,
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -157,6 +159,7 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/api/v1/sync/stream", get(sync::sync_stream))
         .route("/api/v1/sync/trigger", post(sync::trigger_sync))
+        .route("/api/proxy/image", get(proxy::proxy_image))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,
