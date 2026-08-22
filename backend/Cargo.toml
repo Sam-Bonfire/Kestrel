@@ -43,7 +43,8 @@ futures = "0.3"
 tokio-stream = "0.1"
 wasmtime = "22.0.0"
 wasmtime-wasi = "22.0.0"
-reqwest = { version = "0.13.4", features = ["json", "form", "stream"] }
+reqwest = { version = "0.13.4", features = ["json", "form"] }
 base64 = "0.23.0"
 urlencoding = "2.1.3"
-url = "2.5"
+aes-gcm = "0.11.0"
+sha2 = "0.11.0"

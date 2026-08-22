@@ -7,7 +7,6 @@ use axum::Json;
 use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use chrono::Utc;
-use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Semaphore, broadcast};
 use uuid::Uuid;
@@ -140,27 +139,29 @@ pub async fn ensure_valid_token(
                 // Save back to database
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                Some(access_token),
-                                account.token_expires_at,
-                                None,
-                            )
-                            .await
+                        if let Err(e) =
+                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    Some(access_token),
+                                    account.token_expires_at,
+                                    None,
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                Some(access_token),
-                                account.token_expires_at,
-                                None,
-                            )
-                            .await
+                        if let Err(e) =
+                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    Some(access_token),
+                                    account.token_expires_at,
+                                    None,
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
@@ -172,27 +173,29 @@ pub async fn ensure_valid_token(
                 account.sync_error = Some(err_msg.clone());
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&err_msg),
-                            )
-                            .await
+                        if let Err(e) =
+                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    account.access_token.as_deref(),
+                                    account.token_expires_at,
+                                    Some(&err_msg),
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&err_msg),
-                            )
-                            .await
+                        if let Err(e) =
+                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                                .update_tokens_and_error(
+                                    account.id.0,
+                                    account.access_token.as_deref(),
+                                    account.token_expires_at,
+                                    Some(&err_msg),
+                                )
+                                .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
@@ -221,27 +224,29 @@ pub async fn ensure_valid_token(
             let _ = state.sync_tx.send(event);
             match &state.db {
                 DbPool::Sqlite(pool) => {
-                    if let Err(e) = SqliteAccountRepository::new(pool.clone())
-                        .update_tokens_and_error(
-                            account.id.0,
-                            account.access_token.as_deref(),
-                            account.token_expires_at,
-                            Some(&e),
-                        )
-                        .await
+                    if let Err(e) =
+                        SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&e),
+                            )
+                            .await
                     {
                         tracing::error!("DB update failed: {}", e);
                     }
                 }
                 DbPool::Postgres(pool) => {
-                    if let Err(e) = PostgresAccountRepository::new(pool.clone())
-                        .update_tokens_and_error(
-                            account.id.0,
-                            account.access_token.as_deref(),
-                            account.token_expires_at,
-                            Some(&e),
-                        )
-                        .await
+                    if let Err(e) =
+                        PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&e),
+                            )
+                            .await
                     {
                         tracing::error!("DB update failed: {}", e);
                     }
@@ -431,7 +436,6 @@ pub fn start_sync_daemon(
     sync_tx: broadcast::Sender<SyncEvent>,
     mut push_rx: tokio::sync::mpsc::Receiver<uuid::Uuid>,
 ) {
-pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>) {
     tokio::spawn(async move {
         tracing::info!("Background sync daemon started");
 
@@ -440,22 +444,39 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
         limits.insert("gmail".to_string(), Arc::new(Semaphore::new(5)));
         limits.insert("outlook".to_string(), Arc::new(Semaphore::new(5)));
 
+        // Deduplication and Rate Limiting state
+        let mut last_trigger_time: HashMap<uuid::Uuid, i64> = HashMap::new();
+        let mut last_sync_time: HashMap<uuid::Uuid, i64> = HashMap::new();
+        let mut queued_syncs: std::collections::HashSet<uuid::Uuid> =
+            std::collections::HashSet::new();
+
+        // 60-second fallback/polling interval
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+
         loop {
-            // Wait 5 minutes between sync cycles
-            tokio::time::sleep(Duration::from_secs(300)).await;
+            let mut accounts_to_sync: Vec<crate::core::models::Account> = Vec::new();
 
-            tracing::info!("Sync daemon: starting periodic sync cycle");
+            tokio::select! {
+                maybe_account_id = push_rx.recv() => {
+                    match maybe_account_id {
+                        Some(account_id) => {
+                            let now = Utc::now().timestamp();
 
-            // Get all accounts that need syncing
-            let accounts = match get_all_accounts_with_tokens(&state).await {
-                Ok(accounts) => accounts,
-                Err(e) => {
-                    tracing::error!("Sync daemon: failed to list accounts: {}", e);
-                    continue;
-                }
-            };
+                            // Deduplication: if triggered within last 30s, ignore
+                            if last_trigger_time.get(&account_id).is_some_and(|&last| now - last < 30) {
+                                tracing::debug!("Sync trigger for {} deduplicated", account_id);
+                                continue;
+                            }
+                            last_trigger_time.insert(account_id, now);
 
-            let accounts_len = accounts.len();
+                            // Rate limiting: 1 sync per minute (60s)
+                            if last_sync_time.get(&account_id).is_some_and(|&last_sync| now - last_sync < 60) {
+                                tracing::debug!("Sync trigger for {} rate limited, queuing", account_id);
+                                queued_syncs.insert(account_id);
+                                continue;
+                            }
+
+                            last_sync_time.insert(account_id, now);
 
                             // Load account from DB to sync
                             let db_account = match &state.db {
@@ -472,93 +493,70 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
                                     ).await
                                 }
                             };
-            // Process up to 10 accounts concurrently
-            let mut stream = futures::stream::iter(accounts)
-                .map(|mut account| {
-                    let state_clone = state.clone();
-                    let tx_clone = sync_tx.clone();
-                    let semaphore = limits.get(&account.provider).cloned();
 
-                    async move {
-                        let refresher = ReqwestTokenRefresher::new();
-                        let token = match ensure_valid_token(&state_clone, &mut account, &refresher)
-                            .await
-                        {
-                            Ok(t) => t,
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Sync daemon token refresh failed for {}: {}",
-                                    account.id.0,
-                                    e
-                                );
-                                return;
+                            if let Ok(Some(account)) = db_account {
+                                accounts_to_sync.push(account);
                             }
-                        };
-
-                        // Acquire per-provider concurrency permit if available
-                        let _permit = match semaphore {
-                            Some(sem) => Some(sem.acquire_owned().await.unwrap()),
-                            None => None,
-                        };
-
-                        // 60-second timeout to prevent hanging on one provider
-                        let msg_sync = tokio::time::timeout(
-                            Duration::from_secs(60),
-                            sync_account_messages(&state_clone, &account, &token),
-                        )
-                        .await;
-
-                        match msg_sync {
-                            Ok(Ok(count)) => {
-                                if count > 0 {
-                                    let event = SyncEvent {
-                                        event_type: "sync_complete".to_string(),
-                                        account_id: Some(account.id.0),
-                                        message: format!("Synced {} new messages", count),
-                                        timestamp: Utc::now().timestamp(),
-                                    };
-                                    let _ = tx_clone.send(event);
-                                }
-                            }
-                            Ok(Err(e)) => {
-                                tracing::warn!("Sync daemon failed for {}: {}", account.id.0, e)
-                            }
-                            Err(_) => tracing::warn!("Sync daemon timed out for {}", account.id.0),
                         }
+                        None => {
+                            // Channel closed, terminate daemon
+                            tracing::info!("Sync daemon: push channel closed, terminating");
+                            break;
+                        }
+                    }
+                }
+                _ = interval.tick() => {
+                    let now = Utc::now().timestamp();
+                    tracing::debug!("Sync daemon: interval tick");
 
-                        let cal_sync = tokio::time::timeout(
-                            Duration::from_secs(60),
-                            sync_account_calendars(&state_clone, &account, &token),
-                        )
-                        .await;
+                    if let Ok(accounts) = get_all_accounts_with_tokens(&state).await {
+                        for account in accounts {
+                            let account_id = account.id.0;
+                            let last_sync = last_sync_time.get(&account_id).copied().unwrap_or(0);
 
-                        match cal_sync {
-                            Ok(Ok(count)) => {
-                                if count > 0 {
-                                    tracing::info!(
-                                        "Synced {} new calendar events for account {}",
-                                        count,
-                                        account.id.0
-                                    );
+                            let mut should_sync = false;
+
+                            if queued_syncs.contains(&account_id) {
+                                // If it was queued and the 60s rate limit has passed
+                                if now - last_sync >= 60 {
+                                    should_sync = true;
+                                    queued_syncs.remove(&account_id);
                                 }
+                            } else if now - last_sync >= 300 {
+                                // Fallback polling: if it hasn't synced in 5 minutes (300s)
+                                should_sync = true;
                             }
-                            Ok(Err(e)) => {
-                                tracing::warn!("Calendar sync failed for {}: {}", account.id.0, e)
-                            }
-                            Err(_) => {
-                                tracing::warn!("Calendar sync timed out for {}", account.id.0)
+
+                            if should_sync {
+                                last_sync_time.insert(account_id, now);
+                                accounts_to_sync.push(account);
                             }
                         }
                     }
-                })
-                .buffer_unordered(10); // Run up to 10 concurrently
+                }
+            }
 
-            while stream.next().await.is_some() {}
+            if accounts_to_sync.is_empty() {
+                continue;
+            }
+
+            let accounts_len = accounts_to_sync.len();
 
             tracing::info!(
-                "Sync daemon: cycle complete, synced {} account(s)",
+                "Sync daemon: spawning background tasks for {} account(s)",
                 accounts_len
             );
+
+            // Spawn tasks in the background so the daemon loop doesn't block
+            for account in accounts_to_sync {
+                let state_clone = state.clone();
+                let tx_clone = sync_tx.clone();
+                let semaphore = limits.get(&account.provider).cloned();
+
+                tokio::spawn(async move {
+                    run_sync_for_account(state_clone, account, tx_clone, semaphore).await;
+                });
+            }
         }
     });
 }
@@ -571,11 +569,11 @@ pub async fn list_user_accounts(
 ) -> Result<Vec<crate::core::models::Account>, KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
-            let repo = SqliteAccountRepository::new(pool.clone());
+            let repo = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
         DbPool::Postgres(pool) => {
-            let repo = PostgresAccountRepository::new(pool.clone());
+            let repo = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
     }
@@ -953,11 +951,13 @@ mod tests {
         .unwrap();
 
         let (sync_tx, _) = tokio::sync::broadcast::channel(100);
+        let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
         AppState {
             db: DbPool::Sqlite(pool),
             jwt_secret: "test_secret".to_string(),
             plugin_manager: Arc::new(RwLock::new(crate::plugins::manager::PluginManager::new())),
             sync_tx,
+            sync_job_tx,
             auth_rate_limiter: crate::api::rate_limit::RateLimiter::new(
                 10,
                 std::time::Duration::from_secs(60),
@@ -966,10 +966,6 @@ mod tests {
                 10,
                 std::time::Duration::from_secs(60),
             ),
-            http_client: reqwest::Client::builder()
-                .dns_resolver(std::sync::Arc::new(crate::api::proxy::SafeDnsResolver))
-                .build()
-                .unwrap(),
         }
     }
 
@@ -1022,11 +1018,13 @@ mod tests {
         };
 
         // Insert account so DB update works and doesn't log error
-        let repo =
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
+        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+            match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            });
+            },
+            "test_secret".to_string(),
+        );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();
@@ -1062,11 +1060,13 @@ mod tests {
         };
 
         // Insert account
-        let repo =
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
+        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+            match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            });
+            },
+            "test_secret".to_string(),
+        );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();

@@ -19,45 +19,25 @@
     previousThreadId = thread.id;
   }
 
-  import { authState } from '@kestrel/shared';
+  $: processedHtmlBody = thread ? injectCSP(thread.htmlBody, allowImages) : '';
 
-  $: processedHtmlBody = thread ? processHtml(thread.htmlBody, allowImages) : '';
-
-  function processHtml(html: string, allow: boolean): string {
-    let processed = html;
-
-    // Aggressively replace src attribute on img tags, matching quoted and unquoted styles
-    // and protocol-relative URLs (e.g. //example.com).
-    processed = processed.replace(/(<img\b[^>]*\bsrc\s*=\s*)(['"]?)((?:https?:)?\/\/[^\s>'"]+)(\2)([^>]*>)/gi, (match, beforeSrc, quote, url, quoteMatch, afterSrc) => {
-      // Normalize protocol-relative URLs
-      let fullUrl = url;
-      if (fullUrl.startsWith('//')) {
-          fullUrl = 'https:' + fullUrl;
-      }
-      const encodedUrl = encodeURIComponent(fullUrl);
-      const proxyUrl = `/api/proxy/image?url=${encodedUrl}`;
-      // Always put quotes around our injected URL to ensure valid HTML
-      return `${beforeSrc}"${proxyUrl}"${afterSrc}`;
-    });
-
-    // If images are allowed, ONLY allow them from 'self' (the backend proxy), data:, blob:, and cid:.
-    // This strictly prevents the browser from ever leaking the user IP directly to an external server.
-    const imgSrc = allow ? "img-src 'self' data: blob: cid:;" : "img-src data: blob: cid:;";
+  function injectCSP(html: string, allow: boolean): string {
+    const imgSrc = allow ? "img-src * data: blob: cid:;" : "img-src data: blob: cid:;";
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' *; font-src * data:; ${imgSrc}">`;
 
     // Inject into head if it exists, otherwise prepend
-    const headMatch = processed.match(/<head\b[^>]*>/i);
+    const headMatch = html.match(/<head\b[^>]*>/i);
     if (headMatch) {
-      return processed.replace(headMatch[0], `${headMatch[0]}\n${csp}`);
+      return html.replace(headMatch[0], `${headMatch[0]}\n${csp}`);
     }
 
     // Check for html tag
-    const htmlMatch = processed.match(/<html\b[^>]*>/i);
+    const htmlMatch = html.match(/<html\b[^>]*>/i);
     if (htmlMatch) {
-      return processed.replace(htmlMatch[0], `${htmlMatch[0]}\n<head>${csp}</head>`);
+      return html.replace(htmlMatch[0], `${htmlMatch[0]}\n<head>${csp}</head>`);
     }
 
-    return `${csp}\n${processed}`;
+    return `${csp}\n${html}`;
   }
 </script>
 
