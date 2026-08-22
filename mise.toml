@@ -37,6 +37,7 @@ run = "pnpm tauri dev"
 [tasks."build:backend"]
 description = "Build release binary for the backend"
 dir = "backend"
+depends = ["build:plugins"]
 run = "cargo build --release"
 
 [tasks."build:plugins"]
