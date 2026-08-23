@@ -26,6 +26,7 @@ use crate::db::sqlite::account_repository::SqliteAccountRepository;
 pub struct SyncEvent {
     pub event_type: String,
     pub account_id: Option<Uuid>,
+    pub provider: Option<String>,
     pub message: String,
     pub timestamp: i64,
 }
@@ -139,29 +140,27 @@ pub async fn ensure_valid_token(
                 // Save back to database
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) =
-                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                                .update_tokens_and_error(
-                                    account.id.0,
-                                    Some(access_token),
-                                    account.token_expires_at,
-                                    None,
-                                )
-                                .await
+                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                Some(access_token),
+                                account.token_expires_at,
+                                None,
+                            )
+                            .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) =
-                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                                .update_tokens_and_error(
-                                    account.id.0,
-                                    Some(access_token),
-                                    account.token_expires_at,
-                                    None,
-                                )
-                                .await
+                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                Some(access_token),
+                                account.token_expires_at,
+                                None,
+                            )
+                            .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
@@ -173,64 +172,76 @@ pub async fn ensure_valid_token(
                 account.sync_error = Some(err_msg.clone());
                 match &state.db {
                     DbPool::Sqlite(pool) => {
-                        if let Err(e) =
-                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                                .update_tokens_and_error(
-                                    account.id.0,
-                                    account.access_token.as_deref(),
-                                    account.token_expires_at,
-                                    Some(&err_msg),
-                                )
-                                .await
+                        if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&err_msg),
+                            )
+                            .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
                     }
                     DbPool::Postgres(pool) => {
-                        if let Err(e) =
-                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                                .update_tokens_and_error(
-                                    account.id.0,
-                                    account.access_token.as_deref(),
-                                    account.token_expires_at,
-                                    Some(&err_msg),
-                                )
-                                .await
+                        if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            .update_tokens_and_error(
+                                account.id.0,
+                                account.access_token.as_deref(),
+                                account.token_expires_at,
+                                Some(&err_msg),
+                            )
+                            .await
                         {
                             tracing::error!("DB update failed: {}", e);
                         }
                     }
                 }
+                let event = SyncEvent {
+                    event_type: "auth_revocation".to_string(),
+                    account_id: Some(account.id.0),
+                    provider: Some(account.provider.clone()),
+                    message: "Token refresh permanently failed (e.g. revoked)".to_string(),
+                    timestamp: chrono::Utc::now().timestamp(),
+                };
+                let _ = state.sync_tx.send(event);
                 Err(err_msg)
             }
         }
         Err(e) => {
             account.sync_error = Some(e.clone());
+            let event = SyncEvent {
+                event_type: "auth_revocation".to_string(),
+                account_id: Some(account.id.0),
+                provider: Some(account.provider.clone()),
+                message: "Token refresh permanently failed (e.g. revoked)".to_string(),
+                timestamp: chrono::Utc::now().timestamp(),
+            };
+            let _ = state.sync_tx.send(event);
             match &state.db {
                 DbPool::Sqlite(pool) => {
-                    if let Err(e) =
-                        SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&e),
-                            )
-                            .await
+                    if let Err(e) = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                        .update_tokens_and_error(
+                            account.id.0,
+                            account.access_token.as_deref(),
+                            account.token_expires_at,
+                            Some(&e),
+                        )
+                        .await
                     {
                         tracing::error!("DB update failed: {}", e);
                     }
                 }
                 DbPool::Postgres(pool) => {
-                    if let Err(e) =
-                        PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
-                            .update_tokens_and_error(
-                                account.id.0,
-                                account.access_token.as_deref(),
-                                account.token_expires_at,
-                                Some(&e),
-                            )
-                            .await
+                    if let Err(e) = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                        .update_tokens_and_error(
+                            account.id.0,
+                            account.access_token.as_deref(),
+                            account.token_expires_at,
+                            Some(&e),
+                        )
+                        .await
                     {
                         tracing::error!("DB update failed: {}", e);
                     }
@@ -345,7 +356,85 @@ pub async fn sync_stream(
 // --- Background sync daemon (K-037) ---
 
 /// Start the background sync daemon that periodically syncs all linked accounts.
+<<<<<<< HEAD
+pub async fn run_sync_for_account(
+    state: AppState,
+    mut account: crate::core::models::Account,
+    sync_tx: broadcast::Sender<SyncEvent>,
+    semaphore: Option<Arc<Semaphore>>,
+) {
+    let refresher = ReqwestTokenRefresher::new();
+    let token = match ensure_valid_token(&state, &mut account, &refresher).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(
+                "Sync daemon token refresh failed for {}: {}",
+                account.id.0,
+                e
+            );
+            return;
+        }
+    };
+
+    // Acquire per-provider concurrency permit if available
+    let _permit = match semaphore {
+        Some(sem) => Some(sem.acquire_owned().await.unwrap()),
+        None => None,
+    };
+
+    // 60-second timeout to prevent hanging on one provider
+    let msg_sync = tokio::time::timeout(
+        Duration::from_secs(60),
+        sync_account_messages(&state, &account, &token),
+    )
+    .await;
+
+    match msg_sync {
+        Ok(Ok(count)) => {
+            if count > 0 {
+                let event = SyncEvent {
+                    event_type: "sync_complete".to_string(),
+                    account_id: Some(account.id.0),
+                    provider: Some(account.provider.clone()),
+                    message: format!("Synced {} new messages", count),
+                    timestamp: Utc::now().timestamp(),
+                };
+                let _ = sync_tx.send(event);
+            }
+        }
+        Ok(Err(e)) => tracing::warn!("Sync daemon failed for {}: {}", account.id.0, e),
+        Err(_) => tracing::warn!("Sync daemon timed out for {}", account.id.0),
+    }
+
+    let cal_sync = tokio::time::timeout(
+        Duration::from_secs(60),
+        sync_account_calendars(&state, &account, &token),
+    )
+    .await;
+
+    match cal_sync {
+        Ok(Ok(count)) => {
+            if count > 0 {
+                tracing::info!(
+                    "Synced {} new calendar events for account {}",
+                    count,
+                    account.id.0
+                );
+            }
+        }
+        Ok(Err(e)) => tracing::warn!("Calendar sync failed for {}: {}", account.id.0, e),
+        Err(_) => tracing::warn!("Calendar sync timed out for {}", account.id.0),
+    }
+}
+
+pub fn start_sync_daemon(
+    state: AppState,
+    sync_tx: broadcast::Sender<SyncEvent>,
+    mut push_rx: tokio::sync::mpsc::Receiver<uuid::Uuid>,
+) {
+=======
 pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>) {
+>>>>>>> fc65759 (feat(auth): cross-app shared keychain using Tauri secure storage)
     tokio::spawn(async move {
         tracing::info!("Background sync daemon started");
 
@@ -360,12 +449,57 @@ pub fn start_sync_daemon(state: AppState, sync_tx: broadcast::Sender<SyncEvent>)
 
             tracing::info!("Sync daemon: starting periodic sync cycle");
 
+<<<<<<< HEAD
+                            // Deduplication: if triggered within last 30s, ignore
+                            if last_trigger_time.get(&account_id).is_some_and(|&last| now - last < 30) {
+                                tracing::debug!("Sync trigger for {} deduplicated", account_id);
+                                continue;
+                            }
+                            last_trigger_time.insert(account_id, now);
+
+                            // Rate limiting: 1 sync per minute (60s)
+                            if last_sync_time.get(&account_id).is_some_and(|&last_sync| now - last_sync < 60) {
+                                tracing::debug!("Sync trigger for {} rate limited, queuing", account_id);
+                                queued_syncs.insert(account_id);
+                                continue;
+                            }
+
+                            last_sync_time.insert(account_id, now);
+
+                            // Load account from DB to sync
+                            let db_account = match &state.db {
+                                DbPool::Sqlite(pool) => {
+                                    crate::core::repository::AccountRepository::find_by_id(
+                                        &crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone()),
+                                        account_id
+                                    ).await
+                                }
+                                DbPool::Postgres(pool) => {
+                                    crate::core::repository::AccountRepository::find_by_id(
+                                        &crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone()),
+                                        account_id
+                                    ).await
+                                }
+                            };
+
+                            if let Ok(Some(account)) = db_account {
+                                accounts_to_sync.push(account);
+                            }
+                        }
+                        None => {
+                            // Channel closed, terminate daemon
+                            tracing::info!("Sync daemon: push channel closed, terminating");
+                            break;
+                        }
+                    }
+=======
             // Get all accounts that need syncing
             let accounts = match get_all_accounts_with_tokens(&state).await {
                 Ok(accounts) => accounts,
                 Err(e) => {
                     tracing::error!("Sync daemon: failed to list accounts: {}", e);
                     continue;
+>>>>>>> fc65759 (feat(auth): cross-app shared keychain using Tauri secure storage)
                 }
             };
 
@@ -919,13 +1053,11 @@ mod tests {
         };
 
         // Insert account so DB update works and doesn't log error
-        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
-            match &state.db {
+        let repo =
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            },
-            state.jwt_secret.clone(),
-        );
+            }, state.jwt_secret.clone());
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();
@@ -961,13 +1093,11 @@ mod tests {
         };
 
         // Insert account
-        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
-            match &state.db {
+        let repo =
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            },
-            state.jwt_secret.clone(),
-        );
+            }, state.jwt_secret.clone());
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();
@@ -987,4 +1117,70 @@ mod tests {
         // Ensure access token is left as is or updated (it doesn't clear access token, just sets sync_error)
         assert_eq!(account.access_token.unwrap(), "old_token");
     }
+<<<<<<< HEAD
+
+    #[tokio::test]
+    async fn test_daemon_deduplication_and_rate_limiting() {
+        let state = create_test_app_state().await;
+        let (sync_tx, mut sync_rx) = tokio::sync::broadcast::channel(100);
+        let (job_tx, job_rx) = tokio::sync::mpsc::channel(100);
+
+        let account = Account {
+            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            user_id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+            provider: "gmail".to_string(),
+            provider_account_id: "test@gmail.com".to_string(),
+            display_name: "Test Account".to_string(),
+            access_token: Some("old_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            token_expires_at: Some(chrono::Utc::now().timestamp() + 1000),
+            sync_error: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        // Insert into DB
+        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+            match &state.db {
+                DbPool::Sqlite(pool) => pool.clone(),
+                _ => unreachable!(),
+            },
+            "test_secret".to_string(),
+        );
+        crate::core::repository::AccountRepository::create(&repo, &account)
+            .await
+            .unwrap();
+
+        // Start daemon
+        crate::api::sync::start_sync_daemon(state.clone(), sync_tx, job_rx);
+
+        // Trigger syncs rapidly to trigger deduplication (within 30s)
+        job_tx.send(account.id.0).await.unwrap();
+        job_tx.send(account.id.0).await.unwrap();
+        job_tx.send(account.id.0).await.unwrap();
+
+        // Wait for the spawned tasks to have a chance to complete
+        // The token is invalid and refresher will log a warning and return.
+        // We assert that the database record is untouched as it should be rate-limited and deduplicated.
+        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+
+        let db_account =
+            crate::core::repository::AccountRepository::find_by_id(&repo, account.id.0)
+                .await
+                .unwrap()
+                .unwrap();
+
+        // The token hasn't changed.
+        assert_eq!(db_account.access_token.unwrap(), "old_token");
+
+        // The fact that the test finishes without locking up proves the tokio::select works properly.
+        // We ensure that the events processed are zero.
+        let mut msg_count = 0;
+        while let Ok(_) = sync_rx.try_recv() {
+            msg_count += 1;
+        }
+        assert_eq!(msg_count, 0);
+    }
+=======
+>>>>>>> fc65759 (feat(auth): cross-app shared keychain using Tauri secure storage)
 }

@@ -21,6 +21,8 @@ export const authState = $state<{
     }
 });
 
+import { initializeSettings } from "./settings.js";
+
 export async function initAuth() {
     try {
         if (window.__TAURI_INTERNALS__) {
@@ -35,10 +37,12 @@ export async function initAuth() {
         }
         const { user_id } = await getMe();
         authState.userId = user_id;
+        await initializeSettings();
     } catch {
         authState.userId = null;
     } finally {
         authState.isInitialized = true;
+        await initializeSettings();
     }
 }
 
@@ -71,6 +75,7 @@ export async function login(username: string, password: string) {
             }
         }
         authState.isInitialized = true;
+        await initializeSettings();
         
         return { success: true };
     } catch (e) {
@@ -87,5 +92,13 @@ export function logout() {
         invoke('delete_keychain_token').catch(e => {
             console.error("Failed to delete keychain token", e);
         });
+    }
+}
+
+export const revokedAccounts = $state<{accountId: string, provider: string}[]>([]);
+
+export function addRevokedAccount(accountId: string, provider: string) {
+    if (!revokedAccounts.find(a => a.accountId === accountId)) {
+        revokedAccounts.push({ accountId, provider });
     }
 }

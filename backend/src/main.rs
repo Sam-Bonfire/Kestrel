@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create broadcast channel for sync events
     let (sync_tx, _) = broadcast::channel::<SyncEvent>(256);
 
-    let (sync_job_tx, _sync_job_rx) = tokio::sync::mpsc::channel::<uuid::Uuid>(1024);
+    let (sync_job_tx, sync_job_rx) = tokio::sync::mpsc::channel::<uuid::Uuid>(1024);
 
     let state = AppState {
         db: db.clone(),

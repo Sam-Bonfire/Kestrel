@@ -70,6 +70,8 @@ export {
   authState,
   login,
   logout,
+  revokedAccounts,
+  addRevokedAccount,
   mailDenseMode,
   mailDefaultLandingView,
   mailSignature,
@@ -101,6 +103,7 @@ export {
   WindowControls,
   EmailPillInput,
   Dropdown,
+  ReauthBanner,
 } from './components/index.js';
 
 // ── Utils ───────────────────────────────────────────────────────
