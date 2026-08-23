@@ -32,6 +32,10 @@ impl LoadedPlugin {
     pub fn as_calendar_provider(&self) -> &dyn CalendarProvider {
         self.plugin.as_ref()
     }
+
+    pub fn as_webhook_handler(&self) -> &dyn super::traits::WebhookHandler {
+        self.plugin.as_ref()
+    }
 }
 
 /// Manages loading and querying of provider plugins.

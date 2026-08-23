@@ -184,7 +184,9 @@ pub trait ProviderBranding: Send + Sync {
 // ─────────────────────────────────────────────
 
 /// Combined trait that a full-featured provider plugin must implement.
-pub trait ProviderPlugin: ProviderBranding + MailProvider + CalendarProvider + Send + Sync {
+pub trait ProviderPlugin:
+    ProviderBranding + MailProvider + CalendarProvider + WebhookHandler + Send + Sync
+{
     /// Unique identifier for this plugin (e.g. "gmail", "outlook").
     fn id(&self) -> &str;
 }
@@ -215,4 +217,26 @@ impl From<&str> for PluginError {
     fn from(s: &str) -> Self {
         PluginError(s.to_string())
     }
+}
+
+// ─────────────────────────────────────────────
+// Webhook Handler Interface
+// ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WebhookResult {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+    pub account_identifier: Option<String>,
+}
+
+#[async_trait]
+pub trait WebhookHandler: Send + Sync {
+    async fn handle_webhook(
+        &self,
+        webhook_secret: &str,
+        query_params: Vec<(String, String)>,
+        body: Vec<u8>,
+    ) -> Result<WebhookResult, PluginError>;
 }

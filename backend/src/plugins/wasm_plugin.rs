@@ -331,3 +331,31 @@ impl ProviderPlugin for WasmPlugin {
         &self.id
     }
 }
+
+#[async_trait]
+impl super::traits::WebhookHandler for WasmPlugin {
+    async fn handle_webhook(
+        &self,
+        webhook_secret: &str,
+        query_params: Vec<(String, String)>,
+        body: Vec<u8>,
+    ) -> Result<super::traits::WebhookResult, super::traits::PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+
+        let result = instance
+            .kestrel_provider_webhook_handler()
+            .call_handle_webhook(&mut store, webhook_secret, &query_params, &body)
+            .await
+            .map_err(|e| super::traits::PluginError(e.to_string()))?;
+
+        match result {
+            Ok(r) => Ok(super::traits::WebhookResult {
+                status: r.status,
+                headers: r.headers,
+                body: r.body,
+                account_identifier: r.account_identifier,
+            }),
+            Err(e) => Err(super::traits::PluginError(e)),
+        }
+    }
+}

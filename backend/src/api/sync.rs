@@ -25,6 +25,7 @@ use crate::db::sqlite::account_repository::SqliteAccountRepository;
 pub struct SyncEvent {
     pub event_type: String,
     pub account_id: Option<Uuid>,
+    pub provider: Option<String>,
     pub message: String,
     pub timestamp: i64,
 }
@@ -200,11 +201,27 @@ pub async fn ensure_valid_token(
                         }
                     }
                 }
+                let event = SyncEvent {
+                    event_type: "auth_revocation".to_string(),
+                    account_id: Some(account.id.0),
+                    provider: Some(account.provider.clone()),
+                    message: "Token refresh permanently failed (e.g. revoked)".to_string(),
+                    timestamp: chrono::Utc::now().timestamp(),
+                };
+                let _ = state.sync_tx.send(event);
                 Err(err_msg)
             }
         }
         Err(e) => {
             account.sync_error = Some(e.clone());
+            let event = SyncEvent {
+                event_type: "auth_revocation".to_string(),
+                account_id: Some(account.id.0),
+                provider: Some(account.provider.clone()),
+                message: "Token refresh permanently failed (e.g. revoked)".to_string(),
+                timestamp: chrono::Utc::now().timestamp(),
+            };
+            let _ = state.sync_tx.send(event);
             match &state.db {
                 DbPool::Sqlite(pool) => {
                     if let Err(e) =
@@ -382,6 +399,7 @@ pub async fn run_sync_for_account(
                 let event = SyncEvent {
                     event_type: "sync_complete".to_string(),
                     account_id: Some(account.id.0),
+                    provider: Some(account.provider.clone()),
                     message: format!("Synced {} new messages", count),
                     timestamp: Utc::now().timestamp(),
                 };
@@ -445,23 +463,17 @@ pub fn start_sync_daemon(
                             let now = Utc::now().timestamp();
 
                             // Deduplication: if triggered within last 30s, ignore
-                            if let Some(&last) = last_trigger_time.get(&account_id) {
-                                #[allow(clippy::collapsible_if)]
-                                if now - last < 30 {
-                                    tracing::debug!("Sync trigger for {} deduplicated", account_id);
-                                    continue;
-                                }
+                            if last_trigger_time.get(&account_id).is_some_and(|&last| now - last < 30) {
+                                tracing::debug!("Sync trigger for {} deduplicated", account_id);
+                                continue;
                             }
                             last_trigger_time.insert(account_id, now);
 
                             // Rate limiting: 1 sync per minute (60s)
-                            if let Some(&last_sync) = last_sync_time.get(&account_id) {
-                                #[allow(clippy::collapsible_if)]
-                                if now - last_sync < 60 {
-                                    tracing::debug!("Sync trigger for {} rate limited, queuing", account_id);
-                                    queued_syncs.insert(account_id);
-                                    continue;
-                                }
+                            if last_sync_time.get(&account_id).is_some_and(|&last_sync| now - last_sync < 60) {
+                                tracing::debug!("Sync trigger for {} rate limited, queuing", account_id);
+                                queued_syncs.insert(account_id);
+                                continue;
                             }
 
                             last_sync_time.insert(account_id, now);
@@ -1096,11 +1108,13 @@ mod tests {
         };
 
         // Insert into DB
-        let repo =
-            crate::db::sqlite::account_repository::SqliteAccountRepository::new(match &state.db {
+        let repo = crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+            match &state.db {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
-            }, "test_secret".to_string());
+            },
+            "test_secret".to_string(),
+        );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
             .unwrap();

@@ -59,3 +59,11 @@ export function logout() {
     // but clearing state ensures the app drops them
     authState.userId = null;
 }
+
+export const revokedAccounts = $state<{accountId: string, provider: string}[]>([]);
+
+export function addRevokedAccount(accountId: string, provider: string) {
+    if (!revokedAccounts.find(a => a.accountId === accountId)) {
+        revokedAccounts.push({ accountId, provider });
+    }
+}
