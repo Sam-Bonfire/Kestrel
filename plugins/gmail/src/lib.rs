@@ -520,3 +520,64 @@ impl CalendarGuest for GmailPlugin {
 }
 
 export!(GmailPlugin);
+
+impl exports::kestrel::provider::webhook_handler::Guest for GmailPlugin {
+    fn handle_webhook(
+        webhook_secret: String,
+        query_params: Vec<(String, String)>,
+        body: Vec<u8>,
+    ) -> Result<exports::kestrel::provider::webhook_handler::WebhookResult, String> {
+        // Verify the authentication token
+        let token = query_params.iter().find(|(k, _)| k == "token").map(|(_, v)| v.as_str());
+        if token != Some(webhook_secret.as_str()) {
+            return Err("Unauthorized".to_string());
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GooglePubSubMessage { data: String }
+        #[derive(serde::Deserialize)]
+        struct GoogleWebhookPayload { message: GooglePubSubMessage }
+        #[derive(serde::Deserialize)]
+        struct GoogleWebhookData { #[serde(rename = "emailAddress")] email_address: String }
+
+        let payload: GoogleWebhookPayload = serde_json::from_slice(&body).map_err(|_| "Invalid JSON".to_string())?;
+        let decoded_data = b64.decode(payload.message.data).map_err(|_| "Invalid base64 payload".to_string())?;
+        let data: GoogleWebhookData = serde_json::from_slice(&decoded_data).map_err(|_| "Invalid JSON payload".to_string())?;
+
+        Ok(exports::kestrel::provider::webhook_handler::WebhookResult {
+            status: 200,
+            headers: vec![],
+            body: b"OK".to_vec(),
+            account_identifier: Some(data.email_address),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use exports::kestrel::provider::webhook_handler::Guest;
+
+    #[test]
+    fn test_gmail_webhook_handler_success() {
+        let secret = "my_secret".to_string();
+        let query = vec![("token".to_string(), "my_secret".to_string())];
+        let payload = r#"{
+            "message": {
+                "data": "ewogICJlbWFpbEFkZHJlc3MiOiAidGVzdEBnbWFpbC5jb20iLAogICJoaXN0b3J5SWQiOiAxMjM0NQp9"
+            }
+        }"#;
+
+        let result = GmailPlugin::handle_webhook(secret, query, payload.as_bytes().to_vec()).unwrap();
+        assert_eq!(result.status, 200);
+        assert_eq!(result.account_identifier.unwrap(), "test@gmail.com");
+    }
+
+    #[test]
+    fn test_gmail_webhook_handler_invalid_token() {
+        let secret = "my_secret".to_string();
+        let query = vec![("token".to_string(), "wrong".to_string())];
+        let result = GmailPlugin::handle_webhook(secret, query, vec![]);
+        assert!(result.is_err());
+    }
+}

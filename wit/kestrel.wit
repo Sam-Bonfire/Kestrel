@@ -139,6 +139,29 @@ interface provider-branding {
 }
 
 // ─────────────────────────────────────────────
+// Webhook Handler Interface
+// ─────────────────────────────────────────────
+
+interface webhook-handler {
+    record webhook-result {
+        /// HTTP status code to return to the webhook sender (e.g. 200 or 202)
+        status: u16,
+        /// Response headers (e.g. Content-Type)
+        headers: list<tuple<string, string>>,
+        /// Response body (e.g. validation token text)
+        body: list<u8>,
+        /// Optional provider-specific account ID extracted from the payload
+        account-identifier: option<string>,
+    }
+
+    handle-webhook: func(
+        webhook-secret: string,
+        query-params: list<tuple<string, string>>,
+        body: list<u8>
+    ) -> result<webhook-result, string>;
+}
+
+// ─────────────────────────────────────────────
 // Host-Provided HTTP Client
 // ─────────────────────────────────────────────
 
@@ -182,4 +205,5 @@ world kestrel-plugin {
     export mail-provider;
     export calendar-provider;
     export provider-branding;
+    export webhook-handler;
 }

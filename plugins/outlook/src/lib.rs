@@ -459,3 +459,118 @@ impl CalendarGuest for OutlookPlugin {
 }
 
 export!(OutlookPlugin);
+
+impl exports::kestrel::provider::webhook_handler::Guest for OutlookPlugin {
+    fn handle_webhook(
+        webhook_secret: String,
+        query_params: Vec<(String, String)>,
+        body: Vec<u8>,
+    ) -> Result<exports::kestrel::provider::webhook_handler::WebhookResult, String> {
+        // 1. Handle validation handshake
+        if let Some(token) = query_params.iter().find(|(k, _)| k == "validationToken").map(|(_, v)| v.clone()) {
+            return Ok(exports::kestrel::provider::webhook_handler::WebhookResult {
+                status: 200,
+                headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+                body: token.into_bytes(),
+                account_identifier: None,
+            });
+        }
+
+        if body.is_empty() {
+            return Ok(exports::kestrel::provider::webhook_handler::WebhookResult {
+                status: 202,
+                headers: vec![],
+                body: b"Accepted".to_vec(),
+                account_identifier: None,
+            });
+        }
+
+        #[derive(serde::Deserialize)]
+        struct MicrosoftNotification {
+            #[serde(rename = "clientState")]
+            client_state: Option<String>,
+            resource: Option<String>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct MicrosoftWebhookPayload {
+            value: Vec<MicrosoftNotification>,
+        }
+
+        let payload: MicrosoftWebhookPayload = serde_json::from_slice(&body).map_err(|_| "Invalid JSON".to_string())?;
+
+        let mut email = String::new();
+
+        for notification in payload.value {
+            if notification.client_state.as_deref() != Some(webhook_secret.as_str()) {
+                return Err("Unauthorized".to_string());
+            }
+
+            let r = notification.resource.unwrap_or_default();
+            if r.starts_with("Users/") || r.starts_with("users/") {
+                let parts: Vec<&str> = r.split('/').collect();
+                if parts.len() > 1 {
+                    let clean = parts[1].trim_matches(|c| c == '\'' || c == '"' || c == '(' || c == ')');
+                    if clean.contains('@') {
+                        email = clean.to_string();
+                    }
+                }
+            } else if let Some(start) = r.find("('") {
+                let slice = &r[start + 2..];
+                if let Some(end) = slice.find("')") {
+                    let possible_email = &slice[..end];
+                    if possible_email.contains('@') {
+                        email = possible_email.to_string();
+                    }
+                }
+            } else if r.contains('@') && !r.contains('/') {
+                email = r.to_string();
+            }
+        }
+
+        let account_id = if email.is_empty() { None } else { Some(email) };
+
+        Ok(exports::kestrel::provider::webhook_handler::WebhookResult {
+            status: 202,
+            headers: vec![],
+            body: b"Accepted".to_vec(),
+            account_identifier: account_id,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use exports::kestrel::provider::webhook_handler::Guest;
+
+    #[test]
+    fn test_outlook_webhook_handler_handshake() {
+        let secret = "my_secret".to_string();
+        let query = vec![("validationToken".to_string(), "test_token_123".to_string())];
+
+        let result = OutlookPlugin::handle_webhook(secret, query, vec![]).unwrap();
+        assert_eq!(result.status, 200);
+        assert_eq!(result.body, b"test_token_123".to_vec());
+    }
+
+    #[test]
+    fn test_outlook_webhook_handler_payload() {
+        let secret = "my_secret".to_string();
+        let query = vec![];
+        let payload = r#"
+        {
+            "value": [
+                {
+                    "clientState": "my_secret",
+                    "resource": "Users/test@outlook.com/Messages"
+                }
+            ]
+        }
+        "#;
+
+        let result = OutlookPlugin::handle_webhook(secret, query, payload.as_bytes().to_vec()).unwrap();
+        assert_eq!(result.status, 202);
+        assert_eq!(result.account_identifier.unwrap(), "test@outlook.com");
+    }
+}
