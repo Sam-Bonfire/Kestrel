@@ -77,6 +77,8 @@ export async function login(username: string, password: string) {
         authState.isInitialized = true;
         await initializeSettings();
         
+        await initializeSettings();
+
         return { success: true };
     } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
@@ -92,6 +94,14 @@ export function logout() {
         invoke('delete_keychain_token').catch(e => {
             console.error("Failed to delete keychain token", e);
         });
+    }
+}
+
+export const revokedAccounts = $state<{accountId: string, provider: string}[]>([]);
+
+export function addRevokedAccount(accountId: string, provider: string) {
+    if (!revokedAccounts.find(a => a.accountId === accountId)) {
+        revokedAccounts.push({ accountId, provider });
     }
 }
 
