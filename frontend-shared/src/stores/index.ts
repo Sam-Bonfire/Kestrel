@@ -2,7 +2,9 @@ export {
   authState,
   login,
   logout,
-  initAuth
+  initAuth,
+  revokedAccounts,
+  addRevokedAccount
 } from './auth.svelte.js';
 
 export {
@@ -10,4 +12,6 @@ export {
   mailDefaultLandingView,
   mailSignature,
   labelCustomizations,
+  initializeSettings,
+  syncInterval,
 } from './settings.js';

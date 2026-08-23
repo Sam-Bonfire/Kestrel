@@ -8,6 +8,7 @@ rust = "stable"
 node = "22"
 pnpm = "latest"
 jujutsu = "latest"
+"cargo:cargo-component" = "latest"
 
 [tasks.init]
 description = "First-time project setup (installs tools + all dependencies)"
@@ -36,7 +37,22 @@ run = "pnpm tauri dev"
 [tasks."build:backend"]
 description = "Build release binary for the backend"
 dir = "backend"
+depends = ["build:plugins"]
 run = "cargo build --release"
+
+[tasks."build:plugins"]
+description = "Build all WASM plugins and copy them to the backend plugins directory"
+run = [
+    "rustup target add wasm32-wasip1",
+    "echo \"==> Building gmail plugin...\"",
+    "cargo component build --release --manifest-path plugins/gmail/Cargo.toml",
+    "echo \"==> Building outlook plugin...\"",
+    "cargo component build --release --manifest-path plugins/outlook/Cargo.toml",
+    "echo \"==> Copying compiled WASM components to backend...\"",
+    "node -e \"require('fs').mkdirSync('backend/plugins', { recursive: true })\"",
+    "node -e \"require('fs').copyFileSync('target/wasm32-wasip1/release/gmail.wasm', 'backend/plugins/gmail.wasm')\"",
+    "node -e \"require('fs').copyFileSync('target/wasm32-wasip1/release/outlook.wasm', 'backend/plugins/outlook.wasm')\"",
+]
 
 [tasks."build:frontend-mail"]
 description = "Build Kestrel Mail native packages using Tauri"
@@ -91,6 +107,8 @@ run = [
     "cargo fetch --manifest-path backend/Cargo.toml",
     "cargo fetch --manifest-path frontend-mail/src-tauri/Cargo.toml",
     "cargo fetch --manifest-path frontend-calendar/src-tauri/Cargo.toml",
+    "echo \"==> Building WASM plugins...\"",
+    "mise run build:plugins",
     "echo \"==> Setup complete!\""
 ]
 

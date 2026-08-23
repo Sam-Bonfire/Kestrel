@@ -12,10 +12,13 @@ export const authState = $state<{
     }
 });
 
+import { initializeSettings } from './settings.js';
+
 export async function initAuth() {
     try {
         const { user_id } = await getMe();
         authState.userId = user_id;
+        await initializeSettings();
     } catch {
         authState.userId = null;
     } finally {
@@ -43,6 +46,8 @@ export async function login(username: string, password: string) {
         authState.userId = data.user_id;
         authState.isInitialized = true;
         
+        await initializeSettings();
+
         return { success: true };
     } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
@@ -53,4 +58,12 @@ export function logout() {
     // For cookies, we might need a /auth/logout endpoint to clear it, 
     // but clearing state ensures the app drops them
     authState.userId = null;
+}
+
+export const revokedAccounts = $state<{accountId: string, provider: string}[]>([]);
+
+export function addRevokedAccount(accountId: string, provider: string) {
+    if (!revokedAccounts.find(a => a.accountId === accountId)) {
+        revokedAccounts.push({ accountId, provider });
+    }
 }

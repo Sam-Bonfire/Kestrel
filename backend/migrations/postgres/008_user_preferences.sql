@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id UUID PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    preferences_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()))
+);

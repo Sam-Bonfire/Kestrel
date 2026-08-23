@@ -11,9 +11,9 @@ use super::calendars;
 use super::health::health_check;
 use super::messages;
 use super::providers;
-use super::proxy;
 use super::rate_limit::RateLimiter;
 use super::search;
+use super::settings;
 use super::sync;
 use crate::api::sync::SyncEvent;
 use crate::plugins::manager::PluginManager;
@@ -24,9 +24,10 @@ pub struct AppState {
     pub jwt_secret: String,
     pub plugin_manager: std::sync::Arc<tokio::sync::RwLock<PluginManager>>,
     pub sync_tx: broadcast::Sender<SyncEvent>,
+    #[allow(dead_code)]
+    pub sync_job_tx: tokio::sync::mpsc::Sender<uuid::Uuid>,
     pub auth_rate_limiter: RateLimiter,
     pub general_rate_limiter: RateLimiter,
-    pub http_client: reqwest::Client,
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -36,6 +37,8 @@ pub fn create_router(state: AppState) -> Router {
         .allow_origin(vec![
             "http://localhost:1420".parse::<HeaderValue>().unwrap(),
             "http://127.0.0.1:1420".parse::<HeaderValue>().unwrap(),
+            "http://localhost:1421".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:1421".parse::<HeaderValue>().unwrap(),
             "http://localhost:5173".parse::<HeaderValue>().unwrap(),
             "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
             "tauri://localhost".parse::<HeaderValue>().unwrap(),
@@ -148,9 +151,12 @@ pub fn create_router(state: AppState) -> Router {
                 .patch(calendars::update_event)
                 .delete(calendars::delete_event),
         )
+        .route(
+            "/api/settings",
+            get(settings::get_settings).put(settings::update_settings),
+        )
         .route("/api/v1/sync/stream", get(sync::sync_stream))
         .route("/api/v1/sync/trigger", post(sync::trigger_sync))
-        .route("/api/proxy/image", get(proxy::proxy_image))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

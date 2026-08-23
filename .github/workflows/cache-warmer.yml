@@ -35,6 +35,12 @@ jobs:
           install: true
           cache: true
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "kestrel-rust-shared-cache"
+          save-if: true
+
       - name: Setup Build
         run: mise run setup
 
@@ -68,23 +74,17 @@ jobs:
           install: true
           cache: true
           
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "kestrel-rust-shared-cache"
-          save-if: true
-      - name: Setup Rust Android targets
-        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-
-      - name: Setup Build
-        run: mise run setup
-
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "kestrel-rust-android-cache"
           save-if: true
+
+      - name: Setup Rust Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Setup Build
+        run: mise run setup
           
       - name: Build Android Dependencies
         run: |

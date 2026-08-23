@@ -70,10 +70,14 @@ export {
   authState,
   login,
   logout,
+  revokedAccounts,
+  addRevokedAccount,
   mailDenseMode,
   mailDefaultLandingView,
   mailSignature,
   labelCustomizations,
+  initializeSettings,
+  syncInterval,
 } from './stores/index.js';
 
 // ── Offline queue ───────────────────────────────────────────────
@@ -99,6 +103,7 @@ export {
   WindowControls,
   EmailPillInput,
   Dropdown,
+  ReauthBanner,
 } from './components/index.js';
 
 // ── Utils ───────────────────────────────────────────────────────
