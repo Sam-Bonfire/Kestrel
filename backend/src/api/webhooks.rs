@@ -17,8 +17,12 @@ pub async fn handle_generic_webhook(
     let expected_secret = match std::env::var("WEBHOOK_SECRET") {
         Ok(secret) => secret,
         Err(_) => {
-            tracing::error!("WEBHOOK_SECRET environment variable is not set. Webhooks are disabled.");
-            return Err(KestrelError::Internal(Box::new(std::io::Error::other("Webhook ingestion not configured"))));
+            tracing::error!(
+                "WEBHOOK_SECRET environment variable is not set. Webhooks are disabled."
+            );
+            return Err(KestrelError::Internal(Box::new(std::io::Error::other(
+                "Webhook ingestion not configured",
+            ))));
         }
     };
 
