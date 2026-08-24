@@ -20,6 +20,9 @@
     calendars: Calendar[];
   }
 
+  import { calendarSetsStore } from '$lib/stores/calendars.svelte';
+  import { Edit2, Trash2 } from 'lucide-svelte';
+
   let {
     selectedDate = new Date(),
     onDateSelect = (d: Date) => {},
@@ -29,7 +32,8 @@
     events = [] as any[],
     isMobileOrTablet = false,
     viewMode = 'month',
-    onViewModeChange = (mode: string) => {}
+    onViewModeChange = (mode: string) => {},
+    onApplySet = (calendarIds: string[]) => {}
   } = $props<{
     selectedDate?: Date;
     onDateSelect?: (d: Date) => void;
@@ -40,9 +44,36 @@
     isMobileOrTablet?: boolean;
     viewMode?: string;
     onViewModeChange?: (mode: string) => void;
+    onApplySet?: (calendarIds: string[]) => void;
   }>();
 
   let currentMonth = $state(new Date());
+
+  let isCreatingSet = $state(false);
+  let newSetName = $state('');
+  let editingSetId = $state<string | null>(null);
+  let editSetName = $state('');
+
+  function handleCreateSet() {
+    if (newSetName.trim()) {
+      const activeIds = accounts.flatMap((acc: Account) => acc.calendars.filter((cal: Calendar) => cal.isActive).map((cal: Calendar) => cal.id));
+      calendarSetsStore.addSet(newSetName.trim(), activeIds);
+      newSetName = '';
+      isCreatingSet = false;
+    }
+  }
+
+  function handleRenameSet(id: string) {
+    if (editSetName.trim()) {
+      calendarSetsStore.renameSet(id, editSetName.trim());
+      editingSetId = null;
+    }
+  }
+
+  function handleUpdateSet(id: string) {
+    const activeIds = accounts.flatMap((acc: Account) => acc.calendars.filter((cal: Calendar) => cal.isActive).map((cal: Calendar) => cal.id));
+    calendarSetsStore.updateSetCalendars(id, activeIds);
+  }
 
   // Helper to build recursive days in the mini-month grid
   let daysInMonth = $derived(() => {
@@ -204,6 +235,84 @@
         </div>
       </div>
     {/if}
+
+    <div class="space-y-3 pt-1">
+      <div class="flex items-center justify-between px-1">
+        <div class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]/60 font-semibold">
+          Calendar Sets
+        </div>
+        <button
+          onclick={() => isCreatingSet = !isCreatingSet}
+          class="text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer"
+        >
+          <Plus class="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {#if isCreatingSet}
+        <div class="flex items-center gap-1 px-1">
+          <input
+            type="text"
+            bind:value={newSetName}
+            placeholder="New set name..."
+            class="w-full bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded px-1.5 py-1 text-xs text-white outline-none"
+            onkeydown={(e) => e.key === 'Enter' && handleCreateSet()}
+          />
+          <button onclick={handleCreateSet} class="p-1 text-green-400 hover:text-green-300">
+            <Check class="w-3.5 h-3.5" />
+          </button>
+        </div>
+      {/if}
+
+      <div class="space-y-0.5">
+        {#each calendarSetsStore.sets as set}
+          <div class="flex items-center justify-between px-1 py-1 rounded hover:bg-[var(--color-canvas-hover)]/30 group">
+            {#if editingSetId === set.id}
+              <div class="flex items-center gap-1 w-full">
+                <input
+                  type="text"
+                  bind:value={editSetName}
+                  class="w-full bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded px-1 py-0.5 text-xs text-white outline-none"
+                  onkeydown={(e) => e.key === 'Enter' && handleRenameSet(set.id)}
+                  autoFocus
+                />
+                <button onclick={() => handleRenameSet(set.id)} class="p-0.5 text-green-400">
+                  <Check class="w-3 h-3" />
+                </button>
+              </div>
+            {:else}
+              <button
+                onclick={() => onApplySet(set.calendarIds)}
+                class="flex-1 text-left text-xs text-[var(--color-text-primary)] hover:text-white truncate cursor-pointer"
+              >
+                {set.name}
+              </button>
+              <div class="hidden group-hover:flex items-center gap-1 opacity-60 hover:opacity-100">
+                <button
+                  title="Update with current visible calendars"
+                  onclick={() => handleUpdateSet(set.id)}
+                  class="p-0.5 text-[var(--color-text-secondary)] hover:text-white cursor-pointer"
+                >
+                  <CalendarDays class="w-3 h-3" />
+                </button>
+                <button
+                  onclick={() => { editingSetId = set.id; editSetName = set.name; }}
+                  class="p-0.5 text-[var(--color-text-secondary)] hover:text-white cursor-pointer"
+                >
+                  <Edit2 class="w-3 h-3" />
+                </button>
+                <button
+                  onclick={() => calendarSetsStore.removeSet(set.id)}
+                  class="p-0.5 text-red-400 hover:text-red-300 cursor-pointer"
+                >
+                  <Trash2 class="w-3 h-3" />
+                </button>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
 
     <div class="space-y-3 pt-1">
       <div class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]/60 font-semibold px-1">

@@ -2,7 +2,7 @@
   import CalendarSidebar, { type Account, type Calendar } from '$lib/components/CalendarSidebar.svelte';
   import WeekGrid, { type CalendarEvent } from '$lib/components/WeekGrid.svelte';
   import EventPeekPanel from '$lib/components/EventPeekPanel.svelte';
-  import { 
+  import {
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
     Search, Settings, Menu, ChevronDown, X, CalendarDays
   } from 'lucide-svelte';
@@ -26,7 +26,7 @@
   let touchStartY = $state(0);
   let touchEndX = $state(0);
   let touchEndY = $state(0);
-  
+
   // Toolbar state
   let searchQuery = $state('');
   let isMobileSearchOpen = $state(false);
@@ -39,6 +39,7 @@
   let isHeaderMonthDropdownOpen = $state(false);
   let miniMonth = $state(new Date());
   let isDetailsDocked = $state(false);
+  let secondaryTimezones = $state<string[]>([]);
 
   // LocalStorage state persistence
   $effect(() => {
@@ -49,6 +50,7 @@
       localStorage.setItem('kestrel_showWeekends', JSON.stringify(showWeekends));
       localStorage.setItem('kestrel_isDocked', JSON.stringify(isDetailsDocked));
       localStorage.setItem('kestrel_startHour', startHour.toString());
+      localStorage.setItem('kestrel_secondaryTimezones', JSON.stringify(secondaryTimezones));
     }
   });
 
@@ -71,12 +73,12 @@
     } else {
       clickPosition = null;
     }
-    
+
     // Calculate end time (1 hour later by default)
     let [hours, minutes] = timeStr.split(':').map(Number);
     hours = (hours + 1) % 24;
     const endStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    
+
     selectedEvent = {
       title: '',
       date: dateStr,
@@ -96,7 +98,7 @@
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) return;
 
     const key = e.key.toLowerCase();
-    
+
     // View switching
     if (key === 'd') viewMode = 'day';
     else if (key === 'w') viewMode = 'week';
@@ -115,7 +117,7 @@
   // Mobile responsive state
   let isMobileOrTablet = $state(false);
   let isSidebarOpenMobile = $state(false);
-  
+
   import { onMount } from 'svelte';
   import { initAuth } from '@kestrel/shared/stores';
 
@@ -164,18 +166,20 @@
       if (savedDocked) isDetailsDocked = JSON.parse(savedDocked);
       const savedStartHour = localStorage.getItem('kestrel_startHour');
       if (savedStartHour) startHour = parseInt(savedStartHour, 10);
+      const savedSecondaryTimezones = localStorage.getItem('kestrel_secondaryTimezones');
+      if (savedSecondaryTimezones) secondaryTimezones = JSON.parse(savedSecondaryTimezones);
     } catch(e) {}
 
     const checkMobile = () => isMobileOrTablet = window.innerWidth <= 1024;
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     const handleEmptySlot = (e: any) => {
       openNewEventPanel(e.detail.date, e.detail.startTime, undefined);
       if (selectedEvent && e.detail.endTime) { selectedEvent.endTime = e.detail.endTime; }
     };
     window.addEventListener('emptySlotClickWithEndTime', handleEmptySlot);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile);
       window.removeEventListener('emptySlotClickWithEndTime', handleEmptySlot);
@@ -258,7 +262,7 @@
   $effect(() => {
     if (authState.isAuthenticated) {
       import('@tauri-apps/plugin-notification').then(({ sendNotification, onAction }) => {
-        
+
         onAction((event: any) => {
           if (event.actionId === 'snooze' && event.notification?.id) {
             // Snooze for 10 minutes
@@ -274,11 +278,11 @@
           events.forEach(ev => {
             const eventTime = new Date(`${ev.date}T${ev.startTime}:00`).getTime();
             const timeUntil = eventTime - now.getTime();
-            
+
             // Notify if event is exactly 10 minutes away, or if it was snoozed and the snooze time is up
             const is10MinWarning = timeUntil > 9 * 60 * 1000 && timeUntil <= 10 * 60 * 1000;
             const isSnoozeUp = snoozedEvents[ev.id] && now.getTime() > snoozedEvents[ev.id] && snoozedEvents[ev.id] !== Number.MAX_SAFE_INTEGER;
-            
+
             if (is10MinWarning || isSnoozeUp) {
               sendNotification({
                 id: parseInt(ev.id.replace(/[^0-9]/g, ''), 10) || Date.now(),
@@ -305,17 +309,17 @@
     touchStartX = e.changedTouches[0].clientX;
     touchStartY = e.changedTouches[0].clientY;
   }
-  
+
   function handleTouchEnd(e: TouchEvent) {
     touchEndX = e.changedTouches[0].clientX;
     touchEndY = e.changedTouches[0].clientY;
     handleSwipe();
   }
-  
+
   function handleSwipe() {
     const deltaX = touchEndX - touchStartX;
     const deltaY = touchEndY - touchStartY;
-    
+
     // Swipe Navigation Vector Math (Task 27)
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
       if (deltaX < 0) handleNavigateDate('next');
@@ -414,7 +418,7 @@
   let headerLabel = $derived.by(() => {
     if (viewMode === 'day') return selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
     if (viewMode === 'month') return selectedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    
+
     // For week/multi-day views, we show a range
     let daysToAdd = 6;
     if (viewMode === 'weekdays') daysToAdd = 4;
@@ -427,7 +431,7 @@
       const diff = start.getDate() - day + (viewMode === 'weekdays' ? 1 : 0);
       start.setDate(diff);
     }
-    
+
     const end = new Date(start);
     end.setDate(end.getDate() + daysToAdd);
 
@@ -467,7 +471,7 @@
     const month = miniMonth.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const daysCount = new Date(year, month + 1, 0).getDate();
-    
+
     const days: (Date | null)[] = [];
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let d = 1; d <= daysCount; d++) days.push(new Date(year, month, d));
@@ -479,7 +483,7 @@
       // Map form data to backend payload
       const startDateTime = new Date(`${data.date}T${data.startTime}:00`);
       const endDateTime = new Date(`${data.date}T${data.endTime}:00`);
-      
+
       const payload = {
         title: data.title || 'Untitled Event',
         description: data.description,
@@ -554,16 +558,25 @@
         viewMode = mode;
         if (isMobileOrTablet) isSidebarOpenMobile = false;
       }}
+      onApplySet={(calendarIds) => {
+        accounts = accounts.map(acc => ({
+          ...acc,
+          calendars: acc.calendars.map(cal => ({
+            ...cal,
+            isActive: calendarIds.includes(cal.id)
+          }))
+        }));
+      }}
     />
   {/snippet}
 
   {#snippet children()}
   <!-- Main View Canvas area -->
-  <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}" 
-       ontouchstart={handleTouchStart} 
+  <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}"
+       ontouchstart={handleTouchStart}
        ontouchend={handleTouchEnd}
        role="region" aria-label="Calendar Canvas">
-    
+
     {#if isMobileOrTablet}
       <!-- Mobile & Tablet Header -->
       <header class="pl-4 pr-36 py-3 border-b border-[var(--color-border-hairline)] flex items-center justify-between gap-2 bg-[#0a0a0a] relative select-none animate-fadeIn shrink-0">
@@ -587,7 +600,7 @@
             <span>{selectedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
             <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)] transition-transform duration-200 {isHeaderMonthDropdownOpen ? 'rotate-180' : ''}" />
           </button>
-          
+
           {#if isHeaderMonthDropdownOpen}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -611,15 +624,15 @@
                     {@const isSelected = day.toDateString() === selectedDate.toDateString()}
                     {@const isToday = day.toDateString() === new Date().toDateString()}
                     <button
-                      onclick={() => { 
-                        selectedDate = day!; 
-                        isHeaderMonthDropdownOpen = false; 
+                      onclick={() => {
+                        selectedDate = day!;
+                        isHeaderMonthDropdownOpen = false;
                       }}
                       class="h-6 w-full rounded flex items-center justify-center transition-all cursor-pointer relative text-[11px]
-                        {isToday 
-                          ? 'bg-[var(--color-today-red)] text-white font-semibold shadow-sm hover:bg-[var(--color-today-red)]/90' 
-                          : isSelected 
-                          ? 'border border-white/20 bg-[var(--color-canvas-hover)] text-white font-semibold' 
+                        {isToday
+                          ? 'bg-[var(--color-today-red)] text-white font-semibold shadow-sm hover:bg-[var(--color-today-red)]/90'
+                          : isSelected
+                          ? 'border border-white/20 bg-[var(--color-canvas-hover)] text-white font-semibold'
                           : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]'}"
                     >
                       <span class={isToday || isSelected ? 'font-semibold' : ''}>{day.getDate()}</span>
@@ -635,7 +648,7 @@
             </div>
           {/if}
         </div>
-        
+
         <!-- Right side: Search toggle and Today button -->
         <div class="flex items-center gap-2 relative z-10">
           {#if isMobileSearchOpen}
@@ -681,7 +694,7 @@
 
         <!-- Left Controls (Dropdown, Today, Arrows, Title) -->
         <div class="flex items-center gap-3 relative z-10">
-          
+
           <!-- View Mode Dropdown Select -->
           <div class="relative z-50">
             <button
@@ -694,7 +707,7 @@
               <span class="capitalize">{viewModeLabel}</span>
               <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
             </button>
-            
+
             {#if isViewDropdownOpen}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -720,7 +733,7 @@
                     {/each}
 
                     <div class="my-1 border-t border-[var(--color-border-hairline)]"></div>
-                    
+
                     <button
                       onclick={() => dropdownSubmenu = 'number_of_days'}
                       class="w-full text-left px-3.5 py-2.5 text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)] transition-colors flex items-center justify-between cursor-pointer"
@@ -728,9 +741,9 @@
                       <span>Number of days</span>
                       <ChevronRight class="w-3.5 h-3.5 text-neutral-500" />
                     </button>
-                    
+
                     <hr class="border-neutral-800/60 my-1" />
-                    
+
                     <button
                       onclick={() => dropdownSubmenu = 'settings'}
                       class="w-full text-left px-3.5 py-2.5 text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)] transition-colors flex items-center justify-between cursor-pointer"
@@ -748,9 +761,9 @@
                       <ChevronLeft class="w-3.5 h-3.5" />
                       <span>Back</span>
                     </button>
-                    
+
                     <div class="my-1 border-t border-[var(--color-border-hairline)]"></div>
-                    
+
                     {#each [
                       { label: '2 days', mode: '2-day', shortcut: '2' },
                       { label: '3 days', mode: '3-day', shortcut: '3' },
@@ -782,29 +795,29 @@
                       <ChevronLeft class="w-3.5 h-3.5" />
                       <span>Back</span>
                     </button>
-                    
+
                     <div class="my-1 border-t border-[var(--color-border-hairline)]"></div>
-                    
+
                     <button type="button" class="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-[var(--color-canvas-hover)] cursor-pointer text-left" onclick={() => showWeekends = !showWeekends}>
                       <span class="text-white">Show weekends</span>
-                      <div 
+                      <div
                         class="w-7 h-4 rounded-full transition-colors relative cursor-pointer {showWeekends ? 'bg-[#d15b47]' : 'bg-neutral-700'}"
                         aria-hidden="true"
                       >
                         <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all {showWeekends ? 'right-0.5' : 'left-0.5'}"></div>
                       </div>
                     </button>
-                    
+
                     <button type="button" class="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-[var(--color-canvas-hover)] cursor-pointer text-left" onclick={() => isDetailsDocked = !isDetailsDocked}>
                       <span class="text-white">Dock Details panel</span>
-                      <div 
+                      <div
                         class="w-7 h-4 rounded-full transition-colors relative cursor-pointer {isDetailsDocked ? 'bg-[#d15b47]' : 'bg-neutral-700'}"
                         aria-hidden="true"
                       >
                         <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all {isDetailsDocked ? 'right-0.5' : 'left-0.5'}"></div>
                       </div>
                     </button>
-                    
+
                     <div class="px-3.5 py-2 space-y-2">
                       <span class="text-white block">Start hour</span>
                       <select
@@ -824,19 +837,19 @@
 
           <!-- Today Navigation Group -->
           <div class="flex items-center bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg overflow-hidden relative z-10">
-            <button 
+            <button
               onclick={() => handleNavigateDate('prev')}
               class="px-2 py-1 hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer border-r border-[var(--color-border-hairline)]"
             >
               <ChevronLeft class="w-3.5 h-3.5" />
             </button>
-            <button 
+            <button
               onclick={handleJumpToToday}
               class="px-3 py-1 hover:bg-[var(--color-canvas-hover)] transition-colors cursor-pointer text-xs font-mono font-medium text-white"
             >
               Today
             </button>
-            <button 
+            <button
               onclick={() => handleNavigateDate('next')}
               class="px-2 py-1 hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer border-l border-[var(--color-border-hairline)]"
             >
@@ -917,6 +930,7 @@
       bind:viewMode
       {showWeekends}
       {startHour}
+      {secondaryTimezones}
       selectedEventId={selectedEvent?.id}
       onEventClick={(ev, e) => {
         selectedEvent = ev;
@@ -971,15 +985,15 @@
   {/if}
 
   <!-- Creation & Editing Dialog Form Modal Removed in favor of unified EventPeekPanel -->
-  
-  
+
+
   <!-- Settings Modal -->
   {#if isSettingsOpen}
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="fixed inset-0 cursor-pointer" onclick={() => isSettingsOpen = false} role="presentation"></div>
-      
+
       <div class="relative w-full max-w-md bg-[#131313] border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10">
         <div class="px-5 py-4 border-b border-neutral-800/60 flex items-center justify-between bg-[#181818]">
           <div class="flex items-center gap-2">
@@ -988,7 +1002,7 @@
               Calendar Settings
             </span>
           </div>
-          <button 
+          <button
             onclick={() => isSettingsOpen = false}
             class="p-1 rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-white transition-all cursor-pointer"
           >
@@ -1024,9 +1038,9 @@
             <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
               Start Hour (Day/Week View)
             </label>
-            <input 
-              type="range" 
-              min="0" max="23" 
+            <input
+              type="range"
+              min="0" max="23"
               bind:value={startHour}
               class="w-full accent-rose-500 cursor-pointer"
             />
@@ -1040,6 +1054,38 @@
               <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
             </div>
+          </div>
+
+          <div class="space-y-2.5">
+            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+              Secondary Timezones (Max 2)
+            </label>
+            {#each secondaryTimezones as tz, index}
+              <div class="flex items-center gap-2">
+                <select
+                  bind:value={secondaryTimezones[index]}
+                  class="flex-1 bg-[#1a1a1a] border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                >
+                  {#each Intl.supportedValuesOf('timeZone') as tzOption}
+                    <option value={tzOption}>{tzOption}</option>
+                  {/each}
+                </select>
+                <button
+                  onclick={() => secondaryTimezones = secondaryTimezones.filter((_, i) => i !== index)}
+                  class="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            {/each}
+            {#if secondaryTimezones.length < 2}
+              <button
+                onclick={() => secondaryTimezones = [...secondaryTimezones, 'UTC']}
+                class="w-full py-1.5 rounded-lg border border-dashed border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500 text-xs transition-colors cursor-pointer font-semibold"
+              >
+                + Add Timezone
+              </button>
+            {/if}
           </div>
         </div>
       </div>
