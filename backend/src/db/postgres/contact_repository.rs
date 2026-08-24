@@ -26,8 +26,8 @@ impl ContactRepository for PostgresContactRepository {
              avatar_url = COALESCE(EXCLUDED.avatar_url, contacts.avatar_url),
              last_contacted_at = GREATEST(contacts.last_contacted_at, EXCLUDED.last_contacted_at)",
         )
-        .bind(&contact.id.0)
-        .bind(&contact.account_id.0)
+        .bind(contact.id.0)
+        .bind(contact.account_id.0)
         .bind(&contact.name)
         .bind(&contact.email)
         .bind(&contact.avatar_url)

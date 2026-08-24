@@ -883,8 +883,8 @@ pub async fn sync_account_calendars(
         }
 
         if let Some(ref attendees_str) = payload.attendees {
-            let parsed_attendees: Vec<String> = serde_json::from_str(attendees_str)
-                .unwrap_or_else(|_| {
+            let parsed_attendees: Vec<String> =
+                serde_json::from_str(attendees_str).unwrap_or_else(|_| {
                     attendees_str
                         .split(',')
                         .map(|s| s.trim().to_string())

@@ -60,7 +60,7 @@ impl ContactRepository for SqliteContactRepository {
              WHERE account_id IN ({}) AND (email LIKE ? OR name LIKE ?)
              ORDER BY last_contacted_at DESC
              LIMIT ?",
-             in_clause
+            in_clause
         );
 
         let mut q = sqlx::query_as::<_, Contact>(&sql);
@@ -69,9 +69,7 @@ impl ContactRepository for SqliteContactRepository {
             q = q.bind(id);
         }
 
-        q = q.bind(&query_str)
-             .bind(&query_str)
-             .bind(limit);
+        q = q.bind(&query_str).bind(&query_str).bind(limit);
 
         let contacts = q.fetch_all(&self.pool).await?;
 
