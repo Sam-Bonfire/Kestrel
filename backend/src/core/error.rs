@@ -26,6 +26,8 @@ pub enum KestrelError {
     Conflict(String),
     #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Bad gateway: {0}")]
+    BadGateway(String),
     #[error("Internal error: {0}")]
     Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -39,6 +41,7 @@ impl IntoResponse for KestrelError {
             KestrelError::Forbidden(_) => StatusCode::FORBIDDEN,
             KestrelError::Conflict(_) => StatusCode::CONFLICT,
             KestrelError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            KestrelError::BadGateway(_) => StatusCode::BAD_GATEWAY,
             KestrelError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

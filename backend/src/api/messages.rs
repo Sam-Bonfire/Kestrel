@@ -764,7 +764,8 @@ pub struct SendMessageRequest {
     pub cc: Option<Vec<String>>,
     pub bcc: Option<Vec<String>>,
     pub subject: String,
-    pub body_html: String,
+    pub body_html: Option<String>,
+    pub body_text: Option<String>,
     pub attachments: Option<Vec<SendAttachmentPayload>>,
 }
 
@@ -809,7 +810,7 @@ pub async fn send_message(
 
     // 2. Map request payload to plugin WIT payload
     use base64::{Engine as _, engine::general_purpose::STANDARD as b64};
-    let mapped_attachments = match payload.attachments {
+    let mapped_attachments = match payload.attachments.as_ref() {
         Some(atts) => {
             let mut mapped = Vec::new();
             for a in atts {
@@ -826,8 +827,8 @@ pub async fn send_message(
                     KestrelError::BadRequest(format!("Invalid base64 attachment: {}", e))
                 })?;
                 mapped.push(crate::plugins::traits::AttachmentPayload {
-                    filename: a.filename,
-                    content_type: a.content_type,
+                    filename: a.filename.clone(),
+                    content_type: a.content_type.clone(),
                     content: bytes,
                 });
             }
@@ -837,11 +838,11 @@ pub async fn send_message(
     };
 
     let wit_payload = crate::plugins::traits::SendMessagePayload {
-        to: payload.to,
-        cc: payload.cc,
-        bcc: payload.bcc,
-        subject: payload.subject,
-        body_html: payload.body_html,
+        to: payload.to.clone(),
+        cc: payload.cc.clone(),
+        bcc: payload.bcc.clone(),
+        subject: payload.subject.clone(),
+        body_html: payload.body_html.clone().unwrap_or_default(),
         attachments: mapped_attachments,
     };
 
@@ -860,16 +861,51 @@ pub async fn send_message(
         .as_mail_provider()
         .send_message(&auth_token, wit_payload)
         .await
-        .map_err(|e| {
-            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
-                "Dispatch failed: {:?}",
-                e
-            ))))
-        })?;
+        .map_err(|e| KestrelError::BadGateway(format!("Dispatch failed: {:?}", e)))?;
 
-    // 4. Return success response (UI expects SendMessageResponse)
+    // 4. Insert message immediately into local DB
+    let id = uuid::Uuid::new_v4();
+    let has_attachments = payload.attachments.is_some();
+    let now = chrono::Utc::now().timestamp();
+
+    let msg = crate::core::models::Message {
+        id: crate::core::types::DbUuid(id),
+        account_id: crate::core::types::DbUuid(account.id.0),
+        external_id: format!("local-sent-{}", id),
+        thread_id: format!("thread-{}", id),
+        subject: Some(payload.subject.clone()),
+        sender_name: None,
+        sender_email: account.display_name.clone(),
+        recipients: payload.to.join(", "),
+        date_sent: now,
+        date_received: now,
+        snippet: Some("Sent message...".to_string()),
+        body_text: payload.body_text.clone(),
+        body_html: payload.body_html.clone(),
+        labels: Some("[\"SENT\"]".to_string()),
+        is_read: true,
+        is_archived: false,
+        is_deleted: false,
+        has_attachments,
+        snoozed_until: None,
+        created_at: now,
+        updated_at: now,
+    };
+
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            let repo = SqliteMessageRepository::new(pool.clone());
+            repo.upsert(&msg).await?;
+        }
+        DbPool::Postgres(pool) => {
+            let repo = PostgresMessageRepository::new(pool.clone());
+            repo.upsert(&msg).await?;
+        }
+    }
+
+    // 5. Return success response (UI expects SendMessageResponse)
     Ok(Json(SendMessageResponse {
-        id: format!("sent-{}", uuid::Uuid::new_v4()),
+        id: format!("local-sent-{}", id),
     }))
 }
 
