@@ -1,0 +1,30 @@
+--- frontend-calendar/src/routes/+page.svelte
++++ frontend-calendar/src/routes/+page.svelte
+@@ -559,7 +559,7 @@
+
+   {#snippet children()}
+   <!-- Main View Canvas area -->
+-  <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent && !clickPosition ? 'lg:mr-80' : ''}"
++  <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked ? 'lg:mr-80' : ''}"
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+        role="region" aria-label="Calendar Canvas">
+@@ -961,12 +961,12 @@
+         selectedEvent = null;
+       }}
+     />
+-  {:else if isDetailsDocked && !isMobileOrTablet && !selectedEvent}
+-    <!-- Dedicated Docked Empty State (Task 34) -->
+-    <div class="hidden lg:flex flex-col items-center justify-center fixed inset-y-0 right-0 w-80 bg-[#131313] border-l border-[var(--color-border-hairline)] z-40 h-screen text-center p-6 text-[var(--color-text-secondary)] shadow-xl">
+-      <CalendarIcon class="w-12 h-12 mb-4 opacity-20" />
+-      <h3 class="font-bold text-white mb-1">No Event Selected</h3>
+-      <p class="text-xs">Click on any event in the grid to view its details here.</p>
+-    </div>
++  {:else if isDetailsDocked && !isMobileOrTablet}
++    <!-- Dedicated Docked Empty State -->
++    <div class="hidden lg:flex flex-col items-center justify-center fixed inset-y-0 right-0 w-80 bg-[#131313] border-l border-[var(--color-border-hairline)] z-40 h-screen text-center p-6 text-[var(--color-text-secondary)] shadow-xl transition-all">
++      <CalendarIcon class="w-12 h-12 mb-4 opacity-20" />
++      <h3 class="font-bold text-white mb-1">No Event Selected</h3>
++      <p class="text-xs">Click on any event in the grid to view its details here.</p>
++    </div>
+   {/if}
