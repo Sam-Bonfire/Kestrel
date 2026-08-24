@@ -29,6 +29,8 @@
     hasAttachment: boolean;
     labels: string[];
     category?: string;
+    provider?: string;
+    accountColor?: string;
   }
 
   let {
@@ -491,7 +493,12 @@
 
             <!-- Sender column (Mobile: flex with date) -->
             <div class="w-full sm:w-36 md:w-44 sm:pr-4 shrink-0 flex justify-between sm:justify-start items-center text-xs truncate">
-              <span class="{thread.isUnread ? 'font-bold text-white' : 'font-medium text-neutral-200'} truncate">{thread.sender}</span>
+              <div class="flex items-center gap-1.5 truncate">
+                {#if thread.accountColor}
+                  <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background-color: {thread.accountColor};"></span>
+                {/if}
+                <span class="{thread.isUnread ? 'font-bold text-white' : 'font-medium text-neutral-200'} truncate">{thread.sender}</span>
+              </div>
               <span class="font-mono text-[10px] tracking-tight text-[var(--color-text-secondary)] sm:hidden shrink-0">{thread.date}</span>
             </div>
           </div>
