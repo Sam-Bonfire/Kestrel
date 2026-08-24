@@ -201,7 +201,6 @@ async fn test_lww_local_wins_conflict() {
     assert_eq!(db_msg.has_conflict, true);
 }
 
-
 #[tokio::test]
 async fn test_restore_revision() {
     let state = create_test_app_state().await;

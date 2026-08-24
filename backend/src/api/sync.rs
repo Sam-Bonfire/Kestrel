@@ -634,7 +634,6 @@ pub async fn sync_account_messages(
     let result = mail_provider.sync_mail(token, cursor).await?;
     let mut synced_count = 0;
 
-
     let repo: Box<dyn crate::core::repository::MessageRepository> = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => Box::new(
             crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone()),
@@ -644,7 +643,9 @@ pub async fn sync_account_messages(
         ),
     };
 
-    let revision_repo: Box<dyn crate::core::repository::HistoricalRevisionRepository> = match &state.db {
+    let revision_repo: Box<dyn crate::core::repository::HistoricalRevisionRepository> = match &state
+        .db
+    {
         crate::db::pool::DbPool::Sqlite(pool) => Box::new(
             crate::db::sqlite::revision_repository::SqliteRevisionRepository::new(pool.clone()),
         ),
@@ -669,7 +670,6 @@ pub async fn sync_account_messages(
     let blocked_set: std::collections::HashSet<String> = blocked_senders.into_iter().collect();
 
     for payload in result.messages {
-
         let existing = repo
             .find_by_external_id(account.id.0, &payload.external_id)
             .await?;
@@ -682,7 +682,10 @@ pub async fn sync_account_messages(
                 if payload.date_received > m.updated_at {
                     should_upsert = true;
                 } else {
-                    if m.subject != payload.subject || m.snippet != payload.snippet || m.is_read != payload.is_read {
+                    if m.subject != payload.subject
+                        || m.snippet != payload.snippet
+                        || m.is_read != payload.is_read
+                    {
                         has_conflict = true;
                         should_upsert = true;
                     }
@@ -690,7 +693,11 @@ pub async fn sync_account_messages(
 
                 if should_upsert {
                     if let Ok(serialized) = serde_json::to_string(&m) {
-                        let rev_num = revision_repo.get_latest_revision_number("message", m.id.0).await.unwrap_or(0) + 1;
+                        let rev_num = revision_repo
+                            .get_latest_revision_number("message", m.id.0)
+                            .await
+                            .unwrap_or(0)
+                            + 1;
                         let rev = crate::core::models::HistoricalRevision {
                             id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
                             resource_type: "message".to_string(),
@@ -756,7 +763,6 @@ pub async fn sync_account_messages(
             repo.upsert(&message).await?;
             synced_count += 1;
         }
-
     }
 
     Ok(synced_count)
@@ -840,7 +846,6 @@ pub async fn sync_account_calendars(
         .await?;
     let mut synced_count = 0;
 
-
     let event_repo: Box<dyn crate::core::repository::EventRepository> = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
             Box::new(crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone()))
@@ -850,7 +855,9 @@ pub async fn sync_account_calendars(
         ),
     };
 
-    let revision_repo: Box<dyn crate::core::repository::HistoricalRevisionRepository> = match &state.db {
+    let revision_repo: Box<dyn crate::core::repository::HistoricalRevisionRepository> = match &state
+        .db
+    {
         crate::db::pool::DbPool::Sqlite(pool) => Box::new(
             crate::db::sqlite::revision_repository::SqliteRevisionRepository::new(pool.clone()),
         ),
@@ -860,7 +867,6 @@ pub async fn sync_account_calendars(
     };
 
     for payload in events {
-
         let existing = event_repo
             .find_by_external_id(account.id.0, &payload.external_id)
             .await?;
@@ -873,7 +879,10 @@ pub async fn sync_account_calendars(
                 if payload.start_time > e.updated_at {
                     should_upsert = true;
                 } else {
-                    if e.title != payload.title || e.description != payload.description || e.location != payload.location {
+                    if e.title != payload.title
+                        || e.description != payload.description
+                        || e.location != payload.location
+                    {
                         has_conflict = true;
                         should_upsert = true;
                     }
@@ -881,7 +890,11 @@ pub async fn sync_account_calendars(
 
                 if should_upsert {
                     if let Ok(serialized) = serde_json::to_string(&e) {
-                        let rev_num = revision_repo.get_latest_revision_number("calendar_event", e.id.0).await.unwrap_or(0) + 1;
+                        let rev_num = revision_repo
+                            .get_latest_revision_number("calendar_event", e.id.0)
+                            .await
+                            .unwrap_or(0)
+                            + 1;
                         let rev = crate::core::models::HistoricalRevision {
                             id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
                             resource_type: "calendar_event".to_string(),
@@ -942,7 +955,6 @@ pub async fn sync_account_calendars(
         if should_upsert {
             synced_count += 1;
         }
-
     }
 
     Ok(synced_count)

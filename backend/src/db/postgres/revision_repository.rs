@@ -45,10 +45,14 @@ impl HistoricalRevisionRepository for PostgresRevisionRepository {
         .await
     }
 
-    async fn get_latest_revision_number(&self, resource_type: &str, resource_id: Uuid) -> Result<i32, sqlx::Error> {
+    async fn get_latest_revision_number(
+        &self,
+        resource_type: &str,
+        resource_id: Uuid,
+    ) -> Result<i32, sqlx::Error> {
         let result = sqlx::query_scalar::<_, Option<i32>>(
             "SELECT MAX(revision_number) FROM historical_revisions \
-             WHERE resource_type = $1 AND resource_id = $2"
+             WHERE resource_type = $1 AND resource_id = $2",
         )
         .bind(resource_type)
         .bind(resource_id)
