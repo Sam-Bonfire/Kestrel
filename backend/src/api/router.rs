@@ -8,6 +8,7 @@ use tower_http::trace::TraceLayer;
 use super::accounts;
 use super::auth;
 use super::calendars;
+use super::contacts;
 use super::health::health_check;
 use super::messages;
 use super::providers;
@@ -146,6 +147,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/messages/bulk", post(messages::bulk_action))
         .route("/api/v1/messages/send", post(messages::send_message))
         .route("/api/v1/search", get(search::search_messages))
+        .route("/api/contacts/search", get(contacts::search_contacts))
         .route("/api/v1/calendars", get(calendars::list_calendars))
         .route("/api/v1/calendars/{id}", get(calendars::get_calendar))
         .route(

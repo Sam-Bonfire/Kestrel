@@ -113,3 +113,14 @@ pub trait UserPreferencesRepository: Send + Sync {
         preferences_json: &str,
     ) -> Result<(), sqlx::Error>;
 }
+
+#[async_trait]
+pub trait ContactRepository: Send + Sync {
+    async fn upsert(&self, contact: &crate::core::models::Contact) -> Result<(), sqlx::Error>;
+    async fn search(
+        &self,
+        account_ids: &[Uuid],
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<crate::core::models::Contact>, sqlx::Error>;
+}
