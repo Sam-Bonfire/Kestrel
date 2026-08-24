@@ -6,3 +6,5 @@ pub mod label_repository;
 pub mod message_repository;
 pub mod user_preferences_repository;
 pub mod user_repository;
+
+pub mod revision_repository;

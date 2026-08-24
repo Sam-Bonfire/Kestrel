@@ -107,6 +107,8 @@ async fn test_health_check_returns_200() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+
+
 }
 
 // === Auth Handler Tests ===
@@ -309,6 +311,8 @@ async fn test_list_messages_with_valid_token() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
+
+
     let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
@@ -355,6 +359,8 @@ async fn test_list_calendars_with_valid_token() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
+
+
     let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
@@ -380,6 +386,8 @@ async fn test_list_events_with_valid_token() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+
+
 
     let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -407,6 +415,8 @@ async fn test_search_messages_with_valid_token() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
+
+
     let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
@@ -431,6 +441,8 @@ async fn test_list_providers_is_public() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+
+
 }
 
 // === Message Handler Tests ===

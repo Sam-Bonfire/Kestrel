@@ -128,8 +128,8 @@ impl MessageRepository for PostgresMessageRepository {
         sqlx::query(
             "INSERT INTO messages (id, account_id, external_id, thread_id, subject, sender_name, \
              sender_email, recipients, date_sent, date_received, snippet, body_text, body_html, \
-             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) \
+             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, has_conflict, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) \
              ON CONFLICT (account_id, external_id) DO UPDATE SET \
              thread_id = EXCLUDED.thread_id, subject = EXCLUDED.subject, \
              sender_name = EXCLUDED.sender_name, sender_email = EXCLUDED.sender_email, \
@@ -138,7 +138,7 @@ impl MessageRepository for PostgresMessageRepository {
              body_text = EXCLUDED.body_text, body_html = EXCLUDED.body_html, \
              labels = EXCLUDED.labels, is_read = EXCLUDED.is_read, \
              is_archived = EXCLUDED.is_archived, is_deleted = EXCLUDED.is_deleted, \
-             has_attachments = EXCLUDED.has_attachments, snoozed_until = EXCLUDED.snoozed_until, \
+             has_attachments = EXCLUDED.has_attachments, snoozed_until = EXCLUDED.snoozed_until, has_conflict = EXCLUDED.has_conflict, \
              updated_at = EXCLUDED.updated_at",
         )
         .bind(message.id)
@@ -160,6 +160,7 @@ impl MessageRepository for PostgresMessageRepository {
         .bind(message.is_deleted)
         .bind(message.has_attachments)
         .bind(message.snoozed_until)
+        .bind(message.has_conflict)
         .bind(message.created_at)
         .bind(message.updated_at)
         .execute(&self.pool)

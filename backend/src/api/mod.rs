@@ -13,3 +13,5 @@ pub mod settings;
 pub mod sync;
 pub mod token_worker;
 pub mod webhooks;
+
+pub mod revisions;

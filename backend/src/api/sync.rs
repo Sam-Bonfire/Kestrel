@@ -634,12 +634,22 @@ pub async fn sync_account_messages(
     let result = mail_provider.sync_mail(token, cursor).await?;
     let mut synced_count = 0;
 
+
     let repo: Box<dyn crate::core::repository::MessageRepository> = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => Box::new(
             crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone()),
         ),
         crate::db::pool::DbPool::Postgres(pool) => Box::new(
             crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone()),
+        ),
+    };
+
+    let revision_repo: Box<dyn crate::core::repository::HistoricalRevisionRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::revision_repository::SqliteRevisionRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::revision_repository::PostgresRevisionRepository::new(pool.clone()),
         ),
     };
 
@@ -659,68 +669,94 @@ pub async fn sync_account_messages(
     let blocked_set: std::collections::HashSet<String> = blocked_senders.into_iter().collect();
 
     for payload in result.messages {
+
         let existing = repo
             .find_by_external_id(account.id.0, &payload.external_id)
             .await?;
 
-        let should_upsert = match &existing {
-            Some(msg) => {
-                // Last-Write-Wins (LWW): if remote is newer, update.
-                // Since payload doesn't have updated_at, we assume sync_mail only returns NEW or UPDATED emails
-                // We use date_received as a proxy for now, or just assume it's newer if it was yielded.
-                // Ideally we'd use an updated_at from the provider payload.
-                payload.date_received >= msg.date_received
+        let mut has_conflict = false;
+        let mut should_upsert = false;
+
+        let message = match existing {
+            Some(mut m) => {
+                if payload.date_received > m.updated_at {
+                    should_upsert = true;
+                } else {
+                    if m.subject != payload.subject || m.snippet != payload.snippet || m.is_read != payload.is_read {
+                        has_conflict = true;
+                        should_upsert = true;
+                    }
+                }
+
+                if should_upsert {
+                    if let Ok(serialized) = serde_json::to_string(&m) {
+                        let rev_num = revision_repo.get_latest_revision_number("message", m.id.0).await.unwrap_or(0) + 1;
+                        let rev = crate::core::models::HistoricalRevision {
+                            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+                            resource_type: "message".to_string(),
+                            resource_id: m.id,
+                            serialized_payload: serialized,
+                            revision_number: rev_num,
+                            created_at: chrono::Utc::now().timestamp(),
+                        };
+                        let _ = revision_repo.create(&rev).await;
+                    }
+
+                    if has_conflict {
+                        m.has_conflict = true;
+                        m.updated_at = chrono::Utc::now().timestamp();
+                    } else {
+                        m.subject = payload.subject;
+                        m.sender_name = payload.sender_name;
+                        m.sender_email = payload.sender_email;
+                        m.recipients = payload.recipients;
+                        m.date_sent = payload.date_sent;
+                        m.date_received = payload.date_received;
+                        m.snippet = payload.snippet;
+                        m.is_deleted = m.is_deleted || blocked_set.contains(&m.sender_email);
+                        m.labels = payload.labels;
+                        m.is_read = payload.is_read;
+                        m.has_conflict = false;
+                        m.updated_at = chrono::Utc::now().timestamp();
+                    }
+                }
+                m
             }
-            None => true,
+            None => {
+                should_upsert = true;
+                let is_blocked = blocked_set.contains(&payload.sender_email);
+                crate::core::models::Message {
+                    id: uuid::Uuid::new_v4().into(),
+                    account_id: account.id,
+                    external_id: payload.external_id.clone(),
+                    thread_id: payload.thread_id.clone(),
+                    subject: payload.subject.clone(),
+                    sender_name: payload.sender_name.clone(),
+                    sender_email: payload.sender_email.clone(),
+                    recipients: payload.recipients.clone(),
+                    date_sent: payload.date_sent,
+                    date_received: payload.date_received,
+                    snippet: payload.snippet.clone(),
+                    body_text: None,
+                    body_html: None,
+                    labels: payload.labels.clone(),
+                    is_read: payload.is_read,
+                    is_archived: false,
+                    is_deleted: is_blocked,
+                    has_attachments: false,
+                    snoozed_until: None,
+                    has_conflict: false,
+                    created_at: chrono::Utc::now().timestamp(),
+                    updated_at: chrono::Utc::now().timestamp(),
+                }
+            }
         };
 
         if should_upsert {
-            let message = match existing {
-                Some(mut m) => {
-                    m.subject = payload.subject;
-                    m.sender_name = payload.sender_name;
-                    m.sender_email = payload.sender_email;
-                    m.recipients = payload.recipients;
-                    m.date_sent = payload.date_sent;
-                    m.date_received = payload.date_received;
-                    m.snippet = payload.snippet;
-                    m.is_deleted = m.is_deleted || blocked_set.contains(&m.sender_email);
-                    m.updated_at = chrono::Utc::now().timestamp();
-                    m.labels = payload.labels;
-                    m.is_read = payload.is_read;
-                    m
-                }
-                None => {
-                    let is_blocked = blocked_set.contains(&payload.sender_email);
-                    crate::core::models::Message {
-                        id: Uuid::new_v4().into(),
-                        account_id: account.id,
-                        external_id: payload.external_id.clone(),
-                        thread_id: payload.thread_id.clone(),
-                        subject: payload.subject.clone(),
-                        sender_name: payload.sender_name.clone(),
-                        sender_email: payload.sender_email.clone(),
-                        recipients: payload.recipients.clone(),
-                        date_sent: payload.date_sent,
-                        date_received: payload.date_received,
-                        snippet: payload.snippet.clone(),
-                        body_text: None,
-                        body_html: None,
-                        labels: payload.labels.clone(),
-                        is_read: payload.is_read,
-                        is_archived: false,
-                        is_deleted: is_blocked,
-                        has_attachments: false,
-                        snoozed_until: None,
-                        created_at: Utc::now().timestamp(),
-                        updated_at: Utc::now().timestamp(),
-                    }
-                }
-            };
-
             repo.upsert(&message).await?;
             synced_count += 1;
         }
+
     }
 
     Ok(synced_count)
@@ -804,6 +840,7 @@ pub async fn sync_account_calendars(
         .await?;
     let mut synced_count = 0;
 
+
     let event_repo: Box<dyn crate::core::repository::EventRepository> = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
             Box::new(crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone()))
@@ -813,30 +850,74 @@ pub async fn sync_account_calendars(
         ),
     };
 
+    let revision_repo: Box<dyn crate::core::repository::HistoricalRevisionRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::revision_repository::SqliteRevisionRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::revision_repository::PostgresRevisionRepository::new(pool.clone()),
+        ),
+    };
+
     for payload in events {
+
         let existing = event_repo
             .find_by_external_id(account.id.0, &payload.external_id)
             .await?;
 
+        let mut has_conflict = false;
+        let mut should_upsert = false;
+
         match existing {
             Some(mut e) => {
-                e.title = payload.title;
-                e.description = payload.description;
-                e.location = payload.location;
-                e.start_time = payload.start_time;
-                e.end_time = payload.end_time;
-                e.is_all_day = payload.is_all_day;
-                e.recurrence_rules = payload.recurrence_rules;
-                e.organizer_email = payload.organizer_email;
-                e.organizer_name = payload.organizer_name;
-                e.attendees = payload.attendees;
-                e.status = payload.status;
-                e.updated_at = Utc::now().timestamp();
-                event_repo.upsert(&e).await?;
+                if payload.start_time > e.updated_at {
+                    should_upsert = true;
+                } else {
+                    if e.title != payload.title || e.description != payload.description || e.location != payload.location {
+                        has_conflict = true;
+                        should_upsert = true;
+                    }
+                }
+
+                if should_upsert {
+                    if let Ok(serialized) = serde_json::to_string(&e) {
+                        let rev_num = revision_repo.get_latest_revision_number("calendar_event", e.id.0).await.unwrap_or(0) + 1;
+                        let rev = crate::core::models::HistoricalRevision {
+                            id: crate::core::types::DbUuid::new(uuid::Uuid::new_v4()),
+                            resource_type: "calendar_event".to_string(),
+                            resource_id: e.id,
+                            serialized_payload: serialized,
+                            revision_number: rev_num,
+                            created_at: chrono::Utc::now().timestamp(),
+                        };
+                        let _ = revision_repo.create(&rev).await;
+                    }
+
+                    if has_conflict {
+                        e.has_conflict = true;
+                        e.updated_at = chrono::Utc::now().timestamp();
+                    } else {
+                        e.title = payload.title;
+                        e.description = payload.description;
+                        e.location = payload.location;
+                        e.start_time = payload.start_time;
+                        e.end_time = payload.end_time;
+                        e.is_all_day = payload.is_all_day;
+                        e.recurrence_rules = payload.recurrence_rules;
+                        e.organizer_email = payload.organizer_email;
+                        e.organizer_name = payload.organizer_name;
+                        e.attendees = payload.attendees;
+                        e.status = payload.status;
+                        e.has_conflict = false;
+                        e.updated_at = chrono::Utc::now().timestamp();
+                    }
+                    event_repo.upsert(&e).await?;
+                }
             }
             None => {
+                should_upsert = true;
                 let e = crate::core::models::CalendarEvent {
-                    id: crate::core::types::DbUuid(Uuid::new_v4()),
+                    id: crate::core::types::DbUuid(uuid::Uuid::new_v4()),
                     account_id: account.id,
                     calendar_id: crate::core::types::DbUuid(default_calendar_id), // Simplified: attach to default calendar
                     external_id: payload.external_id,
@@ -851,13 +932,17 @@ pub async fn sync_account_calendars(
                     organizer_name: payload.organizer_name,
                     attendees: payload.attendees,
                     status: payload.status,
-                    created_at: Utc::now().timestamp(),
-                    updated_at: Utc::now().timestamp(),
+                    has_conflict: false,
+                    created_at: chrono::Utc::now().timestamp(),
+                    updated_at: chrono::Utc::now().timestamp(),
                 };
                 event_repo.upsert(&e).await?;
             }
         };
-        synced_count += 1;
+        if should_upsert {
+            synced_count += 1;
+        }
+
     }
 
     Ok(synced_count)

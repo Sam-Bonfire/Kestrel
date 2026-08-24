@@ -396,7 +396,7 @@ async fn set_message_deleted(
 
 // --- Ownership verification helpers ---
 
-async fn verify_account_ownership(
+pub async fn verify_account_ownership(
     state: &AppState,
     user_id: Uuid,
     account_id: Uuid,

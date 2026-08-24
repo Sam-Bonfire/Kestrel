@@ -86,15 +86,15 @@ impl EventRepository for PostgresEventRepository {
         sqlx::query(
             "INSERT INTO calendar_events (id, account_id, calendar_id, external_id, title, description, \
              location, start_time, end_time, is_all_day, recurrence_rules, organizer_email, \
-             organizer_name, attendees, status, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) \
+             organizer_name, attendees, status, has_conflict, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) \
              ON CONFLICT (account_id, external_id) DO UPDATE SET \
              calendar_id = EXCLUDED.calendar_id, title = EXCLUDED.title, \
              description = EXCLUDED.description, location = EXCLUDED.location, \
              start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, \
              is_all_day = EXCLUDED.is_all_day, recurrence_rules = EXCLUDED.recurrence_rules, \
              organizer_email = EXCLUDED.organizer_email, organizer_name = EXCLUDED.organizer_name, \
-             attendees = EXCLUDED.attendees, status = EXCLUDED.status, \
+             attendees = EXCLUDED.attendees, status = EXCLUDED.status, has_conflict = EXCLUDED.has_conflict, \
              updated_at = EXCLUDED.updated_at",
         )
         .bind(event.id)
@@ -112,6 +112,7 @@ impl EventRepository for PostgresEventRepository {
         .bind(&event.organizer_name)
         .bind(&event.attendees)
         .bind(&event.status)
+        .bind(event.has_conflict)
         .bind(event.created_at)
         .bind(event.updated_at)
         .execute(&self.pool)

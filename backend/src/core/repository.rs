@@ -1,3 +1,4 @@
+use crate::core::models::HistoricalRevision;
 use async_trait::async_trait;
 use uuid::Uuid;
 
@@ -112,4 +113,12 @@ pub trait UserPreferencesRepository: Send + Sync {
         user_id: Uuid,
         preferences_json: &str,
     ) -> Result<(), sqlx::Error>;
+}
+
+#[async_trait]
+#[allow(dead_code)]
+pub trait HistoricalRevisionRepository: Send + Sync {
+    async fn create(&self, revision: &HistoricalRevision) -> Result<(), sqlx::Error>;
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<HistoricalRevision>, sqlx::Error>;
+    async fn get_latest_revision_number(&self, resource_type: &str, resource_id: Uuid) -> Result<i32, sqlx::Error>;
 }
