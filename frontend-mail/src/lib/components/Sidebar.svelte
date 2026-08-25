@@ -92,6 +92,7 @@
     { id: 'inbox',    label: 'Inbox',    icon: Inbox,         color: 'text-blue-400'   },
     { id: 'unread',   label: 'Unread',   icon: CircleDot,     color: 'text-emerald-400'},
     { id: 'sent',     label: 'Sent',     icon: Send,          color: 'text-violet-400' },
+    { id: 'outbox',   label: 'Outbox',   icon: Send,          color: 'text-neutral-400' },
     { id: 'drafts',   label: 'Drafts',   icon: FileText,      color: 'text-amber-400'  },
     { id: 'starred',  label: 'Starred',  icon: Star,          color: 'text-yellow-400' },
     { id: 'github',   label: 'GitHub',   icon: Github,        color: 'text-indigo-400' },
