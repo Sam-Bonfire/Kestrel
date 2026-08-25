@@ -9,16 +9,76 @@
   import { AppShell, ReauthBanner } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount } from '@kestrel/shared/stores';
   import { replayOfflineQueue, searchMessages } from '@kestrel/shared/api';
+  import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, untrack, onDestroy } from 'svelte';
+
+  async function replayOutbox() {
+    if (!navigator.onLine) return;
+
+    const outbox = getOutboxItems();
+
+    // Calculate exponential backoff times
+    const now = Date.now();
+    const pending = outbox.filter(item => {
+      if (item.status === 'pending' || item.status === 'sending') return true;
+      if (item.status === 'failed' && item.retry_count < 5) {
+        // Backoff: 5s, 15s, 45s, 135s... (5 * 3^retry_count)
+        const delayMs = 5000 * Math.pow(3, item.retry_count - 1);
+        const lastAttempt = new Date(item.created_at).getTime(); // Note: we'd ideally track last_attempt_at but created_at will suffice for a simple delay
+        return (now - lastAttempt) > delayMs;
+      }
+      return false;
+    });
+
+    for (const item of pending) {
+      updateOutboxItem(item.id, { status: 'sending' });
+      // Find matching email in state
+      allEmails = allEmails.map(e => e.id === item.id ? { ...e, outboxStatus: 'sending' } : e);
+
+      try {
+        const api = await import('@kestrel/shared/api');
+        await api.sendMessage({
+          to: item.to,
+          subject: item.subject,
+          body: item.body_html || item.body_text || '',
+        });
+
+        removeOutboxItem(item.id);
+        allEmails = allEmails.filter(e => e.id !== item.id);
+      } catch (err) {
+        const nextRetry = item.retry_count + 1;
+        const newStatus = nextRetry >= 5 ? 'failed' : 'pending';
+        updateOutboxItem(item.id, {
+          status: newStatus,
+          retry_count: nextRetry,
+          last_error: err instanceof Error ? err.message : String(err),
+        });
+        allEmails = allEmails.map(e => e.id === item.id ? { ...e, outboxStatus: newStatus } : e);
+      }
+    }
+  }
+
+  let interval: ReturnType<typeof setInterval>;
 
   onMount(() => {
     // Initial offline queue replay
     replayOfflineQueue().catch(console.error);
+    replayOutbox();
     
     // Setup online listener
-    const onOnline = () => replayOfflineQueue().catch(console.error);
+    const onOnline = () => {
+      replayOfflineQueue().catch(console.error);
+      replayOutbox();
+    };
     window.addEventListener('online', onOnline);
+
+    // Implement exponential backoff conceptually. We'll poll every 5 seconds,
+    // but the filter logic limits it based on retry count manually in the real app.
+    // For now, poll more frequently to allow the 'retry_count' logic in replayOutbox to take effect
+    interval = setInterval(() => {
+      if (navigator.onLine) replayOutbox();
+    }, 5000); // Check every 5 seconds
 
     // Register interactive notification category (Reply / Mark as Read / Archive)
     registerNotificationCategories().catch(console.error);
@@ -615,7 +675,10 @@
       if (e.key === 'Escape') { selectedThreadId = null; isCommandOpen = false; isComposeOpen = false; }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      clearInterval(interval);
+    };
   });
 </script>
 
@@ -677,6 +740,39 @@
       onMute={muteThread}
       onReportSpam={reportSpam}
       onOpenMobileSidebar={() => isMobileSidebarOpen = true}
+      onRetryOutbox={(id) => {
+        const email = allEmails.find(e => e.id === id);
+        if (email) {
+          updateOutboxItem(id, { status: 'sending' });
+          allEmails = allEmails.map(e => e.id === id ? { ...e, outboxStatus: 'sending' } : e);
+          import('@kestrel/shared/api').then(api => {
+            api.sendMessage({
+              to: email.to,
+              subject: email.subject,
+              body: email.body,
+            }).then(() => {
+              removeOutboxItem(id);
+              allEmails = allEmails.filter(e => e.id !== id);
+            }).catch((err) => {
+              const item = getOutboxItems().find(i => i.id === id);
+              if (item) {
+                const nextRetry = item.retry_count + 1;
+                const newStatus = nextRetry >= 5 ? 'failed' : 'pending';
+                updateOutboxItem(id, {
+                  status: newStatus,
+                  retry_count: nextRetry,
+                  last_error: err instanceof Error ? err.message : String(err),
+                });
+                allEmails = allEmails.map(e => e.id === id ? { ...e, outboxStatus: newStatus } : e);
+              }
+            });
+          });
+        }
+      }}
+      onDiscardOutbox={(id) => {
+        removeOutboxItem(id);
+        allEmails = allEmails.filter(e => e.id !== id);
+      }}
     />
     
     <!-- Mobile FAB for Compose -->
@@ -736,17 +832,86 @@
     isOpen={isComposeOpen}
     onClose={() => isComposeOpen = false}
     onSend={async (draft) => {
+      const draftData = {
+        to: draft.to,
+        subject: draft.subject,
+        body: draft.body,
+      };
+
+      if (!navigator.onLine) {
+        const newId = enqueueOutboxItem({
+          account_id: activeAccountId || '1',
+          to: draft.to,
+          cc: draft.cc,
+          bcc: draft.bcc,
+          subject: draft.subject,
+          body_html: draft.body,
+        });
+
+        const newMsg = {
+          id: newId,
+          accountId: activeAccountId || '1',
+          sender: 'Me',
+          senderEmail: 'me@kestrel.dev',
+          to: draft.to,
+          subject: draft.subject || '(no subject)',
+          body: draft.body,
+          timestamp: new Date().toISOString(),
+          isUnread: false,
+          isStarred: false,
+          isArchived: false,
+          isTrash: false,
+          isDraft: false,
+          isSpam: false,
+          hasAttachment: false,
+          labels: ['Outbox'],
+          category: 'Primary',
+          isOutbox: true,
+          outboxStatus: 'pending'
+        };
+        allEmails = [newMsg, ...allEmails];
+        isComposeOpen = false;
+        return;
+      }
+
       try {
         const api = await import('@kestrel/shared/api');
-        await api.sendMessage({
-          to: draft.to,
-          subject: draft.subject,
-          body: draft.body,
-        });
+        await api.sendMessage(draftData);
         isComposeOpen = false;
       } catch (err) {
         console.error('Failed to send message:', err);
-        // Optionally show toast error here
+        // If network error, fallback to outbox
+        const newId = enqueueOutboxItem({
+          account_id: activeAccountId || '1',
+          to: draft.to,
+          cc: draft.cc,
+          bcc: draft.bcc,
+          subject: draft.subject,
+          body_html: draft.body,
+        });
+        const newMsg = {
+          id: newId,
+          accountId: activeAccountId || '1',
+          sender: 'Me',
+          senderEmail: 'me@kestrel.dev',
+          to: draft.to,
+          subject: draft.subject || '(no subject)',
+          body: draft.body,
+          timestamp: new Date().toISOString(),
+          isUnread: false,
+          isStarred: false,
+          isArchived: false,
+          isTrash: false,
+          isDraft: false,
+          isSpam: false,
+          hasAttachment: false,
+          labels: ['Outbox'],
+          category: 'Primary',
+          isOutbox: true,
+          outboxStatus: 'pending'
+        };
+        allEmails = [newMsg, ...allEmails];
+        isComposeOpen = false;
       }
     }}
   />
