@@ -260,6 +260,7 @@ jobs:
         with:
           path: |
             ~/.local/share/pnpm/store
+            ~/AppData/Local/pnpm/store
             node_modules
             frontend-mail/node_modules
             frontend-shared/node_modules
@@ -406,6 +407,7 @@ jobs:
         with:
           path: |
             ~/.local/share/pnpm/store
+            ~/AppData/Local/pnpm/store
             node_modules
             frontend-calendar/node_modules
             frontend-shared/node_modules
