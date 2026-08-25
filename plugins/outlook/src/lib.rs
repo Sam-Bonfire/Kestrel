@@ -1,4 +1,3 @@
-#![allow(unsafe_op_in_unsafe_fn)]
 use wit_bindgen::generate;
 use serde_json::{Value, json};
 use chrono::{DateTime, Utc};

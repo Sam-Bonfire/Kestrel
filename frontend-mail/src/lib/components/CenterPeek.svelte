@@ -36,7 +36,7 @@
   import { 
     labelCustomizations, 
     getLabelStyle,
-    EmailPillInput,
+    ContactAutocomplete,
     Dropdown
   } from '@kestrel/shared';
   import DOMPurify from 'dompurify';
@@ -471,7 +471,7 @@
             <!-- Editable Recipients Input Field with Email Pills -->
             <div class="flex items-center gap-2 px-3 py-1 bg-[var(--color-canvas-base)] rounded-lg border border-[var(--color-border-hairline)] text-xs focus-within:border-white/30 transition-colors">
               <span class="text-[var(--color-text-secondary)] font-mono text-[11px] w-6 shrink-0">To:</span>
-              <EmailPillInput bind:recipients={replyToRecipients} placeholder="recipient@example.com" />
+              <ContactAutocomplete bind:recipients={replyToRecipients} placeholder="recipient@example.com" />
             </div>
 
             <textarea

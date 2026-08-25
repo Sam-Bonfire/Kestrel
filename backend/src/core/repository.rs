@@ -116,13 +116,20 @@ pub trait UserPreferencesRepository: Send + Sync {
 }
 
 #[async_trait]
+pub trait ContactRepository: Send + Sync {
+    async fn upsert(&self, contact: &crate::core::models::Contact) -> Result<(), sqlx::Error>;
+    async fn search(
+        &self,
+        account_ids: &[Uuid],
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<crate::core::models::Contact>, sqlx::Error>;
+}
+
+#[async_trait]
 #[allow(dead_code)]
 pub trait HistoricalRevisionRepository: Send + Sync {
     async fn create(&self, revision: &HistoricalRevision) -> Result<(), sqlx::Error>;
     async fn find_by_id(&self, id: Uuid) -> Result<Option<HistoricalRevision>, sqlx::Error>;
-    async fn get_latest_revision_number(
-        &self,
-        resource_type: &str,
-        resource_id: Uuid,
-    ) -> Result<i32, sqlx::Error>;
+    async fn get_latest_revision_number(&self, resource_type: &str, resource_id: Uuid) -> Result<i32, sqlx::Error>;
 }

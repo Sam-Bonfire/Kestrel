@@ -160,7 +160,6 @@ impl MessageRepository for PostgresMessageRepository {
         .bind(message.is_deleted)
         .bind(message.has_attachments)
         .bind(message.snoozed_until)
-        .bind(message.has_conflict)
         .bind(message.created_at)
         .bind(message.updated_at)
         .execute(&self.pool)

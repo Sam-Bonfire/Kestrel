@@ -52,7 +52,7 @@ impl HistoricalRevisionRepository for PostgresRevisionRepository {
     ) -> Result<i32, sqlx::Error> {
         let result = sqlx::query_scalar::<_, Option<i32>>(
             "SELECT MAX(revision_number) FROM historical_revisions \
-             WHERE resource_type = $1 AND resource_id = $2",
+             WHERE resource_type = $1 AND resource_id = $2"
         )
         .bind(resource_type)
         .bind(resource_id)

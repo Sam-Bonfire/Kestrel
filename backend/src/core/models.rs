@@ -129,6 +129,17 @@ pub struct UserPreferences {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Contact {
+    pub id: DbUuid,
+    pub account_id: DbUuid,
+    pub name: Option<String>,
+    pub email: String,
+    pub avatar_url: Option<String>,
+    pub last_contacted_at: i64,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsPayload {

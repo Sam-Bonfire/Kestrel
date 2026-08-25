@@ -15,3 +15,12 @@ export {
   initializeSettings,
   syncInterval,
 } from './settings.js';
+
+export {
+  defaultShortcuts,
+  customShortcuts,
+  resetShortcuts,
+  updateShortcut,
+  inputGuard,
+  registerShortcuts
+} from './shortcuts.js';

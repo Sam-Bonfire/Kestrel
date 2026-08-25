@@ -2,7 +2,7 @@
   import { X, Send, Paperclip, Bold, Italic, List, Link } from 'lucide-svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { EmailPillInput } from '@kestrel/shared/components';
+  import { ContactAutocomplete } from '@kestrel/shared';
   import { apiClient } from '@kestrel/shared/api';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
@@ -166,7 +166,7 @@
           <span class="w-10 text-[var(--color-text-secondary)] font-mono shrink-0 select-none">To:</span>
           <div class="flex-1 flex items-center">
             <div class="flex-1">
-              <EmailPillInput bind:recipients={toRecipients} placeholder="Recipients..." />
+              <ContactAutocomplete bind:recipients={toRecipients} placeholder="Recipients..." />
             </div>
             <div class="flex items-center gap-2 ml-2 text-[11px] text-[var(--color-text-secondary)] shrink-0 select-none">
               {#if !showCc}
@@ -187,7 +187,7 @@
               <button type="button" onclick={() => { showCc = false; ccRecipients = []; }} class="text-[10px] text-[var(--color-text-secondary)] hover:text-white mr-1.5 cursor-pointer">✕</button>
             </div>
             <div class="flex-1">
-              <EmailPillInput bind:recipients={ccRecipients} placeholder="Cc recipients..." />
+              <ContactAutocomplete bind:recipients={ccRecipients} placeholder="Cc recipients..." />
             </div>
           </div>
         {/if}
@@ -200,7 +200,7 @@
               <button type="button" onclick={() => { showBcc = false; bccRecipients = []; }} class="text-[10px] text-[var(--color-text-secondary)] hover:text-white mr-1.5 cursor-pointer">✕</button>
             </div>
             <div class="flex-1">
-              <EmailPillInput bind:recipients={bccRecipients} placeholder="Bcc recipients..." />
+              <ContactAutocomplete bind:recipients={bccRecipients} placeholder="Bcc recipients..." />
             </div>
           </div>
         {/if}
