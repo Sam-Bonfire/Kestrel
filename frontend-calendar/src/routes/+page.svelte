@@ -39,6 +39,7 @@
   let isHeaderMonthDropdownOpen = $state(false);
   let miniMonth = $state(new Date());
   let isDetailsDocked = $state(false);
+  let secondaryTimezones = $state<string[]>([]);
 
   // LocalStorage state persistence
   $effect(() => {
@@ -49,6 +50,7 @@
       localStorage.setItem('kestrel_showWeekends', JSON.stringify(showWeekends));
       localStorage.setItem('kestrel_isDocked', JSON.stringify(isDetailsDocked));
       localStorage.setItem('kestrel_startHour', startHour.toString());
+      localStorage.setItem('kestrel_secondaryTimezones', JSON.stringify(secondaryTimezones));
     }
   });
 
@@ -164,6 +166,8 @@
       if (savedDocked) isDetailsDocked = JSON.parse(savedDocked);
       const savedStartHour = localStorage.getItem('kestrel_startHour');
       if (savedStartHour) startHour = parseInt(savedStartHour, 10);
+      const savedSecondaryTimezones = localStorage.getItem('kestrel_secondaryTimezones');
+      if (savedSecondaryTimezones) secondaryTimezones = JSON.parse(savedSecondaryTimezones);
     } catch(e) {}
 
     const checkMobile = () => isMobileOrTablet = window.innerWidth <= 1024;
@@ -554,6 +558,15 @@
         viewMode = mode;
         if (isMobileOrTablet) isSidebarOpenMobile = false;
       }}
+      onApplySet={(calendarIds) => {
+        accounts = accounts.map(acc => ({
+          ...acc,
+          calendars: acc.calendars.map(cal => ({
+            ...cal,
+            isActive: calendarIds.includes(cal.id)
+          }))
+        }));
+      }}
     />
   {/snippet}
 
@@ -917,6 +930,7 @@
       bind:viewMode
       {showWeekends}
       {startHour}
+      {secondaryTimezones}
       selectedEventId={selectedEvent?.id}
       onEventClick={(ev, e) => {
         selectedEvent = ev;
@@ -1040,6 +1054,38 @@
               <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
             </div>
+          </div>
+
+          <div class="space-y-2.5">
+            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+              Secondary Timezones (Max 2)
+            </label>
+            {#each secondaryTimezones as tz, index}
+              <div class="flex items-center gap-2">
+                <select
+                  bind:value={secondaryTimezones[index]}
+                  class="flex-1 bg-[#1a1a1a] border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                >
+                  {#each Intl.supportedValuesOf('timeZone') as tzOption}
+                    <option value={tzOption}>{tzOption}</option>
+                  {/each}
+                </select>
+                <button
+                  onclick={() => secondaryTimezones = secondaryTimezones.filter((_, i) => i !== index)}
+                  class="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            {/each}
+            {#if secondaryTimezones.length < 2}
+              <button
+                onclick={() => secondaryTimezones = [...secondaryTimezones, 'UTC']}
+                class="w-full py-1.5 rounded-lg border border-dashed border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500 text-xs transition-colors cursor-pointer font-semibold"
+              >
+                + Add Timezone
+              </button>
+            {/if}
           </div>
         </div>
       </div>

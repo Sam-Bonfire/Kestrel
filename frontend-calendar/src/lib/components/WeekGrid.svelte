@@ -27,6 +27,7 @@
     viewMode = $bindable('month'),
     showWeekends = true,
     startHour = 8,
+    secondaryTimezones = [] as string[],
     selectedEventId = null as string | null,
     onEventClick = (ev: CalendarEvent) => {},
     onEmptySlotClick = () => {},
@@ -38,6 +39,7 @@
     viewMode?: string;
     showWeekends?: boolean;
     startHour?: number;
+    secondaryTimezones?: string[];
     selectedEventId?: string | null;
     onEventClick?: (ev: CalendarEvent, e?: MouseEvent) => void;
     onEmptySlotClick?: (dateStr: string, timeStr: string, e?: MouseEvent) => void;
@@ -53,6 +55,25 @@
     const offset = -(new Date().getTimezoneOffset()) / 60;
     return `GMT${offset >= 0 ? '+' : ''}${offset}`;
   });
+
+  // Helper to format hours in a specific timezone
+  function formatHourInTimezone(hour: number, tz: string): string {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour: 'numeric',
+        hour12: true
+      }).formatToParts(d);
+      return parts.map(p => p.value).join('');
+    } catch(e) {
+      return `${hour}:00`;
+    }
+  }
+
+  // Calculate the gutter width based on number of timezones
+  let gutterWidth = $derived(64 + (secondaryTimezones.length * 56));
 
   // Color options configurations matching design tokens and presets
   const COLOR_CLASSES: Record<string, { bg: string; border: string; hex: string }> = {
@@ -442,9 +463,18 @@
   {:else}
     <!-- Timeline Views (Week, Weekdays, Day) -->
     <div class="grid border-b border-[var(--color-border-hairline)] bg-[var(--color-canvas-card)] text-xs font-semibold text-[var(--color-text-secondary)] shrink-0 select-none"
-         style="grid-template-columns: 64px repeat({visibleDates().length}, minmax(0, 1fr));">
-      <div class="p-3 border-r border-[var(--color-border-hairline)] font-mono text-[10px] flex flex-col items-center justify-center">
-        <span class="opacity-70">{tzOffsetStr()}</span>
+         style="grid-template-columns: {gutterWidth}px repeat({visibleDates().length}, minmax(0, 1fr));">
+      <div class="border-r border-[var(--color-border-hairline)] flex items-center justify-center">
+        <div class="flex items-center w-full h-full divide-x divide-[var(--color-border-hairline)]">
+          {#each secondaryTimezones as tz}
+            <div class="flex-1 h-full p-2 flex flex-col items-center justify-center">
+              <span class="text-[10px] opacity-70 truncate w-full text-center" title={tz}>{tz.split('/')[1]?.replace('_', ' ') || tz}</span>
+            </div>
+          {/each}
+          <div class="flex-1 h-full p-2 flex flex-col items-center justify-center font-mono text-[10px]">
+            <span class="opacity-70">{tzOffsetStr()}</span>
+          </div>
+        </div>
       </div>
       {#each visibleDates() as date}
         {@const isToday = date.toDateString() === new Date().toDateString()}
@@ -474,15 +504,26 @@
 
       <!-- Time blocks columns -->
       <div class="relative min-h-[1440px] grid" 
-           style="grid-template-columns: 64px repeat({visibleDates().length}, minmax(0, 1fr));">
+           style="grid-template-columns: {gutterWidth}px repeat({visibleDates().length}, minmax(0, 1fr));">
         
         <!-- Y-Axis Hours list labels -->
-        <div class="border-r border-[var(--color-border-hairline)] bg-[var(--color-canvas-card)]/10">
-          {#each hours as hour}
-            <div class="h-[60px] p-2 text-[10px] font-mono text-[var(--color-text-secondary)]/60 text-right">
-              {hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+        <div class="border-r border-[var(--color-border-hairline)] bg-[var(--color-canvas-card)]/10 flex divide-x divide-[var(--color-border-hairline)]">
+          {#each secondaryTimezones as tz}
+            <div class="flex-1 flex flex-col">
+              {#each hours as hour}
+                <div class="h-[60px] p-2 text-[10px] font-mono text-[var(--color-text-secondary)]/40 text-right flex items-start justify-end">
+                  {formatHourInTimezone(hour, tz)}
+                </div>
+              {/each}
             </div>
           {/each}
+          <div class="flex-[1.1] flex flex-col">
+            {#each hours as hour}
+              <div class="h-[60px] p-2 text-[10px] font-mono text-[var(--color-text-secondary)]/60 text-right">
+                {hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+              </div>
+            {/each}
+          </div>
         </div>
 
         <!-- Columns for each day -->
