@@ -132,11 +132,28 @@ fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
     }
 
     // 2. Fallback to Authorization header
-    req.headers()
+    if let Some(token) = req
+        .headers()
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
-        .map(|s| s.to_string())
+    {
+        return Some(token.to_string());
+    }
+
+    // 3. Fallback to query parameter (needed for browser EventSource / SSE connections)
+    if let Some(query) = req.uri().query() {
+        for pair in query.split('&') {
+            if let Some((k, v)) = pair.split_once('=')
+                && k == "token"
+                && !v.is_empty()
+            {
+                return Some(v.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 // --- JWT helpers ---
