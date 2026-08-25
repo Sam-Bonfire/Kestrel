@@ -56,6 +56,8 @@ pub trait MessageRepository: Send + Sync {
     async fn set_archived(&self, id: Uuid, is_archived: bool) -> Result<(), sqlx::Error>;
     async fn set_deleted(&self, id: Uuid, is_deleted: bool) -> Result<(), sqlx::Error>;
     async fn set_labels(&self, id: Uuid, labels: Option<String>) -> Result<(), sqlx::Error>;
+    async fn set_snoozed_until(&self, id: Uuid, snoozed_until: Option<i64>) -> Result<(), sqlx::Error>;
+    async fn unsnooze_due_messages(&self, current_timestamp: i64) -> Result<Vec<Uuid>, sqlx::Error>;
 
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error>;
     async fn report_phishing(&self, id: Uuid) -> Result<(), sqlx::Error>;

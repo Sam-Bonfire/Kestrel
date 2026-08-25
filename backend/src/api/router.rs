@@ -126,6 +126,10 @@ pub fn create_router(state: AppState) -> Router {
             "/api/v1/messages/{id}/snooze",
             post(messages::snooze_message),
         )
+        .route(
+            "/api/v1/messages/{id}/unsnooze",
+            post(messages::unsnooze_message),
+        )
         .route("/api/v1/messages/{id}/trash", post(messages::trash_message))
         .route("/api/v1/messages/{id}/star", post(messages::toggle_star))
         .route("/api/v1/messages/{id}/mute", post(messages::mute_thread))
