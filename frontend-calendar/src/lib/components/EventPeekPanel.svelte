@@ -170,7 +170,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     transition:fly={{ x: isDocked && !isMobileOrTablet ? 50 : 0, y: isMobileOrTablet || (!isDocked && !isMobileOrTablet) ? 30 : 0, duration: 300, easing: cubicOut }}
-    class="bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden font-sans shadow-2xl flex flex-col text-sm text-[var(--color-text-primary)] {isMobileOrTablet ? 'fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl max-h-[90vh] overflow-y-auto' : isDocked ? 'fixed inset-y-0 right-0 w-80 border-l z-50 rounded-none h-screen' : 'fixed z-50 max-h-[90vh] rounded-xl'}"
+    class="bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden font-sans shadow-2xl flex flex-col text-sm text-[var(--color-text-primary)] {isMobileOrTablet ? 'fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl max-h-[90vh] overflow-y-auto' : isDocked ? 'fixed inset-y-0 right-0 w-80 border-l z-50 rounded-none h-screen' : 'fixed z-50 max-h-[90vh] overflow-y-auto rounded-xl'}"
     style={popoverStyle}
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => { 
