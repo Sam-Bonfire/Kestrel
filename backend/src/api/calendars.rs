@@ -435,6 +435,7 @@ pub async fn create_event(
         organizer_name: None,
         attendees: body.attendees,
         status: Some("confirmed".to_string()),
+        has_conflict: false,
         created_at: now,
         updated_at: now,
     };

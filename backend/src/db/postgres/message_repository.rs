@@ -128,8 +128,8 @@ impl MessageRepository for PostgresMessageRepository {
         sqlx::query(
             "INSERT INTO messages (id, account_id, external_id, thread_id, subject, sender_name, \
              sender_email, recipients, date_sent, date_received, snippet, body_text, body_html, \
-             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) \
+             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, has_conflict, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) \
              ON CONFLICT (account_id, external_id) DO UPDATE SET \
              thread_id = EXCLUDED.thread_id, subject = EXCLUDED.subject, \
              sender_name = EXCLUDED.sender_name, sender_email = EXCLUDED.sender_email, \
@@ -138,7 +138,7 @@ impl MessageRepository for PostgresMessageRepository {
              body_text = EXCLUDED.body_text, body_html = EXCLUDED.body_html, \
              labels = EXCLUDED.labels, is_read = EXCLUDED.is_read, \
              is_archived = EXCLUDED.is_archived, is_deleted = EXCLUDED.is_deleted, \
-             has_attachments = EXCLUDED.has_attachments, snoozed_until = EXCLUDED.snoozed_until, \
+             has_attachments = EXCLUDED.has_attachments, snoozed_until = EXCLUDED.snoozed_until, has_conflict = EXCLUDED.has_conflict, \
              updated_at = EXCLUDED.updated_at",
         )
         .bind(message.id)
@@ -209,6 +209,53 @@ impl MessageRepository for PostgresMessageRepository {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn set_snoozed_until(
+        &self,
+        id: Uuid,
+        snoozed_until: Option<i64>,
+    ) -> Result<(), sqlx::Error> {
+        let is_archived = snoozed_until.is_some();
+        sqlx::query(
+            "UPDATE messages SET snoozed_until = $1, is_archived = $2, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id = $3",
+        )
+        .bind(snoozed_until)
+        .bind(is_archived)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn unsnooze_due_messages(
+        &self,
+        current_timestamp: i64,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
+        #[derive(sqlx::FromRow)]
+        struct MessageId {
+            id: Uuid,
+        }
+
+        let rows = sqlx::query_as::<_, MessageId>(
+            "SELECT id FROM messages WHERE snoozed_until IS NOT NULL AND snoozed_until <= $1",
+        )
+        .bind(current_timestamp)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let ids: Vec<Uuid> = rows.into_iter().map(|row| row.id).collect();
+
+        if !ids.is_empty() {
+            sqlx::query(
+                "UPDATE messages SET snoozed_until = NULL, is_archived = false, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT WHERE snoozed_until IS NOT NULL AND snoozed_until <= $1"
+            )
+            .bind(current_timestamp)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        Ok(ids)
     }
 
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {

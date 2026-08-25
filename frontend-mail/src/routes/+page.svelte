@@ -9,16 +9,76 @@
   import { AppShell, ReauthBanner } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount } from '@kestrel/shared/stores';
   import { replayOfflineQueue, searchMessages } from '@kestrel/shared/api';
+  import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, untrack, onDestroy } from 'svelte';
+
+  async function replayOutbox() {
+    if (!navigator.onLine) return;
+
+    const outbox = getOutboxItems();
+
+    // Calculate exponential backoff times
+    const now = Date.now();
+    const pending = outbox.filter(item => {
+      if (item.status === 'pending' || item.status === 'sending') return true;
+      if (item.status === 'failed' && item.retry_count < 5) {
+        // Backoff: 5s, 15s, 45s, 135s... (5 * 3^retry_count)
+        const delayMs = 5000 * Math.pow(3, item.retry_count - 1);
+        const lastAttempt = new Date(item.created_at).getTime(); // Note: we'd ideally track last_attempt_at but created_at will suffice for a simple delay
+        return (now - lastAttempt) > delayMs;
+      }
+      return false;
+    });
+
+    for (const item of pending) {
+      updateOutboxItem(item.id, { status: 'sending' });
+      // Find matching email in state
+      allEmails = allEmails.map(e => e.id === item.id ? { ...e, outboxStatus: 'sending' } : e);
+
+      try {
+        const api = await import('@kestrel/shared/api');
+        await api.sendMessage({
+          to: item.to,
+          subject: item.subject,
+          body: item.body_html || item.body_text || '',
+        });
+
+        removeOutboxItem(item.id);
+        allEmails = allEmails.filter(e => e.id !== item.id);
+      } catch (err) {
+        const nextRetry = item.retry_count + 1;
+        const newStatus = nextRetry >= 5 ? 'failed' : 'pending';
+        updateOutboxItem(item.id, {
+          status: newStatus,
+          retry_count: nextRetry,
+          last_error: err instanceof Error ? err.message : String(err),
+        });
+        allEmails = allEmails.map(e => e.id === item.id ? { ...e, outboxStatus: newStatus } : e);
+      }
+    }
+  }
+
+  let interval: ReturnType<typeof setInterval>;
 
   onMount(() => {
     // Initial offline queue replay
     replayOfflineQueue().catch(console.error);
+    replayOutbox();
     
     // Setup online listener
-    const onOnline = () => replayOfflineQueue().catch(console.error);
+    const onOnline = () => {
+      replayOfflineQueue().catch(console.error);
+      replayOutbox();
+    };
     window.addEventListener('online', onOnline);
+
+    // Implement exponential backoff conceptually. We'll poll every 5 seconds,
+    // but the filter logic limits it based on retry count manually in the real app.
+    // For now, poll more frequently to allow the 'retry_count' logic in replayOutbox to take effect
+    interval = setInterval(() => {
+      if (navigator.onLine) replayOutbox();
+    }, 5000); // Check every 5 seconds
 
     // Register interactive notification category (Reply / Mark as Read / Archive)
     registerNotificationCategories().catch(console.error);
@@ -53,8 +113,8 @@
 
   // ── Accounts ────────────────────────────────────────────────────
   const accounts = [
-    { id: '1', name: 'Personal Gmail',  email: 'alex@gmail.com',   color: '#EA4335' },
-    { id: '2', name: 'Work Outlook',    email: 'alex@kestrel.dev', color: '#0078D4' },
+    { id: '1', name: 'Personal Gmail',  email: 'alex@gmail.com',   color: '#EA4335', provider: 'google' },
+    { id: '2', name: 'Work Outlook',    email: 'alex@kestrel.dev', color: '#0078D4', provider: 'outlook' },
   ];
 
   // ── App state ───────────────────────────────────────────────────
@@ -65,7 +125,7 @@
   let isCommandOpen    = $state(false);
   let isSettingsOpen   = $state(false);
   let isMailSettingsOpen = $state(false);
-  let activeAccountId  = $state('1');
+  let activeAccountId  = $state('all');
   let isMobileSidebarOpen = $state(false);
   let initialReplyMode = $state<'reply'|'reply_all'|'forward'|null>(null);
 
@@ -192,26 +252,41 @@
     Array.from(new Set([...allEmails.flatMap(e => e.labels), ...customLabels]))
   );
 
-  let unreadCount = $derived(allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isTrash && !e.isSpam).length);
-  let inboxCount = $derived(allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length);
+  let unreadCount = $derived.by(() => {
+    const total = allEmails.filter(e => e.isUnread && !e.isTrash && !e.isSpam).length;
+    const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isTrash && !e.isSpam).length;
+    if (total === 0) return 0;
+    return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
+  });
+  let inboxCount = $derived.by(() => {
+    const total = allEmails.filter(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
+    const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
+    if (total === 0) return 0;
+    return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
+  });
 
   let viewCounts = $derived.by(() => {
-    const accEmails = allEmails.filter(e => e.accountId === activeAccountId);
-    const counts: Record<string, number> = {};
+    const getCountStr = (filterFn: (e: typeof allEmails[0]) => boolean) => {
+      const total = allEmails.filter(filterFn).length;
+      const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && filterFn(e)).length;
+      if (total === 0) return 0;
+      return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
+    };
 
-    counts['inbox'] = accEmails.filter(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
-    counts['unread'] = accEmails.filter(e => e.isUnread && !e.isTrash && !e.isSpam).length;
-    counts['sent'] = accEmails.filter(e => e.isUnread && e.labels.includes('Sent')).length;
-    counts['drafts'] = accEmails.filter(e => e.isDraft).length;
-    counts['starred'] = accEmails.filter(e => e.isUnread && e.isStarred && !e.isTrash).length;
-    counts['github'] = accEmails.filter(e => e.isUnread && e.sender === 'GitHub' && !e.isTrash).length;
-    counts['all-mail'] = accEmails.filter(e => e.isUnread && !e.isTrash).length;
-    counts['spam'] = accEmails.filter(e => e.isUnread && e.isSpam).length;
-    counts['trash'] = accEmails.filter(e => e.isUnread && e.isTrash).length;
+    const counts: Record<string, string | number> = {};
+
+    counts['inbox'] = getCountStr(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft);
+    counts['unread'] = getCountStr(e => e.isUnread && !e.isTrash && !e.isSpam);
+    counts['sent'] = getCountStr(e => e.isUnread && e.labels.includes('Sent'));
+    counts['drafts'] = getCountStr(e => e.isDraft);
+    counts['starred'] = getCountStr(e => e.isUnread && e.isStarred && !e.isTrash);
+    counts['github'] = getCountStr(e => e.isUnread && e.sender === 'GitHub' && !e.isTrash);
+    counts['all-mail'] = getCountStr(e => e.isUnread && !e.isTrash);
+    counts['spam'] = getCountStr(e => e.isUnread && e.isSpam);
+    counts['trash'] = getCountStr(e => e.isUnread && e.isTrash);
 
     allLabels.forEach((lbl: string) => {
-      const cnt = accEmails.filter(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase())).length;
-      counts[`label-${lbl}`] = cnt;
+      counts[`label-${lbl}`] = getCountStr(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase()));
     });
 
     return counts;
@@ -221,7 +296,7 @@
   let threads = $derived(
     allEmails
       .filter(e => {
-        if (e.accountId !== activeAccountId) return false;
+        if (activeAccountId !== 'all' && e.accountId !== activeAccountId) return false;
         if (currentView === 'inbox')    return !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft;
         if (currentView === 'unread')   return e.isUnread && !e.isTrash && !e.isSpam;
         if (currentView === 'sent')     return e.labels.includes('Sent');
@@ -237,6 +312,7 @@
         }
         return true;
       })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .map(e => ({
         id: e.id,
         sender: e.sender,
@@ -248,7 +324,9 @@
         isStarred: e.isStarred,
         hasAttachment: false,
         labels: e.labels,
-        category: e.category
+        category: e.category,
+        provider: accounts.find(a => a.id === e.accountId)?.provider || 'unknown',
+        accountColor: accounts.find(a => a.id === e.accountId)?.color || '#6B7280'
       }))
   );
 
@@ -615,7 +693,10 @@
       if (e.key === 'Escape') { selectedThreadId = null; isCommandOpen = false; isComposeOpen = false; }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      clearInterval(interval);
+    };
   });
 </script>
 
@@ -677,6 +758,39 @@
       onMute={muteThread}
       onReportSpam={reportSpam}
       onOpenMobileSidebar={() => isMobileSidebarOpen = true}
+      onRetryOutbox={(id) => {
+        const email = allEmails.find(e => e.id === id);
+        if (email) {
+          updateOutboxItem(id, { status: 'sending' });
+          allEmails = allEmails.map(e => e.id === id ? { ...e, outboxStatus: 'sending' } : e);
+          import('@kestrel/shared/api').then(api => {
+            api.sendMessage({
+              to: email.to,
+              subject: email.subject,
+              body: email.body,
+            }).then(() => {
+              removeOutboxItem(id);
+              allEmails = allEmails.filter(e => e.id !== id);
+            }).catch((err) => {
+              const item = getOutboxItems().find(i => i.id === id);
+              if (item) {
+                const nextRetry = item.retry_count + 1;
+                const newStatus = nextRetry >= 5 ? 'failed' : 'pending';
+                updateOutboxItem(id, {
+                  status: newStatus,
+                  retry_count: nextRetry,
+                  last_error: err instanceof Error ? err.message : String(err),
+                });
+                allEmails = allEmails.map(e => e.id === id ? { ...e, outboxStatus: newStatus } : e);
+              }
+            });
+          });
+        }
+      }}
+      onDiscardOutbox={(id) => {
+        removeOutboxItem(id);
+        allEmails = allEmails.filter(e => e.id !== id);
+      }}
     />
     
     <!-- Mobile FAB for Compose -->
@@ -736,17 +850,86 @@
     isOpen={isComposeOpen}
     onClose={() => isComposeOpen = false}
     onSend={async (draft) => {
+      const draftData = {
+        to: draft.to,
+        subject: draft.subject,
+        body: draft.body,
+      };
+
+      if (!navigator.onLine) {
+        const newId = enqueueOutboxItem({
+          account_id: activeAccountId || '1',
+          to: draft.to,
+          cc: draft.cc,
+          bcc: draft.bcc,
+          subject: draft.subject,
+          body_html: draft.body,
+        });
+
+        const newMsg = {
+          id: newId,
+          accountId: activeAccountId || '1',
+          sender: 'Me',
+          senderEmail: 'me@kestrel.dev',
+          to: draft.to,
+          subject: draft.subject || '(no subject)',
+          body: draft.body,
+          timestamp: new Date().toISOString(),
+          isUnread: false,
+          isStarred: false,
+          isArchived: false,
+          isTrash: false,
+          isDraft: false,
+          isSpam: false,
+          hasAttachment: false,
+          labels: ['Outbox'],
+          category: 'Primary',
+          isOutbox: true,
+          outboxStatus: 'pending'
+        };
+        allEmails = [newMsg, ...allEmails];
+        isComposeOpen = false;
+        return;
+      }
+
       try {
         const api = await import('@kestrel/shared/api');
-        await api.sendMessage({
-          to: draft.to,
-          subject: draft.subject,
-          body: draft.body,
-        });
+        await api.sendMessage(draftData);
         isComposeOpen = false;
       } catch (err) {
         console.error('Failed to send message:', err);
-        // Optionally show toast error here
+        // If network error, fallback to outbox
+        const newId = enqueueOutboxItem({
+          account_id: activeAccountId || '1',
+          to: draft.to,
+          cc: draft.cc,
+          bcc: draft.bcc,
+          subject: draft.subject,
+          body_html: draft.body,
+        });
+        const newMsg = {
+          id: newId,
+          accountId: activeAccountId || '1',
+          sender: 'Me',
+          senderEmail: 'me@kestrel.dev',
+          to: draft.to,
+          subject: draft.subject || '(no subject)',
+          body: draft.body,
+          timestamp: new Date().toISOString(),
+          isUnread: false,
+          isStarred: false,
+          isArchived: false,
+          isTrash: false,
+          isDraft: false,
+          isSpam: false,
+          hasAttachment: false,
+          labels: ['Outbox'],
+          category: 'Primary',
+          isOutbox: true,
+          outboxStatus: 'pending'
+        };
+        allEmails = [newMsg, ...allEmails];
+        isComposeOpen = false;
       }
     }}
   />

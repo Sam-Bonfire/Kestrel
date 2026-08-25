@@ -17,7 +17,7 @@ impl SqliteMessageRepository {
 
 const MESSAGE_COLUMNS: &str = "m.id, m.account_id, m.external_id, m.thread_id, m.subject, m.sender_name, m.sender_email, \
      m.recipients, m.date_sent, m.date_received, m.snippet, m.body_text, m.body_html, m.labels, \
-     m.is_read, m.is_archived, m.is_deleted, m.has_attachments, m.snoozed_until, m.created_at, m.updated_at";
+     m.is_read, m.is_archived, m.is_deleted, m.has_attachments, m.snoozed_until, m.has_conflict, m.created_at, m.updated_at";
 
 #[async_trait]
 impl MessageRepository for SqliteMessageRepository {
@@ -115,8 +115,8 @@ impl MessageRepository for SqliteMessageRepository {
         sqlx::query(
             "INSERT INTO messages (id, account_id, external_id, thread_id, subject, sender_name, \
              sender_email, recipients, date_sent, date_received, snippet, body_text, body_html, \
-             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, has_conflict, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
              ON CONFLICT(account_id, external_id) DO UPDATE SET \
              thread_id = excluded.thread_id, subject = excluded.subject, \
              sender_name = excluded.sender_name, sender_email = excluded.sender_email, \
@@ -125,7 +125,7 @@ impl MessageRepository for SqliteMessageRepository {
              body_text = excluded.body_text, body_html = excluded.body_html, \
              labels = excluded.labels, is_read = excluded.is_read, \
              is_archived = excluded.is_archived, is_deleted = excluded.is_deleted, \
-             has_attachments = excluded.has_attachments, snoozed_until = excluded.snoozed_until, \
+             has_attachments = excluded.has_attachments, snoozed_until = excluded.snoozed_until, has_conflict = excluded.has_conflict, \
              updated_at = excluded.updated_at",
         )
         .bind(message.id.to_string())
@@ -188,6 +188,54 @@ impl MessageRepository for SqliteMessageRepository {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn set_snoozed_until(
+        &self,
+        id: Uuid,
+        snoozed_until: Option<i64>,
+    ) -> Result<(), sqlx::Error> {
+        let is_archived = snoozed_until.is_some();
+        sqlx::query("UPDATE messages SET snoozed_until = ?, is_archived = ?, updated_at = unixepoch() WHERE id = ?")
+            .bind(snoozed_until)
+            .bind(is_archived)
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn unsnooze_due_messages(
+        &self,
+        current_timestamp: i64,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
+        #[derive(sqlx::FromRow)]
+        struct MessageId {
+            id: String,
+        }
+
+        let rows = sqlx::query_as::<_, MessageId>(
+            "SELECT id FROM messages WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?",
+        )
+        .bind(current_timestamp)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let ids: Vec<Uuid> = rows
+            .into_iter()
+            .filter_map(|row| Uuid::parse_str(&row.id).ok())
+            .collect();
+
+        if !ids.is_empty() {
+            sqlx::query(
+                "UPDATE messages SET snoozed_until = NULL, is_archived = 0, updated_at = unixepoch() WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?"
+            )
+            .bind(current_timestamp)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        Ok(ids)
     }
 
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error> {

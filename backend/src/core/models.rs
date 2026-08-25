@@ -61,6 +61,7 @@ pub struct Message {
     pub is_deleted: bool,
     pub has_attachments: bool,
     pub snoozed_until: Option<i64>,
+    pub has_conflict: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -94,6 +95,7 @@ pub struct CalendarEvent {
     pub organizer_name: Option<String>,
     pub attendees: Option<String>,
     pub status: Option<String>,
+    pub has_conflict: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -127,6 +129,17 @@ pub struct UserPreferences {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Contact {
+    pub id: DbUuid,
+    pub account_id: DbUuid,
+    pub name: Option<String>,
+    pub email: String,
+    pub avatar_url: Option<String>,
+    pub last_contacted_at: i64,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsPayload {
@@ -143,4 +156,15 @@ pub struct SettingsPayload {
 pub struct LabelCustomization {
     pub icon_name: String,
     pub color_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[allow(dead_code)]
+pub struct HistoricalRevision {
+    pub id: DbUuid,
+    pub resource_type: String,
+    pub resource_id: DbUuid,
+    pub serialized_payload: String,
+    pub revision_number: i32,
+    pub created_at: i64,
 }
