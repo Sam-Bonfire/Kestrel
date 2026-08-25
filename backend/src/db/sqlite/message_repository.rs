@@ -190,7 +190,11 @@ impl MessageRepository for SqliteMessageRepository {
         Ok(())
     }
 
-    async fn set_snoozed_until(&self, id: Uuid, snoozed_until: Option<i64>) -> Result<(), sqlx::Error> {
+    async fn set_snoozed_until(
+        &self,
+        id: Uuid,
+        snoozed_until: Option<i64>,
+    ) -> Result<(), sqlx::Error> {
         let is_archived = snoozed_until.is_some();
         sqlx::query("UPDATE messages SET snoozed_until = ?, is_archived = ?, updated_at = unixepoch() WHERE id = ?")
             .bind(snoozed_until)
@@ -201,20 +205,26 @@ impl MessageRepository for SqliteMessageRepository {
         Ok(())
     }
 
-    async fn unsnooze_due_messages(&self, current_timestamp: i64) -> Result<Vec<Uuid>, sqlx::Error> {
+    async fn unsnooze_due_messages(
+        &self,
+        current_timestamp: i64,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
         #[derive(sqlx::FromRow)]
         struct MessageId {
             id: String,
         }
 
         let rows = sqlx::query_as::<_, MessageId>(
-            "SELECT id FROM messages WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?"
+            "SELECT id FROM messages WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?",
         )
         .bind(current_timestamp)
         .fetch_all(&self.pool)
         .await?;
 
-        let ids: Vec<Uuid> = rows.into_iter().filter_map(|row| Uuid::parse_str(&row.id).ok()).collect();
+        let ids: Vec<Uuid> = rows
+            .into_iter()
+            .filter_map(|row| Uuid::parse_str(&row.id).ok())
+            .collect();
 
         if !ids.is_empty() {
             sqlx::query(

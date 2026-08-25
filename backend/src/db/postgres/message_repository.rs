@@ -211,7 +211,11 @@ impl MessageRepository for PostgresMessageRepository {
         Ok(())
     }
 
-    async fn set_snoozed_until(&self, id: Uuid, snoozed_until: Option<i64>) -> Result<(), sqlx::Error> {
+    async fn set_snoozed_until(
+        &self,
+        id: Uuid,
+        snoozed_until: Option<i64>,
+    ) -> Result<(), sqlx::Error> {
         let is_archived = snoozed_until.is_some();
         sqlx::query(
             "UPDATE messages SET snoozed_until = $1, is_archived = $2, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id = $3",
@@ -224,14 +228,17 @@ impl MessageRepository for PostgresMessageRepository {
         Ok(())
     }
 
-    async fn unsnooze_due_messages(&self, current_timestamp: i64) -> Result<Vec<Uuid>, sqlx::Error> {
+    async fn unsnooze_due_messages(
+        &self,
+        current_timestamp: i64,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
         #[derive(sqlx::FromRow)]
         struct MessageId {
             id: Uuid,
         }
 
         let rows = sqlx::query_as::<_, MessageId>(
-            "SELECT id FROM messages WHERE snoozed_until IS NOT NULL AND snoozed_until <= $1"
+            "SELECT id FROM messages WHERE snoozed_until IS NOT NULL AND snoozed_until <= $1",
         )
         .bind(current_timestamp)
         .fetch_all(&self.pool)
