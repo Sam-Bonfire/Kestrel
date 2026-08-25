@@ -132,11 +132,28 @@ fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
     }
 
     // 2. Fallback to Authorization header
-    req.headers()
+    if let Some(token) = req
+        .headers()
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
-        .map(|s| s.to_string())
+    {
+        return Some(token.to_string());
+    }
+
+    // 3. Fallback to query parameter (needed for browser EventSource / SSE connections)
+    if let Some(query) = req.uri().query() {
+        for pair in query.split('&') {
+            if let Some((k, v)) = pair.split_once('=')
+                && k == "token"
+                && !v.is_empty()
+            {
+                return Some(v.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 // --- JWT helpers ---
@@ -536,20 +553,42 @@ pub async fn callback(
     let sync_state = state.clone();
     let sync_account = account.clone();
     let sync_token = access_token.clone();
+    let sync_tx = state.sync_tx.clone();
     tokio::spawn(async move {
         tracing::info!(
             "Starting initial historical sync for account {}",
             sync_account.id.0
         );
-        if let Err(e) =
-            crate::api::sync::sync_account_messages(&sync_state, &sync_account, &sync_token).await
+        let _ = sync_tx.send(crate::api::sync::SyncEvent::SyncStarted {
+            account_id: sync_account.id.0.to_string(),
+            provider: sync_account.provider.clone(),
+        });
+
+        let start_time = std::time::Instant::now();
+        if let Err(e) = crate::api::sync::sync_account_messages(
+            &sync_state,
+            &sync_account,
+            &sync_token,
+            &sync_tx,
+        )
+        .await
         {
             tracing::error!(
                 "Initial historical sync failed for {}: {}",
                 sync_account.id.0,
                 e
             );
+            let _ = sync_tx.send(crate::api::sync::SyncEvent::SyncError {
+                account_id: sync_account.id.0.to_string(),
+                error: e.to_string(),
+            });
         }
+
+        let _ = sync_tx.send(crate::api::sync::SyncEvent::SyncComplete {
+            account_id: sync_account.id.0.to_string(),
+            duration_ms: start_time.elapsed().as_millis() as u64,
+        });
+
         tracing::info!(
             "Completed initial historical sync for account {}",
             sync_account.id.0

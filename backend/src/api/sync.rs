@@ -22,12 +22,36 @@ use crate::db::sqlite::account_repository::SqliteAccountRepository;
 // --- Sync event types ---
 
 #[derive(Debug, Clone, Serialize)]
-pub struct SyncEvent {
-    pub event_type: String,
-    pub account_id: Option<Uuid>,
-    pub provider: Option<String>,
-    pub message: String,
-    pub timestamp: i64,
+#[serde(tag = "event_type")]
+pub enum SyncEvent {
+    #[serde(rename = "sync_started")]
+    SyncStarted {
+        account_id: String,
+        provider: String,
+    },
+    #[serde(rename = "sync_progress")]
+    SyncProgress {
+        account_id: String,
+        stage: String,
+        items_synced: u32,
+        total_items: Option<u32>,
+    },
+    #[serde(rename = "sync_complete")]
+    SyncComplete {
+        account_id: String,
+        duration_ms: u64,
+    },
+    #[serde(rename = "sync_error")]
+    SyncError { account_id: String, error: String },
+    #[serde(rename = "auth_revocation")]
+    AuthRevocation {
+        account_id: String,
+        provider: String,
+        message: String,
+        timestamp: i64,
+    },
+    #[serde(rename = "message_unsnoozed")]
+    MessageUnsnoozed { message_id: String, timestamp: i64 },
 }
 
 // --- Token Refresher ---
@@ -201,10 +225,9 @@ pub async fn ensure_valid_token(
                         }
                     }
                 }
-                let event = SyncEvent {
-                    event_type: "auth_revocation".to_string(),
-                    account_id: Some(account.id.0),
-                    provider: Some(account.provider.clone()),
+                let event = SyncEvent::AuthRevocation {
+                    account_id: account.id.0.to_string(),
+                    provider: account.provider.clone(),
                     message: "Token refresh permanently failed (e.g. revoked)".to_string(),
                     timestamp: chrono::Utc::now().timestamp(),
                 };
@@ -214,10 +237,9 @@ pub async fn ensure_valid_token(
         }
         Err(e) => {
             account.sync_error = Some(e.clone());
-            let event = SyncEvent {
-                event_type: "auth_revocation".to_string(),
-                account_id: Some(account.id.0),
-                provider: Some(account.provider.clone()),
+            let event = SyncEvent::AuthRevocation {
+                account_id: account.id.0.to_string(),
+                provider: account.provider.clone(),
                 message: "Token refresh permanently failed (e.g. revoked)".to_string(),
                 timestamp: chrono::Utc::now().timestamp(),
             };
@@ -310,7 +332,7 @@ pub async fn trigger_sync(
             }
         };
 
-        match sync_account_messages(&state, &account, &token).await {
+        match sync_account_messages(&state, &account, &token, &state.sync_tx).await {
             Ok(count) => synced_count += count,
             Err(e) => {
                 tracing::warn!(
@@ -343,7 +365,15 @@ pub async fn sync_stream(
                 Ok(event) => {
                     // Filter events relevant to this user
                     let data = serde_json::to_string(&event).unwrap_or_default();
-                    let sse_event = Event::default().event(&event.event_type).data(data);
+                    let event_type = match &event {
+                        SyncEvent::SyncStarted { .. } => "sync_started",
+                        SyncEvent::SyncProgress { .. } => "sync_progress",
+                        SyncEvent::SyncComplete { .. } => "sync_complete",
+                        SyncEvent::SyncError { .. } => "sync_error",
+                        SyncEvent::AuthRevocation { .. } => "auth_revocation",
+                        SyncEvent::MessageUnsnoozed { .. } => "message_unsnoozed",
+                    };
+                    let sse_event = Event::default().event(event_type).data(data);
                     Some((Ok(sse_event), rx))
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => {
@@ -386,49 +416,78 @@ pub async fn run_sync_for_account(
         None => None,
     };
 
+    let start_time = std::time::Instant::now();
+    let _ = sync_tx.send(SyncEvent::SyncStarted {
+        account_id: account.id.0.to_string(),
+        provider: account.provider.clone(),
+    });
+
     // 60-second timeout to prevent hanging on one provider
     let msg_sync = tokio::time::timeout(
         Duration::from_secs(60),
-        sync_account_messages(&state, &account, &token),
+        sync_account_messages(&state, &account, &token, &sync_tx),
     )
     .await;
 
     match msg_sync {
         Ok(Ok(count)) => {
-            if count > 0 {
-                let event = SyncEvent {
-                    event_type: "sync_complete".to_string(),
-                    account_id: Some(account.id.0),
-                    provider: Some(account.provider.clone()),
-                    message: format!("Synced {} new messages", count),
-                    timestamp: Utc::now().timestamp(),
-                };
-                let _ = sync_tx.send(event);
-            }
+            tracing::info!("Synced {} messages for account {}", count, account.id.0);
         }
-        Ok(Err(e)) => tracing::warn!("Sync daemon failed for {}: {}", account.id.0, e),
-        Err(_) => tracing::warn!("Sync daemon timed out for {}", account.id.0),
+        Ok(Err(e)) => {
+            tracing::warn!("Sync daemon failed for {}: {}", account.id.0, e);
+            let _ = sync_tx.send(SyncEvent::SyncError {
+                account_id: account.id.0.to_string(),
+                error: e.to_string(),
+            });
+            return;
+        }
+        Err(_) => {
+            tracing::warn!("Sync daemon timed out for {}", account.id.0);
+            let _ = sync_tx.send(SyncEvent::SyncError {
+                account_id: account.id.0.to_string(),
+                error: "Sync timed out".to_string(),
+            });
+            return;
+        }
     }
 
     let cal_sync = tokio::time::timeout(
         Duration::from_secs(60),
-        sync_account_calendars(&state, &account, &token),
+        sync_account_calendars(&state, &account, &token, &sync_tx),
     )
     .await;
 
     match cal_sync {
         Ok(Ok(count)) => {
-            if count > 0 {
-                tracing::info!(
-                    "Synced {} new calendar events for account {}",
-                    count,
-                    account.id.0
-                );
-            }
+            tracing::info!(
+                "Synced {} new calendar events for account {}",
+                count,
+                account.id.0
+            );
         }
-        Ok(Err(e)) => tracing::warn!("Calendar sync failed for {}: {}", account.id.0, e),
-        Err(_) => tracing::warn!("Calendar sync timed out for {}", account.id.0),
+        Ok(Err(e)) => {
+            tracing::warn!("Calendar sync failed for {}: {}", account.id.0, e);
+            let _ = sync_tx.send(SyncEvent::SyncError {
+                account_id: account.id.0.to_string(),
+                error: e.to_string(),
+            });
+            return;
+        }
+        Err(_) => {
+            tracing::warn!("Calendar sync timed out for {}", account.id.0);
+            let _ = sync_tx.send(SyncEvent::SyncError {
+                account_id: account.id.0.to_string(),
+                error: "Calendar sync timed out".to_string(),
+            });
+            return;
+        }
     }
+
+    let duration_ms = start_time.elapsed().as_millis() as u64;
+    let _ = sync_tx.send(SyncEvent::SyncComplete {
+        account_id: account.id.0.to_string(),
+        duration_ms,
+    });
 }
 
 pub fn start_sync_daemon(
@@ -515,11 +574,8 @@ pub fn start_sync_daemon(
                             let repo = crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone());
                             if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
                                 for msg_id in unsnoozed_ids {
-                                    let _ = sync_tx.send(SyncEvent {
-                                        event_type: "message_unsnoozed".to_string(),
-                                        account_id: None, // No account available easily here, but FE needs just message_id, or we could fetch it.
-                                        provider: None,
-                                        message: msg_id.to_string(), // Sending message ID as message string for FE to parse.
+                                    let _ = sync_tx.send(SyncEvent::MessageUnsnoozed {
+                                        message_id: msg_id.to_string(),
                                         timestamp: now,
                                     });
                                 }
@@ -529,11 +585,8 @@ pub fn start_sync_daemon(
                             let repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone());
                             if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
                                 for msg_id in unsnoozed_ids {
-                                    let _ = sync_tx.send(SyncEvent {
-                                        event_type: "message_unsnoozed".to_string(),
-                                        account_id: None,
-                                        provider: None,
-                                        message: msg_id.to_string(),
+                                    let _ = sync_tx.send(SyncEvent::MessageUnsnoozed {
+                                        message_id: msg_id.to_string(),
                                         timestamp: now,
                                     });
                                 }
@@ -648,7 +701,15 @@ pub async fn sync_account_messages(
     state: &AppState,
     account: &crate::core::models::Account,
     token: &str,
+    sync_tx: &broadcast::Sender<SyncEvent>,
 ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
+    let _ = sync_tx.send(SyncEvent::SyncProgress {
+        account_id: account.id.0.to_string(),
+        stage: "messages".to_string(),
+        items_synced: 0,
+        total_items: None,
+    });
+
     let plugin_manager = state.plugin_manager.read().await;
     let plugin = match plugin_manager.find_by_provider(&account.provider) {
         Some(p) => p,
@@ -698,6 +759,8 @@ pub async fn sync_account_messages(
         .await
         .unwrap_or_default();
     let blocked_set: std::collections::HashSet<String> = blocked_senders.into_iter().collect();
+
+    let total_items = result.messages.len() as u32;
 
     for payload in result.messages {
         let existing = repo
@@ -799,6 +862,15 @@ pub async fn sync_account_messages(
 
             repo.upsert(&message).await?;
             synced_count += 1;
+
+            if synced_count % 10 == 0 || synced_count == total_items as i64 {
+                let _ = sync_tx.send(SyncEvent::SyncProgress {
+                    account_id: account.id.0.to_string(),
+                    stage: "messages".to_string(),
+                    items_synced: synced_count as u32,
+                    total_items: Some(total_items),
+                });
+            }
         }
     }
 
@@ -810,7 +882,15 @@ pub async fn sync_account_calendars(
     state: &AppState,
     account: &crate::core::models::Account,
     token: &str,
+    sync_tx: &broadcast::Sender<SyncEvent>,
 ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
+    let _ = sync_tx.send(SyncEvent::SyncProgress {
+        account_id: account.id.0.to_string(),
+        stage: "calendars".to_string(),
+        items_synced: 0,
+        total_items: None,
+    });
+
     let plugin_manager = state.plugin_manager.read().await;
     let plugin = match plugin_manager.find_by_provider(&account.provider) {
         Some(p) => p,
@@ -881,6 +961,8 @@ pub async fn sync_account_calendars(
     let events = calendar_provider
         .fetch_events(token, start_time, end_time)
         .await?;
+
+    let total_items = events.len() as u32;
     let mut synced_count = 0;
 
     let event_repo: Box<dyn crate::core::repository::EventRepository> = match &state.db {
@@ -984,6 +1066,15 @@ pub async fn sync_account_calendars(
             }
         };
         synced_count += 1;
+
+        if synced_count % 10 == 0 || synced_count == total_items as i64 {
+            let _ = sync_tx.send(SyncEvent::SyncProgress {
+                account_id: account.id.0.to_string(),
+                stage: "calendars".to_string(),
+                items_synced: synced_count as u32,
+                total_items: Some(total_items),
+            });
+        }
     }
 
     Ok(synced_count)
@@ -1270,9 +1361,9 @@ mod tests {
         // The fact that the test finishes without locking up proves the tokio::select works properly.
         // We ensure that the events processed are zero.
         let mut msg_count = 0;
-        while let Ok(_) = sync_rx.try_recv() {
+        while let Ok(_msg) = sync_rx.try_recv() {
             msg_count += 1;
         }
-        assert_eq!(msg_count, 0);
+        assert_eq!(msg_count, 4);
     }
 }

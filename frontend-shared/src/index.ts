@@ -80,6 +80,13 @@ export {
   syncInterval,
 } from './stores/index.js';
 
+export {
+  initSyncEvents,
+  closeSyncEvents,
+  getSyncState,
+  getGlobalSyncState,
+} from './stores/sync.svelte.js';
+
 // ── Offline queue ───────────────────────────────────────────────
 export {
   enqueueMutation,
