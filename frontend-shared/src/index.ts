@@ -80,6 +80,13 @@ export {
   syncInterval,
 } from './stores/index.js';
 
+export {
+  initSyncEvents,
+  closeSyncEvents,
+  getSyncState,
+  getGlobalSyncState,
+} from './stores/sync.svelte.js';
+
 // ── Offline queue ───────────────────────────────────────────────
 export {
   enqueueMutation,
@@ -119,3 +126,4 @@ export type {
   FlattenedLabelItem,
 } from './utils/labels.js';
 
+export { default as ContactAutocomplete } from './components/ContactAutocomplete.svelte';

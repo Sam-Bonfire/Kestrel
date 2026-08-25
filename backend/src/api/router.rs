@@ -8,6 +8,7 @@ use tower_http::trace::TraceLayer;
 use super::accounts;
 use super::auth;
 use super::calendars;
+use super::contacts;
 use super::health::health_check;
 use super::messages;
 use super::providers;
@@ -126,6 +127,10 @@ pub fn create_router(state: AppState) -> Router {
             "/api/v1/messages/{id}/snooze",
             post(messages::snooze_message),
         )
+        .route(
+            "/api/v1/messages/{id}/unsnooze",
+            post(messages::unsnooze_message),
+        )
         .route("/api/v1/messages/{id}/trash", post(messages::trash_message))
         .route("/api/v1/messages/{id}/star", post(messages::toggle_star))
         .route("/api/v1/messages/{id}/mute", post(messages::mute_thread))
@@ -146,6 +151,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/messages/bulk", post(messages::bulk_action))
         .route("/api/v1/messages/send", post(messages::send_message))
         .route("/api/v1/search", get(search::search_messages))
+        .route("/api/contacts/search", get(contacts::search_contacts))
         .route("/api/v1/calendars", get(calendars::list_calendars))
         .route("/api/v1/calendars/{id}", get(calendars::get_calendar))
         .route(

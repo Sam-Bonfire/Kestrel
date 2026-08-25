@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X, Calendar as CalendarIcon, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link } from 'lucide-svelte';
+  import { ContactAutocomplete } from '@kestrel/shared';
 
   export interface CalendarEvent {
     id?: string;
@@ -44,7 +45,7 @@
   let category = $state('Work');
   let color = $state('blue');
   let rsvpStatus = $state<'yes' | 'no' | 'maybe' | 'none'>('none');
-  let attendeesInput = $state('');
+  let attendees = $state<string[]>([]);
   let isAllDay = $state(false);
   let calendarId = $state('');
   let organizer = $state('');
@@ -87,7 +88,7 @@
       calendarId,
       organizer,
       rsvpStatus,
-      attendees: attendeesInput.split(',').map(email => email.trim()).filter(Boolean)
+      attendees
     });
 
     // Reset
@@ -98,7 +99,7 @@
     status = 'Scheduled';
     category = 'Work';
     rsvpStatus = 'none';
-    attendeesInput = '';
+    attendees = [];
     isAllDay = false;
     organizer = '';
     onClose();
@@ -192,9 +193,11 @@
 
         <!-- Additions Block -->
         <div class="space-y-3 border-b border-neutral-800 pb-4">
-          <div class="flex items-center gap-4 group cursor-pointer">
-            <User class="w-4 h-4 text-neutral-500 shrink-0" />
-            <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Participants and Rooms</span>
+          <div class="flex items-start gap-4 group">
+            <User class="w-4 h-4 text-neutral-500 shrink-0 mt-2" />
+            <div class="flex-1 w-full max-w-[calc(100%-2rem)]">
+              <ContactAutocomplete bind:recipients={attendees} placeholder="Add participants..." />
+            </div>
           </div>
           
           <div class="flex items-center gap-4 group cursor-pointer">

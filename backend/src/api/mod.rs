@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod auth;
 pub mod calendars;
+pub mod contacts;
 pub mod health;
 pub mod labels;
 pub mod logging;
