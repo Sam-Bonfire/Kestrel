@@ -335,15 +335,48 @@ pub async fn archive_message(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(serde::Deserialize)]
+pub struct SnoozeRequest {
+    pub snoozed_until: Option<i64>, // Changed from `until: String` based on the front-end code previously sending timestamp directly
+}
+
 pub async fn snooze_message(
     State(state): State<AppState>,
     AuthUser { user_id }: AuthUser,
     Path(message_id): Path<Uuid>,
+    Json(payload): Json<SnoozeRequest>,
 ) -> Result<StatusCode, KestrelError> {
-    // Basic implementation for snooze
     verify_message_ownership(&state, user_id, message_id).await?;
-    set_message_archived(&state, message_id, true).await?;
+    set_message_snoozed_until(&state, message_id, payload.snoozed_until).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn unsnooze_message(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(message_id): Path<Uuid>,
+) -> Result<StatusCode, KestrelError> {
+    verify_message_ownership(&state, user_id, message_id).await?;
+    set_message_snoozed_until(&state, message_id, None).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn set_message_snoozed_until(
+    state: &AppState,
+    message_id: Uuid,
+    snoozed_until: Option<i64>,
+) -> Result<(), KestrelError> {
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            let repo = SqliteMessageRepository::new(pool.clone());
+            repo.set_snoozed_until(message_id, snoozed_until).await?;
+        }
+        DbPool::Postgres(pool) => {
+            let repo = PostgresMessageRepository::new(pool.clone());
+            repo.set_snoozed_until(message_id, snoozed_until).await?;
+        }
+    }
+    Ok(())
 }
 
 async fn set_message_archived(

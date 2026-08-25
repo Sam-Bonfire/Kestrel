@@ -509,6 +509,38 @@ pub fn start_sync_daemon(
                     let now = Utc::now().timestamp();
                     tracing::debug!("Sync daemon: interval tick");
 
+                    // Process unsnoozes
+                    match &state.db {
+                        DbPool::Sqlite(pool) => {
+                            let repo = crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone());
+                            if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
+                                for msg_id in unsnoozed_ids {
+                                    let _ = sync_tx.send(SyncEvent {
+                                        event_type: "message_unsnoozed".to_string(),
+                                        account_id: None, // No account available easily here, but FE needs just message_id, or we could fetch it.
+                                        provider: None,
+                                        message: msg_id.to_string(), // Sending message ID as message string for FE to parse.
+                                        timestamp: now,
+                                    });
+                                }
+                            }
+                        }
+                        DbPool::Postgres(pool) => {
+                            let repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone());
+                            if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
+                                for msg_id in unsnoozed_ids {
+                                    let _ = sync_tx.send(SyncEvent {
+                                        event_type: "message_unsnoozed".to_string(),
+                                        account_id: None,
+                                        provider: None,
+                                        message: msg_id.to_string(),
+                                        timestamp: now,
+                                    });
+                                }
+                            }
+                        }
+                    }
+
                     if let Ok(accounts) = get_all_accounts_with_tokens(&state).await {
                         for account in accounts {
                             let account_id = account.id.0;
