@@ -52,7 +52,7 @@ impl HistoricalRevisionRepository for SqliteRevisionRepository {
     ) -> Result<i32, sqlx::Error> {
         let result = sqlx::query_scalar::<_, i32>(
             "SELECT COALESCE(MAX(revision_number), 0) FROM historical_revisions \
-             WHERE resource_type = ? AND resource_id = ?"
+             WHERE resource_type = ? AND resource_id = ?",
         )
         .bind(resource_type)
         .bind(resource_id.to_string())

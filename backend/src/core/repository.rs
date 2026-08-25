@@ -131,5 +131,9 @@ pub trait ContactRepository: Send + Sync {
 pub trait HistoricalRevisionRepository: Send + Sync {
     async fn create(&self, revision: &HistoricalRevision) -> Result<(), sqlx::Error>;
     async fn find_by_id(&self, id: Uuid) -> Result<Option<HistoricalRevision>, sqlx::Error>;
-    async fn get_latest_revision_number(&self, resource_type: &str, resource_id: Uuid) -> Result<i32, sqlx::Error>;
+    async fn get_latest_revision_number(
+        &self,
+        resource_type: &str,
+        resource_id: Uuid,
+    ) -> Result<i32, sqlx::Error>;
 }

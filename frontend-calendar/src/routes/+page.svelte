@@ -559,14 +559,14 @@
 
   {#snippet children()}
   <!-- Main View Canvas area -->
-  <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked ? 'lg:mr-80' : ''}"
+  <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}"
        ontouchstart={handleTouchStart}
        ontouchend={handleTouchEnd}
        role="region" aria-label="Calendar Canvas">
 
     {#if isMobileOrTablet}
       <!-- Mobile & Tablet Header -->
-      <header class="pl-4 pr-36 pt-8 pb-3 border-b border-[var(--color-border-hairline)] flex items-center justify-between gap-2 bg-[#0a0a0a] relative select-none animate-fadeIn shrink-0">
+      <header class="pl-4 pr-36 py-3 border-b border-[var(--color-border-hairline)] flex items-center justify-between gap-2 bg-[#0a0a0a] relative select-none animate-fadeIn shrink-0">
         <!-- Transparent drag handle that stops before WindowControls -->
         <div class="absolute inset-y-0 left-0 right-36" data-tauri-drag-region></div>
 
@@ -675,7 +675,7 @@
       </header>
     {:else}
       <!-- Desktop Header -->
-      <header class="pl-6 pr-36 pt-8 pb-3 flex items-center justify-between shrink-0 bg-[#0a0a0a] cursor-default select-none relative border-b border-[var(--color-border-hairline)]">
+      <header class="pl-6 pr-36 py-3 flex items-center justify-between shrink-0 bg-[#0a0a0a] cursor-default select-none relative border-b border-[var(--color-border-hairline)]">
         <!-- Transparent drag handle that stops before WindowControls -->
         <div class="absolute inset-y-0 left-0 right-36" data-tauri-drag-region></div>
 
@@ -920,10 +920,11 @@
       selectedEventId={selectedEvent?.id}
       onEventClick={(ev, e) => {
         selectedEvent = ev;
-        if (e) {
+        if (e && viewMode === 'month') {
           clickPosition = { x: e.clientX, y: e.clientY };
         } else {
           clickPosition = null;
+          isDetailsDocked = true;
         }
       }}
       onEmptySlotClick={openNewEventPanel}
@@ -947,7 +948,7 @@
     <EventPeekPanel
       event={selectedEvent}
       {clickPosition}
-      isDocked={isDetailsDocked && !isMobileOrTablet && !clickPosition}
+      isDocked={isDetailsDocked && !isMobileOrTablet}
       isMobileOrTablet={isMobileOrTablet}
       {accounts}
       onClose={() => selectedEvent = null}
@@ -960,8 +961,7 @@
         selectedEvent = null;
       }}
     />
-    {/if}
-  {#if isDetailsDocked && !isMobileOrTablet}
+  {:else if isDetailsDocked && !isMobileOrTablet}
     <!-- Dedicated Docked Empty State (Task 34) -->
     <div class="hidden lg:flex flex-col items-center justify-center fixed inset-y-0 right-0 w-80 bg-[#131313] border-l border-[var(--color-border-hairline)] z-40 h-screen text-center p-6 text-[var(--color-text-secondary)] shadow-xl">
       <CalendarIcon class="w-12 h-12 mb-4 opacity-20" />
