@@ -17,7 +17,7 @@ impl SqliteMessageRepository {
 
 const MESSAGE_COLUMNS: &str = "m.id, m.account_id, m.external_id, m.thread_id, m.subject, m.sender_name, m.sender_email, \
      m.recipients, m.date_sent, m.date_received, m.snippet, m.body_text, m.body_html, m.labels, \
-     m.is_read, m.is_archived, m.is_deleted, m.has_attachments, m.snoozed_until, m.created_at, m.updated_at";
+     m.is_read, m.is_archived, m.is_deleted, m.has_attachments, m.snoozed_until, m.has_conflict, m.created_at, m.updated_at";
 
 #[async_trait]
 impl MessageRepository for SqliteMessageRepository {
@@ -115,8 +115,8 @@ impl MessageRepository for SqliteMessageRepository {
         sqlx::query(
             "INSERT INTO messages (id, account_id, external_id, thread_id, subject, sender_name, \
              sender_email, recipients, date_sent, date_received, snippet, body_text, body_html, \
-             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, has_conflict, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
              ON CONFLICT(account_id, external_id) DO UPDATE SET \
              thread_id = excluded.thread_id, subject = excluded.subject, \
              sender_name = excluded.sender_name, sender_email = excluded.sender_email, \
@@ -125,7 +125,7 @@ impl MessageRepository for SqliteMessageRepository {
              body_text = excluded.body_text, body_html = excluded.body_html, \
              labels = excluded.labels, is_read = excluded.is_read, \
              is_archived = excluded.is_archived, is_deleted = excluded.is_deleted, \
-             has_attachments = excluded.has_attachments, snoozed_until = excluded.snoozed_until, \
+             has_attachments = excluded.has_attachments, snoozed_until = excluded.snoozed_until, has_conflict = excluded.has_conflict, \
              updated_at = excluded.updated_at",
         )
         .bind(message.id.to_string())

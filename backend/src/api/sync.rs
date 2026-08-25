@@ -790,6 +790,7 @@ pub async fn sync_account_messages(
                         is_deleted: is_blocked,
                         has_attachments: false,
                         snoozed_until: None,
+                        has_conflict: false,
                         created_at: Utc::now().timestamp(),
                         updated_at: Utc::now().timestamp(),
                     }
@@ -975,6 +976,7 @@ pub async fn sync_account_calendars(
                     organizer_name: payload.organizer_name,
                     attendees: payload.attendees,
                     status: payload.status,
+                    has_conflict: false,
                     created_at: Utc::now().timestamp(),
                     updated_at: Utc::now().timestamp(),
                 };

@@ -921,6 +921,7 @@ pub async fn send_message(
         is_deleted: false,
         has_attachments,
         snoozed_until: None,
+        has_conflict: false,
         created_at: now,
         updated_at: now,
     };
