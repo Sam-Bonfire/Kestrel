@@ -591,8 +591,11 @@ pub fn start_sync_daemon(
                             let repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone());
                             if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
                                 for msg_id in unsnoozed_ids {
-                                    let _ = sync_tx.send(SyncEvent::MessageUnsnoozed {
-                                        message_id: msg_id.to_string(),
+                                    let _ = sync_tx.send(SyncEvent {
+                                        event_type: "message_unsnoozed".to_string(),
+                                        account_id: None,
+                                        provider: None,
+                                        message: msg_id.to_string(),
                                         timestamp: now,
                                     });
                                 }
