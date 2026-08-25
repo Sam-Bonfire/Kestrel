@@ -113,8 +113,8 @@
 
   // ── Accounts ────────────────────────────────────────────────────
   const accounts = [
-    { id: '1', name: 'Personal Gmail',  email: 'alex@gmail.com',   color: '#EA4335' },
-    { id: '2', name: 'Work Outlook',    email: 'alex@kestrel.dev', color: '#0078D4' },
+    { id: '1', name: 'Personal Gmail',  email: 'alex@gmail.com',   color: '#EA4335', provider: 'google' },
+    { id: '2', name: 'Work Outlook',    email: 'alex@kestrel.dev', color: '#0078D4', provider: 'outlook' },
   ];
 
   // ── App state ───────────────────────────────────────────────────
@@ -125,7 +125,7 @@
   let isCommandOpen    = $state(false);
   let isSettingsOpen   = $state(false);
   let isMailSettingsOpen = $state(false);
-  let activeAccountId  = $state('1');
+  let activeAccountId  = $state('all');
   let isMobileSidebarOpen = $state(false);
   let initialReplyMode = $state<'reply'|'reply_all'|'forward'|null>(null);
 
@@ -252,26 +252,41 @@
     Array.from(new Set([...allEmails.flatMap(e => e.labels), ...customLabels]))
   );
 
-  let unreadCount = $derived(allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isTrash && !e.isSpam).length);
-  let inboxCount = $derived(allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length);
+  let unreadCount = $derived.by(() => {
+    const total = allEmails.filter(e => e.isUnread && !e.isTrash && !e.isSpam).length;
+    const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isTrash && !e.isSpam).length;
+    if (total === 0) return 0;
+    return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
+  });
+  let inboxCount = $derived.by(() => {
+    const total = allEmails.filter(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
+    const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
+    if (total === 0) return 0;
+    return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
+  });
 
   let viewCounts = $derived.by(() => {
-    const accEmails = allEmails.filter(e => e.accountId === activeAccountId);
-    const counts: Record<string, number> = {};
+    const getCountStr = (filterFn: (e: typeof allEmails[0]) => boolean) => {
+      const total = allEmails.filter(filterFn).length;
+      const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && filterFn(e)).length;
+      if (total === 0) return 0;
+      return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
+    };
 
-    counts['inbox'] = accEmails.filter(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
-    counts['unread'] = accEmails.filter(e => e.isUnread && !e.isTrash && !e.isSpam).length;
-    counts['sent'] = accEmails.filter(e => e.isUnread && e.labels.includes('Sent')).length;
-    counts['drafts'] = accEmails.filter(e => e.isDraft).length;
-    counts['starred'] = accEmails.filter(e => e.isUnread && e.isStarred && !e.isTrash).length;
-    counts['github'] = accEmails.filter(e => e.isUnread && e.sender === 'GitHub' && !e.isTrash).length;
-    counts['all-mail'] = accEmails.filter(e => e.isUnread && !e.isTrash).length;
-    counts['spam'] = accEmails.filter(e => e.isUnread && e.isSpam).length;
-    counts['trash'] = accEmails.filter(e => e.isUnread && e.isTrash).length;
+    const counts: Record<string, string | number> = {};
+
+    counts['inbox'] = getCountStr(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft);
+    counts['unread'] = getCountStr(e => e.isUnread && !e.isTrash && !e.isSpam);
+    counts['sent'] = getCountStr(e => e.isUnread && e.labels.includes('Sent'));
+    counts['drafts'] = getCountStr(e => e.isDraft);
+    counts['starred'] = getCountStr(e => e.isUnread && e.isStarred && !e.isTrash);
+    counts['github'] = getCountStr(e => e.isUnread && e.sender === 'GitHub' && !e.isTrash);
+    counts['all-mail'] = getCountStr(e => e.isUnread && !e.isTrash);
+    counts['spam'] = getCountStr(e => e.isUnread && e.isSpam);
+    counts['trash'] = getCountStr(e => e.isUnread && e.isTrash);
 
     allLabels.forEach((lbl: string) => {
-      const cnt = accEmails.filter(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase())).length;
-      counts[`label-${lbl}`] = cnt;
+      counts[`label-${lbl}`] = getCountStr(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase()));
     });
 
     return counts;
@@ -281,7 +296,7 @@
   let threads = $derived(
     allEmails
       .filter(e => {
-        if (e.accountId !== activeAccountId) return false;
+        if (activeAccountId !== 'all' && e.accountId !== activeAccountId) return false;
         if (currentView === 'inbox')    return !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft;
         if (currentView === 'unread')   return e.isUnread && !e.isTrash && !e.isSpam;
         if (currentView === 'sent')     return e.labels.includes('Sent');
@@ -297,6 +312,7 @@
         }
         return true;
       })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .map(e => ({
         id: e.id,
         sender: e.sender,
@@ -308,7 +324,9 @@
         isStarred: e.isStarred,
         hasAttachment: false,
         labels: e.labels,
-        category: e.category
+        category: e.category,
+        provider: accounts.find(a => a.id === e.accountId)?.provider || 'unknown',
+        accountColor: accounts.find(a => a.id === e.accountId)?.color || '#6B7280'
       }))
   );
 

@@ -11,3 +11,4 @@ export { default as EmailPillInput } from './EmailPillInput.svelte';
 export { default as Dropdown } from './Dropdown.svelte';
 
 export { default as ReauthBanner } from './ReauthBanner.svelte';
+export { default as ContactAutocomplete } from './ContactAutocomplete.svelte';

@@ -509,6 +509,38 @@ pub fn start_sync_daemon(
                     let now = Utc::now().timestamp();
                     tracing::debug!("Sync daemon: interval tick");
 
+                    // Process unsnoozes
+                    match &state.db {
+                        DbPool::Sqlite(pool) => {
+                            let repo = crate::db::sqlite::message_repository::SqliteMessageRepository::new(pool.clone());
+                            if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
+                                for msg_id in unsnoozed_ids {
+                                    let _ = sync_tx.send(SyncEvent {
+                                        event_type: "message_unsnoozed".to_string(),
+                                        account_id: None, // No account available easily here, but FE needs just message_id, or we could fetch it.
+                                        provider: None,
+                                        message: msg_id.to_string(), // Sending message ID as message string for FE to parse.
+                                        timestamp: now,
+                                    });
+                                }
+                            }
+                        }
+                        DbPool::Postgres(pool) => {
+                            let repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone());
+                            if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
+                                for msg_id in unsnoozed_ids {
+                                    let _ = sync_tx.send(SyncEvent {
+                                        event_type: "message_unsnoozed".to_string(),
+                                        account_id: None,
+                                        provider: None,
+                                        message: msg_id.to_string(),
+                                        timestamp: now,
+                                    });
+                                }
+                            }
+                        }
+                    }
+
                     if let Ok(accounts) = get_all_accounts_with_tokens(&state).await {
                         for account in accounts {
                             let account_id = account.id.0;
@@ -652,6 +684,15 @@ pub async fn sync_account_messages(
         ),
     };
 
+    let contact_repo: Box<dyn crate::core::repository::ContactRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::contact_repository::SqliteContactRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::contact_repository::PostgresContactRepository::new(pool.clone()),
+        ),
+    };
+
     let blocked_senders = filter_repo
         .get_blocked_senders(account.user_id.0)
         .await
@@ -675,6 +716,43 @@ pub async fn sync_account_messages(
         };
 
         if should_upsert {
+            // Upsert contact for the sender
+            let contact = crate::core::models::Contact {
+                id: Uuid::new_v4().into(),
+                account_id: account.id,
+                name: payload.sender_name.clone(),
+                email: payload.sender_email.clone(),
+                avatar_url: None,
+                last_contacted_at: payload.date_received,
+                created_at: chrono::Utc::now().timestamp(),
+            };
+            let _ = contact_repo.upsert(&contact).await;
+
+            // Upsert contacts for recipients (parsing the JSON string if necessary, assuming it's a JSON array of strings or comma-separated string)
+            // Kestrel mail recipients are typically stored as a JSON string `["a@b.com", "c@d.com"]` or comma-separated
+            let parsed_recipients: Vec<String> = serde_json::from_str(&payload.recipients)
+                .unwrap_or_else(|_| {
+                    payload
+                        .recipients
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                });
+
+            for rec in parsed_recipients {
+                let contact = crate::core::models::Contact {
+                    id: Uuid::new_v4().into(),
+                    account_id: account.id,
+                    name: None,
+                    email: rec,
+                    avatar_url: None,
+                    last_contacted_at: payload.date_sent, // fallback to date_sent
+                    created_at: chrono::Utc::now().timestamp(),
+                };
+                let _ = contact_repo.upsert(&contact).await;
+            }
+
             let message = match existing {
                 Some(mut m) => {
                     m.subject = payload.subject;
@@ -712,6 +790,7 @@ pub async fn sync_account_messages(
                         is_deleted: is_blocked,
                         has_attachments: false,
                         snoozed_until: None,
+                        has_conflict: false,
                         created_at: Utc::now().timestamp(),
                         updated_at: Utc::now().timestamp(),
                     }
@@ -813,7 +892,53 @@ pub async fn sync_account_calendars(
         ),
     };
 
+    let contact_repo: Box<dyn crate::core::repository::ContactRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::contact_repository::SqliteContactRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::contact_repository::PostgresContactRepository::new(pool.clone()),
+        ),
+    };
+
     for payload in events {
+        if let Some(ref email) = payload.organizer_email {
+            let contact = crate::core::models::Contact {
+                id: Uuid::new_v4().into(),
+                account_id: account.id,
+                name: payload.organizer_name.clone(),
+                email: email.clone(),
+                avatar_url: None,
+                last_contacted_at: payload.start_time,
+                created_at: chrono::Utc::now().timestamp(),
+            };
+            let _ = contact_repo.upsert(&contact).await;
+        }
+
+        if let Some(ref attendees_str) = payload.attendees {
+            let parsed_attendees: Vec<String> =
+                serde_json::from_str(attendees_str).unwrap_or_else(|_| {
+                    attendees_str
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                });
+
+            for email in parsed_attendees {
+                let contact = crate::core::models::Contact {
+                    id: Uuid::new_v4().into(),
+                    account_id: account.id,
+                    name: None,
+                    email,
+                    avatar_url: None,
+                    last_contacted_at: payload.start_time,
+                    created_at: chrono::Utc::now().timestamp(),
+                };
+                let _ = contact_repo.upsert(&contact).await;
+            }
+        }
+
         let existing = event_repo
             .find_by_external_id(account.id.0, &payload.external_id)
             .await?;
@@ -851,6 +976,7 @@ pub async fn sync_account_calendars(
                     organizer_name: payload.organizer_name,
                     attendees: payload.attendees,
                     status: payload.status,
+                    has_conflict: false,
                     created_at: Utc::now().timestamp(),
                     updated_at: Utc::now().timestamp(),
                 };

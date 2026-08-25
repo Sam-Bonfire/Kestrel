@@ -66,9 +66,9 @@
     onRenameLabel = (oldVal: string, newVal: string) => {},
     onDeleteLabel = (label: string) => {},
     onCreateNewLabel = (label: string) => {},
-    inboxCount = 0,
-    unreadCount = 0,
-    viewCounts = {} as Record<string, number>,
+    inboxCount = 0 as string | number,
+    unreadCount = 0 as string | number,
+    viewCounts = {} as Record<string, string | number>,
     onOpenMailSettings = () => {}
   } = $props<{
     currentView?: string;
@@ -81,9 +81,9 @@
     onRenameLabel?: (oldVal: string, newVal: string) => void;
     onDeleteLabel?: (label: string) => void;
     onCreateNewLabel?: (label: string) => void;
-    inboxCount?: number;
-    unreadCount?: number;
-    viewCounts?: Record<string, number>;
+    inboxCount?: string | number;
+    unreadCount?: string | number;
+    viewCounts?: Record<string, string | number>;
     onOpenMailSettings?: () => void;
   }>();
 
@@ -119,7 +119,7 @@
     teal: { dot: 'bg-teal-500', text: 'text-teal-400' }
   };
 
-  let activeAccount = $derived(accounts.find((a: Account) => a.id === activeAccountId));
+  let activeAccount = $derived(activeAccountId === 'all' ? { id: 'all', name: 'All Inboxes', email: 'Unified Inbox', color: '#6B7280' } : accounts.find((a: Account) => a.id === activeAccountId));
 
   let labelsExpanded = $state(true);
   let categoriesExpanded = $state(false);
@@ -273,6 +273,22 @@
           {/snippet}
           {#snippet content()}
             <div class="w-48 py-1 font-sans text-xs">
+              <button
+                onclick={() => {
+                  activeAccountId = 'all';
+                  showAccountDropdown = false;
+                }}
+                class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-b border-white/5 pb-2 mb-1"
+              >
+                <div class="w-2 h-2 rounded-full" style="background-color: #6B7280"></div>
+                <div class="flex flex-col min-w-0">
+                  <span class="font-semibold truncate">All Inboxes</span>
+                  <span class="text-[9px] text-[var(--color-text-secondary)] truncate">Unified Inbox</span>
+                </div>
+                {#if 'all' === activeAccountId}
+                  <Check class="w-3 h-3 text-blue-400 ml-auto" />
+                {/if}
+              </button>
               {#each accounts as acc}
                 <button
                   onclick={() => {
@@ -342,7 +358,7 @@
               <folder.icon class="w-4 h-4 {folder.color}" strokeWidth={1.5} />
               <span>{folder.label}</span>
             </div>
-            {#if (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) > 0}
+            {#if (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) !== 0 && (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) !== '0'}
               <span in:scale={{ duration: 200, start: 0.8 }} class="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border-hairline)]/40 shadow-sm">
                 {viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : unreadCount)}
               </span>
@@ -426,7 +442,7 @@
               <IconComponent class="w-3.5 h-3.5 shrink-0 {style.textColor}" strokeWidth={1.5} />
               <span class="truncate text-[var(--color-text-primary)]">{item.displayName}</span>
             </div>
-            {#if (viewCounts[`label-${item.name}`] ?? 0) > 0}
+            {#if (viewCounts[`label-${item.name}`] ?? 0) !== 0 && (viewCounts[`label-${item.name}`] ?? 0) !== '0'}
               <span class="bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border-hairline)]/40 text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-auto">{viewCounts[`label-${item.name}`]}</span>
             {/if}
           </button>

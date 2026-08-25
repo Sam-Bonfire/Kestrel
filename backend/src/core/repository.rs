@@ -1,3 +1,4 @@
+use crate::core::models::HistoricalRevision;
 use async_trait::async_trait;
 use uuid::Uuid;
 
@@ -56,6 +57,13 @@ pub trait MessageRepository: Send + Sync {
     async fn set_archived(&self, id: Uuid, is_archived: bool) -> Result<(), sqlx::Error>;
     async fn set_deleted(&self, id: Uuid, is_deleted: bool) -> Result<(), sqlx::Error>;
     async fn set_labels(&self, id: Uuid, labels: Option<String>) -> Result<(), sqlx::Error>;
+    async fn set_snoozed_until(
+        &self,
+        id: Uuid,
+        snoozed_until: Option<i64>,
+    ) -> Result<(), sqlx::Error>;
+    async fn unsnooze_due_messages(&self, current_timestamp: i64)
+    -> Result<Vec<Uuid>, sqlx::Error>;
 
     async fn set_thread_muted(&self, thread_id: &str) -> Result<(), sqlx::Error>;
     async fn report_phishing(&self, id: Uuid) -> Result<(), sqlx::Error>;
@@ -112,4 +120,27 @@ pub trait UserPreferencesRepository: Send + Sync {
         user_id: Uuid,
         preferences_json: &str,
     ) -> Result<(), sqlx::Error>;
+}
+
+#[async_trait]
+pub trait ContactRepository: Send + Sync {
+    async fn upsert(&self, contact: &crate::core::models::Contact) -> Result<(), sqlx::Error>;
+    async fn search(
+        &self,
+        account_ids: &[Uuid],
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<crate::core::models::Contact>, sqlx::Error>;
+}
+
+#[async_trait]
+#[allow(dead_code)]
+pub trait HistoricalRevisionRepository: Send + Sync {
+    async fn create(&self, revision: &HistoricalRevision) -> Result<(), sqlx::Error>;
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<HistoricalRevision>, sqlx::Error>;
+    async fn get_latest_revision_number(
+        &self,
+        resource_type: &str,
+        resource_id: Uuid,
+    ) -> Result<i32, sqlx::Error>;
 }

@@ -119,3 +119,4 @@ export type {
   FlattenedLabelItem,
 } from './utils/labels.js';
 
+export { default as ContactAutocomplete } from './components/ContactAutocomplete.svelte';
