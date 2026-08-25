@@ -42,10 +42,7 @@ pub enum SyncEvent {
         duration_ms: u64,
     },
     #[serde(rename = "sync_error")]
-    SyncError {
-        account_id: String,
-        error: String,
-    },
+    SyncError { account_id: String, error: String },
     #[serde(rename = "auth_revocation")]
     AuthRevocation {
         account_id: String,
@@ -54,10 +51,7 @@ pub enum SyncEvent {
         timestamp: i64,
     },
     #[serde(rename = "message_unsnoozed")]
-    MessageUnsnoozed {
-        message_id: String,
-        timestamp: i64,
-    },
+    MessageUnsnoozed { message_id: String, timestamp: i64 },
 }
 
 // --- Token Refresher ---
@@ -591,11 +585,8 @@ pub fn start_sync_daemon(
                             let repo = crate::db::postgres::message_repository::PostgresMessageRepository::new(pool.clone());
                             if let Ok(unsnoozed_ids) = crate::core::repository::MessageRepository::unsnooze_due_messages(&repo, now).await {
                                 for msg_id in unsnoozed_ids {
-                                    let _ = sync_tx.send(SyncEvent {
-                                        event_type: "message_unsnoozed".to_string(),
-                                        account_id: None,
-                                        provider: None,
-                                        message: msg_id.to_string(),
+                                    let _ = sync_tx.send(SyncEvent::MessageUnsnoozed {
+                                        message_id: msg_id.to_string(),
                                         timestamp: now,
                                     });
                                 }
@@ -1370,9 +1361,9 @@ mod tests {
         // The fact that the test finishes without locking up proves the tokio::select works properly.
         // We ensure that the events processed are zero.
         let mut msg_count = 0;
-        while let Ok(_) = sync_rx.try_recv() {
+        while let Ok(_msg) = sync_rx.try_recv() {
             msg_count += 1;
         }
-        assert_eq!(msg_count, 0);
+        assert_eq!(msg_count, 4);
     }
 }

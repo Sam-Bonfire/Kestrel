@@ -548,8 +548,13 @@ pub async fn callback(
         });
 
         let start_time = std::time::Instant::now();
-        if let Err(e) =
-            crate::api::sync::sync_account_messages(&sync_state, &sync_account, &sync_token, &sync_tx).await
+        if let Err(e) = crate::api::sync::sync_account_messages(
+            &sync_state,
+            &sync_account,
+            &sync_token,
+            &sync_tx,
+        )
+        .await
         {
             tracing::error!(
                 "Initial historical sync failed for {}: {}",

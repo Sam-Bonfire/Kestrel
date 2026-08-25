@@ -1,5 +1,5 @@
-import { API_BASE } from '../api/client';
-import { authState } from './auth.svelte';
+import { API_BASE } from '../api/client.js';
+import { authState } from './auth.svelte.js';
 
 export interface SyncState {
   isSyncing: boolean;

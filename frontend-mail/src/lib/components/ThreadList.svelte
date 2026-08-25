@@ -29,8 +29,6 @@
     hasAttachment: boolean;
     labels: string[];
     category?: string;
-    isOutbox?: boolean;
-    outboxStatus?: 'pending' | 'sending' | 'failed' | 'sent';
     provider?: string;
     accountColor?: string;
   }
@@ -57,9 +55,7 @@
     onMute = (id: string) => {},
     onReportSpam = (id: string) => {},
     allLabels = [] as string[],
-    onOpenMobileSidebar = () => {},
-    onRetryOutbox = (id: string) => {},
-    onDiscardOutbox = (id: string) => {}
+    onOpenMobileSidebar = () => {}
   } = $props<{
     threads?: EmailThread[];
     selectedThreadId?: string | null;
@@ -83,8 +79,6 @@
     onReportSpam?: (id: string) => void;
     allLabels?: string[];
     onOpenMobileSidebar?: () => void;
-    onRetryOutbox?: (id: string) => void;
-    onDiscardOutbox?: (id: string) => void;
   }>();
 
   let selectedIndex = $state(0);
@@ -549,23 +543,6 @@
               absolute right-0 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5
               bg-[#1c1b1b] border border-white/10 rounded-lg p-0.5 shadow-2xl z-10
             ">
-              {#if thread.isOutbox}
-                <!-- Outbox Actions -->
-                <button
-                  onclick={(e) => { e.stopPropagation(); onRetryOutbox(thread.id); }}
-                  title="Retry Sending"
-                  class="p-1 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  <RotateCw class="w-3.5 h-3.5 {thread.outboxStatus === 'sending' ? 'animate-spin text-blue-400' : ''}" />
-                </button>
-                <button
-                  onclick={(e) => { e.stopPropagation(); onDiscardOutbox(thread.id); }}
-                  title="Discard Draft"
-                  class="p-1 rounded hover:bg-red-500/10 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
-                >
-                  <Trash2 class="w-3.5 h-3.5" />
-                </button>
-              {:else}
               <!-- Star -->
               <button
                 onclick={(e) => { e.stopPropagation(); onToggleStar(thread.id); }}
@@ -619,7 +596,6 @@
               >
                 <Tag class="w-3.5 h-3.5" />
               </button>
-              {/if}
             </div>
           </div>
         </div>
