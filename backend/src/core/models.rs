@@ -149,6 +149,8 @@ pub struct SettingsPayload {
     pub label_customizations: Option<std::collections::HashMap<String, LabelCustomization>>,
     pub sync_interval: Option<i32>,
     pub theme: Option<String>,
+    pub snippets: Option<Vec<Snippet>>,
+    pub signatures: Option<Vec<Signature>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -156,6 +158,25 @@ pub struct SettingsPayload {
 pub struct LabelCustomization {
     pub icon_name: String,
     pub color_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Snippet {
+    pub id: String,
+    pub title: String,
+    pub shortcut: String,
+    pub template: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Signature {
+    pub id: String,
+    pub account_id: Option<String>,
+    pub name: String,
+    pub html_content: String,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

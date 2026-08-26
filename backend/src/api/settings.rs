@@ -78,6 +78,12 @@ pub async fn update_settings(
     if payload.theme.is_some() {
         current_prefs.theme = payload.theme;
     }
+    if payload.snippets.is_some() {
+        current_prefs.snippets = payload.snippets;
+    }
+    if payload.signatures.is_some() {
+        current_prefs.signatures = payload.signatures;
+    }
 
     let new_prefs_str = serde_json::to_string(&current_prefs).map_err(|e| {
         KestrelError::Internal(format!("Failed to serialize preferences: {}", e).into())
