@@ -133,6 +133,14 @@ export type {
   FlattenedLabelItem,
 } from './utils/labels.js';
 
+export {
+  detectConferenceLink,
+} from './utils/conference.js';
+
+export type {
+  ConferenceLink,
+} from './utils/conference.js';
+
 export { default as ContactAutocomplete } from './components/ContactAutocomplete.svelte';
 
 export { parseIcs } from './utils/icsParser.js';

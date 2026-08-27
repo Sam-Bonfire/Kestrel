@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { X, Calendar as CalendarIcon, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link } from 'lucide-svelte';
+  import { X, Calendar as CalendarIcon, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, ExternalLink } from 'lucide-svelte';
   import { ContactAutocomplete } from '@kestrel/shared';
+  import { detectConferenceLink } from '@kestrel/shared';
+  import { openUrl } from '@tauri-apps/plugin-opener';
 
   export interface CalendarEvent {
     id?: string;
@@ -213,15 +215,53 @@
             </div>
           </div>
           
-          <div class="flex items-center gap-4 group cursor-pointer">
-            <Video class="w-4 h-4 text-neutral-500 shrink-0" />
-            <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Conferencing</span>
-          </div>
+          {#if location || description}
+            {@const confLink = location ? detectConferenceLink(location) : description ? detectConferenceLink(description) : null}
+            {#if confLink}
+              <div class="flex items-center gap-4 group">
+                <Video class="w-4 h-4 text-blue-400 shrink-0" />
+                <div class="flex-1 min-w-0 flex items-center justify-between">
+                  <div class="flex flex-col">
+                    <span class="text-sm font-semibold text-white">{confLink.displayLabel}</span>
+                    <span class="text-xs text-neutral-500 font-mono">{confLink.provider}</span>
+                  </div>
+                  <button
+                    onclick={() => openUrl(confLink.url)}
+                    class="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-[11px] font-bold transition-colors shadow-sm cursor-pointer flex items-center gap-2"
+                    type="button"
+                  >
+                    <ExternalLink class="w-3.5 h-3.5" />
+                    <span>Join</span>
+                  </button>
+                </div>
+              </div>
 
-          <div class="flex items-center gap-4 group">
-            <MapPin class="w-4 h-4 text-neutral-500 shrink-0" />
-            <input type="text" placeholder="Location" bind:value={location} class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-400" />
-          </div>
+              <div class="flex items-center gap-4 group">
+                <MapPin class="w-4 h-4 text-neutral-500 shrink-0" />
+                <input type="text" placeholder="Location" bind:value={location} class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-400" />
+              </div>
+            {:else}
+              <div class="flex items-center gap-4 group cursor-pointer">
+                <Video class="w-4 h-4 text-neutral-500 shrink-0" />
+                <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Conferencing</span>
+              </div>
+
+              <div class="flex items-center gap-4 group">
+                <MapPin class="w-4 h-4 text-neutral-500 shrink-0" />
+                <input type="text" placeholder="Location" bind:value={location} class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-400" />
+              </div>
+            {/if}
+          {:else}
+            <div class="flex items-center gap-4 group cursor-pointer">
+              <Video class="w-4 h-4 text-neutral-500 shrink-0" />
+              <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Conferencing</span>
+            </div>
+
+            <div class="flex items-center gap-4 group">
+              <MapPin class="w-4 h-4 text-neutral-500 shrink-0" />
+              <input type="text" placeholder="Location" bind:value={location} class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-400" />
+            </div>
+          {/if}
         </div>
 
         <!-- Links and Description Block -->
