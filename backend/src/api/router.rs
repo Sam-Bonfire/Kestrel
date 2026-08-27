@@ -159,6 +159,10 @@ pub fn create_router(state: AppState) -> Router {
             get(calendars::list_events).post(calendars::create_event),
         )
         .route(
+            "/api/v1/events/rsvp_external",
+            post(calendars::rsvp_external),
+        )
+        .route(
             "/api/v1/events/{id}",
             get(calendars::get_event)
                 .patch(calendars::update_event)

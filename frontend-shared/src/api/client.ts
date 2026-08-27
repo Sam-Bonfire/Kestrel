@@ -40,7 +40,7 @@ async function request<T>(
   opts: RequestOptions = {},
 ): Promise<T> {
   const { token, body, ...init } = opts;
-  
+
   if (!navigator.onLine && method !== 'GET') {
     enqueueMutation(path, method, body);
     return undefined as T; // Return early for void operations (or mock for others)
@@ -104,7 +104,7 @@ export async function replayOfflineQueue(): Promise<void> {
     } catch (err) {
       console.error('Failed to replay mutation', mut, err);
       // Stop replay on first network failure to maintain order
-      if (err instanceof TypeError) break; 
+      if (err instanceof TypeError) break;
     }
   }
 }
@@ -211,13 +211,25 @@ export interface Calendar {
 
 export interface CalendarEvent {
   id: string;
+  account_id: string;
   calendar_id: string;
+  external_id: string;
   title: string;
   description: string;
-  start: string;
-  end: string;
-  all_day: boolean;
+  start?: string;
+  end?: string;
+  start_time: number;
+  end_time: number;
+  all_day?: boolean;
+  is_all_day: boolean;
   location: string;
+  organizer_email?: string;
+  organizer_name?: string;
+  attendees?: string;
+  status?: string;
+  rsvpStatus?: 'yes' | 'no' | 'maybe' | 'none';
+  created_at: number;
+  updated_at: number;
 }
 
 export interface EventSearchResult {
@@ -518,6 +530,18 @@ export async function updateEvent(
   return request<CalendarEvent>('PATCH', `/events/${eventId}`, {
     token,
     body: patch,
+  });
+}
+
+
+export async function rsvpExternal(
+  externalId: string,
+  status: string,
+  token?: string,
+): Promise<CalendarEvent> {
+  return request<CalendarEvent>('POST', '/events/rsvp_external', {
+    token,
+    body: { external_id: externalId, status },
   });
 }
 

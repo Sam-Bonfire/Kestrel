@@ -127,3 +127,6 @@ export type {
 } from './utils/labels.js';
 
 export { default as ContactAutocomplete } from './components/ContactAutocomplete.svelte';
+
+export { parseIcs } from './utils/icsParser.js';
+export type { IcsEvent } from './utils/icsParser.js';

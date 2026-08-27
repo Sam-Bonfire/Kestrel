@@ -29,6 +29,7 @@ export {
   createEvent,
   updateEvent,
   deleteEvent,
+  rsvpExternal,
 } from './client.js';
 
 export * from './client.js';

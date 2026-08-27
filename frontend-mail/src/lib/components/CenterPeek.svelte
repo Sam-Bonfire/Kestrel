@@ -39,6 +39,9 @@
     ContactAutocomplete,
     Dropdown
   } from '@kestrel/shared';
+  import { parseIcs } from '@kestrel/shared';
+  import type { IcsEvent } from '@kestrel/shared';
+  import EventInviteCard from './EventInviteCard.svelte';
   import DOMPurify from 'dompurify';
 
   export interface Email {
@@ -129,6 +132,9 @@
 
   let showHistory = $state(false);
 
+  let icsEvent = $state<IcsEvent | null>(null);
+  let loadingIcs = $state(false);
+
   // ── Attachment download via Tauri ──────────────────────────────
   let downloadingAttachments = $state<Record<string, boolean>>({});
 
@@ -191,6 +197,36 @@
     if (initialReplyMode && !showReplyDraft) {
       showReplyDraft = true;
       replyType = initialReplyMode;
+    }
+  });
+
+  let previousEmailId: string | null = null;
+  $effect(() => {
+    if (email && email.id !== previousEmailId) {
+      icsEvent = null;
+      loadingIcs = false;
+      previousEmailId = email.id;
+    }
+
+    if (email?.attachments?.length) {
+      const icsAttachment = email.attachments.find((a: { filename: string }) => a.filename.toLowerCase().endsWith('.ics') || a.filename.toLowerCase().endsWith('.vcs'));
+      if (icsAttachment && !icsEvent && !loadingIcs) {
+        loadingIcs = true;
+        import('@kestrel/shared/api').then(({ downloadAttachment }) => {
+          downloadAttachment(email!.id, icsAttachment.filename).then(bytes => {
+            const text = new TextDecoder().decode(bytes);
+            icsEvent = parseIcs(text);
+            loadingIcs = false;
+          }).catch(err => {
+            console.error('Failed to parse ICS', err);
+            loadingIcs = false;
+          });
+        });
+      } else if (!icsAttachment) {
+        icsEvent = null;
+      }
+    } else {
+      icsEvent = null;
     }
   });
 
@@ -362,6 +398,10 @@
               </button>
             </div>
           </div>
+
+          {#if icsEvent}
+            <EventInviteCard event={icsEvent} emailId={email.id} />
+          {/if}
 
           <!-- Message HTML Render Content (Task 33: Body Sandboxing) -->
           <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">

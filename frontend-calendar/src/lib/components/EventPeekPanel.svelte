@@ -44,13 +44,13 @@
 
   let popoverStyle = $derived.by(() => {
     if (isDocked || isMobileOrTablet) return ''; // Docked and Mobile use fixed classes
-    
+
     const PANEL_WIDTH = 340; // Reduced from 450
     const PANEL_HEIGHT = 500; // Estimated height
     const MARGIN = 16;
 
     if (!clickPosition) return `top: 50%; left: 50%; transform: translate(-50%, -50%); width: ${PANEL_WIDTH}px; max-width: 90vw;`;
-    
+
     // Advanced Bounding Box Math for Floating Panel
     let x = clickPosition.x + 20;
     let y = clickPosition.y - 20;
@@ -58,10 +58,10 @@
     if (typeof window !== 'undefined') {
       if (x + PANEL_WIDTH > window.innerWidth - MARGIN) x = clickPosition.x - PANEL_WIDTH - 20;
       if (x < MARGIN) x = MARGIN;
-      
+
       if (y + PANEL_HEIGHT > window.innerHeight - MARGIN) y = window.innerHeight - PANEL_HEIGHT - MARGIN;
       if (y < MARGIN) y = MARGIN;
-      
+
       maxH = window.innerHeight - y - MARGIN;
     }
     return `top: ${y}px; left: ${x}px; width: ${PANEL_WIDTH}px; max-width: 90vw; max-height: ${maxH}px;`;
@@ -95,7 +95,7 @@
         initialSnapshot = JSON.parse(JSON.stringify(event));
         currentEventId = event.id;
       }
-      
+
       title = event.title || '';
       description = event.description || '';
       location = event.location || '';
@@ -139,7 +139,7 @@
       rsvpStatus,
       attendees: attendeesInput.split(',').map(email => ({ name: email.trim(), email: email.trim(), rsvp: 'none' })).filter(a => a.email)
     });
-    
+
     if (close) onClose();
   }
 
@@ -148,6 +148,15 @@
       onSave(initialSnapshot);
     }
     onClose();
+  }
+
+  function updateRsvp(status: string) {
+    if (!event || !event.id) return;
+    const newRsvpStatus = status === 'accepted' ? 'yes' : status === 'declined' ? 'no' : 'maybe';
+    event.rsvpStatus = newRsvpStatus;
+    import('@kestrel/shared/api').then(({ updateEvent }) => {
+      updateEvent(event!.id!, { status }).catch(console.error);
+    });
   }
 </script>
 
@@ -173,9 +182,9 @@
     class="bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden font-sans shadow-2xl flex flex-col text-sm text-[var(--color-text-primary)] {isMobileOrTablet ? 'fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl max-h-[90vh] overflow-y-auto' : isDocked ? 'fixed inset-y-0 right-0 w-80 border-l z-50 rounded-none h-screen' : 'fixed z-50 max-h-[90vh] rounded-xl'}"
     style={popoverStyle}
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => { 
-      if (e.key === 'Escape') handleEscape(); 
-      e.stopPropagation(); 
+    onkeydown={(e) => {
+      if (e.key === 'Escape') handleEscape();
+      e.stopPropagation();
     }}
     role="dialog"
   >
@@ -198,9 +207,9 @@
       </div>
     </div>
 
-    
+
     <!-- Scrollable content area -->
-    <div 
+    <div
       class="p-6 pt-2 space-y-5 flex-1 overflow-y-auto"
       onchange={() => { if (event?.id && isEditing) handleSave(false); }}
     >
@@ -268,7 +277,7 @@
             <User class="w-4 h-4 text-neutral-500 shrink-0" />
             <input type="text" placeholder="Add guests (comma separated emails)" bind:value={attendeesInput} class="w-full bg-transparent border-none outline-none text-xs text-white placeholder:text-neutral-400" />
           </div>
-          
+
           <div class="flex items-center gap-4 group cursor-pointer">
             <Video class="w-4 h-4 text-neutral-500 shrink-0" />
             <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">Conferencing</span>
@@ -312,7 +321,7 @@
               </select>
             </div>
           </div>
-          
+
           <div class="pl-8 flex items-center gap-6">
             <span class="text-xs text-white">Busy</span>
             <span class="text-xs text-white">Default visibility</span>
@@ -331,7 +340,7 @@
       {:else}
         <!-- VIEW MODE DETAILS VIEW -->
         <div class="space-y-5">
-          
+
           <!-- Event Title Block -->
           <div class="space-y-1">
             <h3 class="text-sm font-bold text-white leading-snug">
@@ -341,7 +350,7 @@
 
           <!-- Planned Execution Date Block - BORDERLESS -->
           <div class="space-y-2.5 bg-neutral-900/30 p-3.5 rounded-xl">
-            
+
             <div class="flex items-start gap-2.5">
               <Clock class="w-3.5 h-3.5 text-neutral-400 mt-0.5 flex-shrink-0" />
               <div class="space-y-0.5">
@@ -380,7 +389,7 @@
           <!-- Organizer & Attendees block -->
           {#if event.organizer || (event.attendees && event.attendees.length > 0)}
             <div class="space-y-2.5 pt-1">
-              
+
               <!-- Organizer -->
               {#if event.organizer}
                 <div class="space-y-1">
@@ -429,9 +438,9 @@
                 <div class="space-y-1">
                   <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Your RSVP Status</span>
                   <div class="flex items-center gap-1.5 bg-[#1a1a1a]/60 p-1.5 rounded-xl">
-                    <button class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400 font-bold' : 'text-neutral-500 hover:text-white'}">Yes</button>
-                    <button class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400 font-bold' : 'text-neutral-500 hover:text-white'}">No</button>
-                    <button class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}">Maybe</button>
+                    <button onclick={() => updateRsvp('accepted')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400 font-bold' : 'text-neutral-500 hover:text-white'}">Yes</button>
+                    <button onclick={() => updateRsvp('declined')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400 font-bold' : 'text-neutral-500 hover:text-white'}">No</button>
+                    <button onclick={() => updateRsvp('tentative')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}">Maybe</button>
                     <div class="w-px h-5 bg-neutral-800 mx-1"></div>
                     <button onclick={() => isEditing = true} class="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer" title="Edit Response">
                       <Edit2 class="w-3 h-3" />
@@ -445,7 +454,7 @@
 
           <!-- AI notes and online meeting shortcuts -->
           <div class="space-y-2 pt-3 border-t border-neutral-800/20">
-            
+
             <button
               type="button"
               class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-500/5 to-indigo-500/5 hover:from-purple-500/10 hover:to-indigo-500/10 text-xs font-semibold text-purple-300 transition-all cursor-pointer flex items-center justify-between"
@@ -461,7 +470,7 @@
 
           <!-- Other attributes (Priority, Location, etc.) -->
           <div class="space-y-3 pt-3 border-t border-neutral-800/20">
-            
+
             <!-- Priority Field -->
             <div class="flex items-center justify-between text-xs py-1.5">
               <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
@@ -522,8 +531,8 @@
 <!-- Footer Actions -->
     {#if !event.id}
       <div class="px-6 py-4 flex items-center justify-end">
-        <button 
-          onclick={() => handleSave(true)} 
+        <button
+          onclick={() => handleSave(true)}
           class="px-5 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-md"
         >
           Save

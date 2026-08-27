@@ -945,7 +945,7 @@
       onChangeViewMode={(m) => viewMode = m}
       onEventUpdate={(id, updates) => {
         import('@kestrel/shared/api').then(({ updateEvent }) => {
-          updateEvent(id, updates).then(() => {
+          updateEvent(id, updates as unknown as Partial<import('@kestrel/shared/api').CalendarEvent>).then(() => {
             events = events.map(ev => ev.id === id ? { ...ev, ...updates } : ev);
             showToast('Event updated successfully', 'success');
           }).catch(err => {
