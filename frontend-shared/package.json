@@ -18,7 +18,8 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "svelte": "^4.0.0 || ^5.0.0"
@@ -30,7 +31,8 @@
     "svelte": "^5.56.7",
     "typescript": "^5.8.2",
     "vite": "^6.4.3",
-    "vite-plugin-dts": "^5.0.3"
+    "vite-plugin-dts": "^5.0.3",
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "@tanstack/query-core": "^5.101.4",
