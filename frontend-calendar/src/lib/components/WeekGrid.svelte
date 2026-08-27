@@ -229,6 +229,16 @@
   } | null>(null);
   // Set when a drag-create committed, so the subsequent `click` event is ignored
   let suppressNextClick = $state(false);
+  let dragMove = $state<{
+    id: string;
+    active: boolean;
+    dateStr: string;
+    previewStartTime: string;
+    previewEndTime: string;
+    widthPct: number;
+    leftPct: number;
+    color: string;
+  } | null>(null);
 
   // Convert a Y coordinate (relative to the timeline body) into HH:MM,
   // snapped to 15-minute increments and clamped to 23:59.
@@ -309,53 +319,74 @@
   let resizing = $state<{
     id: string;
     startY: number;
+    originalStartMins: number;
     originalEndMins: number;
+    edge: 'top' | 'bottom';
   } | null>(null);
+  let resizePreviewStart = $state<string | null>(null);
   let resizePreviewEnd = $state<string | null>(null);
 
-  function startResize(e: PointerEvent, ev: CalendarEvent) {
+  function startResize(e: PointerEvent, ev: CalendarEvent, edge: 'top' | 'bottom') {
     e.preventDefault();
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const [sh, sm] = ev.startTime.split(':').map(Number);
     const [eh, em] = ev.endTime.split(':').map(Number);
     resizing = {
       id: ev.id,
-      startY: e.clientY - rect.top,
+      startY: e.clientY, // use raw ClientY to calculate deltas accurately
+      originalStartMins: sh * 60 + sm,
       originalEndMins: eh * 60 + em,
+      edge
     };
+    resizePreviewStart = ev.startTime;
     resizePreviewEnd = ev.endTime;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function updateResize(e: PointerEvent) {
     if (!resizing) return;
-    const el = e.currentTarget as HTMLElement | null;
-    if (!el) return;
-    const deltaMins = Math.round((e.clientY - el.getBoundingClientRect().top - resizing.startY) / 15) * 15;
-    const newEndMins = Math.max(resizing.originalEndMins + deltaMins, 30);
-    const h = Math.floor(newEndMins / 60);
-    const m = newEndMins % 60;
-    resizePreviewEnd = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    const deltaMins = Math.round((e.clientY - resizing.startY) / 15) * 15;
+
+    if (resizing.edge === 'bottom') {
+      const newEndMins = Math.max(resizing.originalEndMins + deltaMins, resizing.originalStartMins + 15);
+      const h = Math.floor(newEndMins / 60);
+      const m = newEndMins % 60;
+      resizePreviewEnd = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    } else {
+      const newStartMins = Math.max(0, Math.min(resizing.originalStartMins + deltaMins, resizing.originalEndMins - 15));
+      const h = Math.floor(newStartMins / 60);
+      const m = newStartMins % 60;
+      resizePreviewStart = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
   }
 
   function endResize(e: PointerEvent) {
     if (!resizing) return;
     updateResize(e);
-    if (resizePreviewEnd && resizePreviewEnd !== resizing.originalEndMins.toString()) {
+
+    if (resizing.edge === 'bottom' && resizePreviewEnd && resizePreviewEnd !== resizing.originalEndMins.toString()) {
       const id = resizing.id;
       const newEnd = resizePreviewEnd;
       // Keep the new end clamped to the same day (never beyond 23:59)
       const [h, m] = newEnd.split(':').map(Number);
       const capped = h > 23 ? '23:59' : newEnd;
       onEventUpdate(id, { endTime: capped });
+    } else if (resizing.edge === 'top' && resizePreviewStart && resizePreviewStart !== resizing.originalStartMins.toString()) {
+      const id = resizing.id;
+      const newStart = resizePreviewStart;
+      onEventUpdate(id, { startTime: newStart });
     }
+
     resizing = null;
+    resizePreviewStart = null;
     resizePreviewEnd = null;
   }
 
   function pointerCaptureLost() {
     dragCreate = null;
     resizing = null;
+    resizePreviewStart = null;
     resizePreviewEnd = null;
   }
 
@@ -566,7 +597,42 @@
           {@const dayEvents = getEventsForDate(dateStr)}
           {@const layoutInfo = getTimedEventsLayout(dayEvents)}
           <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors cursor-cell select-none"
-               ondragover={(e) => { e.preventDefault(); e.dataTransfer!.dropEffect = 'move'; }}
+               ondragover={(e) => {
+                 e.preventDefault();
+                 e.dataTransfer!.dropEffect = 'move';
+                 if (dragMove?.active) {
+                   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                   const y = e.clientY - rect.top;
+                   const exactHour = Math.floor(y / 60);
+                   const roundedMinutes = Math.floor((y % 60) / 15) * 15;
+
+                   // Ensure it does not go negative
+                   const startHourStr = Math.max(0, exactHour).toString().padStart(2, '0');
+                   const newStartTime = `${startHourStr}:${roundedMinutes.toString().padStart(2, '0')}`;
+
+                   const ev = events.find((ev: CalendarEvent) => ev.id === dragMove!.id);
+                   if (ev) {
+                     const [sh, sm] = ev.startTime.split(':').map(Number);
+                     const [eh, em] = ev.endTime.split(':').map(Number);
+                     const duration = (eh * 60 + em) - (sh * 60 + sm);
+
+                     const newStartMins = exactHour * 60 + roundedMinutes;
+                     const newEndMins = newStartMins + duration;
+                     const newEndHour = Math.floor(newEndMins / 60);
+                     const newEndMinute = newEndMins % 60;
+                     const cappedEndHour = newEndHour > 23 ? 23 : newEndHour;
+                     const cappedEndMin = newEndHour > 23 ? 59 : newEndMinute;
+
+                     const newEndTime = `${cappedEndHour.toString().padStart(2, '0')}:${cappedEndMin.toString().padStart(2, '0')}`;
+
+                     if (dragMove.dateStr !== dateStr || dragMove.previewStartTime !== newStartTime) {
+                       dragMove.dateStr = dateStr;
+                       dragMove.previewStartTime = newStartTime;
+                       dragMove.previewEndTime = newEndTime;
+                     }
+                   }
+                 }
+               }}
                ondrop={(e) => {
                  e.preventDefault();
                  const id = e.dataTransfer?.getData('text/plain');
@@ -575,7 +641,9 @@
                  const y = e.clientY - rect.top;
                  const exactHour = Math.floor(y / 60);
                  const roundedMinutes = Math.floor((y % 60) / 15) * 15;
-                 const newStartTime = `${exactHour.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+
+                 const startHourStr = Math.max(0, exactHour).toString().padStart(2, '0');
+                 const newStartTime = `${startHourStr}:${roundedMinutes.toString().padStart(2, '0')}`;
                  
                  // Get old event to calculate duration and new end time
                  const ev = events.find((e: any) => e.id === id);
@@ -588,7 +656,9 @@
                    const newEndMins = newStartMins + duration;
                    const newEndHour = Math.floor(newEndMins / 60);
                    const newEndMinute = newEndMins % 60;
-                   const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${newEndMinute.toString().padStart(2, '0')}`;
+                   const cappedEndHour = newEndHour > 23 ? 23 : newEndHour;
+                   const cappedEndMin = newEndHour > 23 ? 59 : newEndMinute;
+                   const newEndTime = `${cappedEndHour.toString().padStart(2, '0')}:${cappedEndMin.toString().padStart(2, '0')}`;
                    
                    onEventUpdate(id, {
                      date: dateStr,
@@ -596,6 +666,7 @@
                      endTime: newEndTime
                    });
                  }
+                 dragMove = null;
                }}
                onpointerdown={(e) => startDragCreate(e, dateStr)}
                onpointermove={(e) => updateDragCreate(e)}
@@ -642,6 +713,21 @@
               ></div>
             {/if}
 
+            <!-- Drag-to-move ghost selection overlay -->
+            {#if dragMove?.active && dragMove.dateStr === dateStr}
+              {@const ghostTop = getEventTopOffset(dragMove.previewStartTime)}
+              {@const ghostHeight = getEventHeight(dragMove.previewStartTime, dragMove.previewEndTime)}
+              {@const ghostStyle = COLOR_CLASSES[dragMove.color] || COLOR_CLASSES.blue}
+              <div
+                class="absolute p-2 rounded-lg text-xs text-left font-medium border border-dashed shadow-md transition-all z-20 pointer-events-none opacity-80 {ghostStyle.bg} {ghostStyle.border}"
+                style="top: {ghostTop}px; height: {ghostHeight}px; left: {dragMove.leftPct}%; width: calc({dragMove.widthPct}% - 4px);"
+              >
+                <div class="text-[10px] opacity-75 font-mono mt-0.5">
+                  {dragMove.previewStartTime} - {dragMove.previewEndTime}
+                </div>
+              </div>
+            {/if}
+
             <!-- Render events for this column day -->
             {#each dayEvents as ev}
               {@const top = getEventTopOffset(ev.startTime)}
@@ -651,8 +737,10 @@
               {@const widthPct = layout ? layout.width : 100}
               {@const leftPct = layout ? layout.left : 0}
               {@const isSelected = ev.id === selectedEventId}
+              {@const previewStart = resizing?.id === ev.id ? resizePreviewStart : ev.startTime}
               {@const previewEnd = resizing?.id === ev.id ? resizePreviewEnd : ev.endTime}
-              {@const displayHeight = resizing?.id === ev.id ? getEventHeight(ev.startTime, previewEnd ?? ev.endTime) : height}
+              {@const displayTop = resizing?.id === ev.id ? getEventTopOffset(previewStart ?? ev.startTime) : top}
+              {@const displayHeight = resizing?.id === ev.id ? getEventHeight(previewStart ?? ev.startTime, previewEnd ?? ev.endTime) : height}
               
               <button
                 in:scale={{ duration: 200, start: 0.95 }}
@@ -660,6 +748,28 @@
                 ondragstart={(e) => {
                   e.dataTransfer!.setData('text/plain', ev.id);
                   e.dataTransfer!.effectAllowed = 'move';
+
+                  // Setup drag image and dragMove state
+                  const layout = layoutInfo.get(ev.id);
+                  dragMove = {
+                    id: ev.id,
+                    active: true,
+                    dateStr,
+                    previewStartTime: ev.startTime,
+                    previewEndTime: ev.endTime,
+                    widthPct: layout ? layout.width : 100,
+                    leftPct: layout ? layout.left : 0,
+                    color: ev.color
+                  };
+
+                  // Empty drag image
+                  const dragIcon = document.createElement('div');
+                  document.body.appendChild(dragIcon);
+                  e.dataTransfer!.setDragImage(dragIcon, 0, 0);
+                  setTimeout(() => document.body.removeChild(dragIcon), 0);
+                }}
+                ondragend={() => {
+                  dragMove = null;
                 }}
                 onclick={(e) => {
                   e.stopPropagation();
@@ -670,13 +780,14 @@
                 onpointerenter={(e) => handlePointerEnter(e, ev)}
                 onpointerleave={handlePointerLeave}
                 data-event-card
-                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-move overflow-hidden
-                  {colStyle.bg} {colStyle.border} {isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}"
-                style="top: {top}px; height: {displayHeight}px; left: {leftPct}%; width: calc({widthPct}% - 4px);"
+                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-grab overflow-hidden active:cursor-grabbing select-none
+                  {colStyle.bg} {colStyle.border} {isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}
+                  {dragMove?.id === ev.id ? 'opacity-30' : ''}"
+                style="top: {displayTop}px; height: {displayHeight}px; left: {leftPct}%; width: calc({widthPct}% - 4px);"
               >
                 <div class="font-bold truncate text-white leading-tight pointer-events-none">{ev.title}</div>
                 <div class="text-[10px] opacity-75 font-mono mt-0.5 pointer-events-none">
-                  {ev.startTime} - {resizing?.id === ev.id ? (resizePreviewEnd ?? ev.endTime) : ev.endTime}
+                  {resizing?.id === ev.id ? (resizePreviewStart ?? ev.startTime) : ev.startTime} - {resizing?.id === ev.id ? (resizePreviewEnd ?? ev.endTime) : ev.endTime}
                 </div>
                 {#if ev.location && height > 50}
                   <div class="text-[9px] opacity-80 truncate flex items-center gap-1 mt-1 pointer-events-none">
@@ -685,11 +796,18 @@
                   </div>
                 {/if}
 
-                <!-- Drag-to-resize handle (bottom edge) -->
+                <!-- Drag-to-resize handles (top and bottom edges) -->
                 {#if isSelected}
                   <div
+                    class="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize bg-white/20 hover:bg-white/50 rounded-t-lg transition-colors"
+                    onpointerdown={(e) => startResize(e, ev, 'top')}
+                    onpointermove={(e) => updateResize(e)}
+                    onpointerup={(e) => endResize(e)}
+                    onpointercancel={pointerCaptureLost}
+                  ></div>
+                  <div
                     class="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-white/20 hover:bg-white/50 rounded-b-lg transition-colors"
-                    onpointerdown={(e) => startResize(e, ev)}
+                    onpointerdown={(e) => startResize(e, ev, 'bottom')}
                     onpointermove={(e) => updateResize(e)}
                     onpointerup={(e) => endResize(e)}
                     onpointercancel={pointerCaptureLost}
