@@ -145,9 +145,18 @@ run = [
     "pnpm --filter frontend-calendar build"
 ]
 
+[tasks."check:frontend-shared"]
+description = "Run Shared frontend tests and type checks"
+run = [
+    "echo \"==> Frontend Shared: type check...\"",
+    "pnpm --filter @kestrel/shared build",
+    "echo \"==> Frontend Shared: tests...\"",
+    "pnpm --filter @kestrel/shared test"
+]
+
 [tasks.check]
 description = "Run all linters, tests, and build checks"
-depends = ["check:backend", "check:frontend-mail", "check:frontend-calendar"]
+depends = ["check:backend", "check:frontend-shared", "check:frontend-mail", "check:frontend-calendar"]
 run = "echo \"==> All checks passed!\""
 
 [tasks.clean]
