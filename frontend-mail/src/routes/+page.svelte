@@ -122,6 +122,9 @@
   let searchQuery      = $state('');
   let selectedThreadId = $state<string | null>(null);
   let isComposeOpen    = $state(false);
+  let composeInitialTo = $state<string[]>([]);
+  let composeInitialSubject = $state('');
+  let composeInitialBody = $state('');
   let isCommandOpen    = $state(false);
   let isSettingsOpen   = $state(false);
   let isMailSettingsOpen = $state(false);
@@ -835,6 +838,15 @@
       onRemoveLabel={removeLabel}
       onMoveTo={moveTo}
       onSendReply={handleSendReply}
+          onPopOut={(type: string, recipients: string[], body: string) => {
+            composeInitialTo = recipients;
+            let baseSubject = activeEmail?.subject || '';
+            composeInitialSubject = baseSubject.toLowerCase().startsWith('re:') || baseSubject.toLowerCase().startsWith('fwd:')
+              ? baseSubject
+              : (type === 'forward' ? `Fwd: ${baseSubject}` : `Re: ${baseSubject}`);
+            composeInitialBody = body;
+            isComposeOpen = true;
+          }}
       allLabels={allLabels}
       onReportSpam={reportSpam}
       onMute={muteThread}

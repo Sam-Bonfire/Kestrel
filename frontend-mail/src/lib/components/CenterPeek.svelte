@@ -70,7 +70,8 @@
     onToggleUnread = (id: string) => {},
     onAddLabel = (id: string, label: string) => {},
     onRemoveLabel = (id: string, label: string) => {},
-    onSendReply = (emailId: string, replyBody: string) => {},
+    onSendReply = (emailId: string, replyBody: string, recipients: string[], type: string) => {},
+    onPopOut = (type: string, recipients: string[], body: string) => {},
     onSnooze = (id: string, until: string) => {},
     onMoveTo = (id: string, folder: string) => {},
     onReportSpam = (id: string) => {},
@@ -95,7 +96,8 @@
     onToggleUnread?: (id: string) => void;
     onAddLabel?: (id: string, label: string) => void;
     onRemoveLabel?: (id: string, label: string) => void;
-    onSendReply?: (emailId: string, replyBody: string) => void;
+    onSendReply?: (emailId: string, replyBody: string, recipients: string[], type: string) => void;
+    onPopOut?: (type: string, recipients: string[], body: string) => void;
     onSnooze?: (id: string, until: string) => void;
     onMoveTo?: (id: string, folder: string) => void;
     onReportSpam?: (id: string) => void;
@@ -171,7 +173,7 @@
 
   function handleSendReply() {
     if (replyText.trim() && email) {
-      onSendReply(email.id, replyText.trim());
+      onSendReply(email.id, replyText.trim(), replyToRecipients, replyType);
       replyText = '';
       replyToRecipients = [];
       showReplyDraft = false;
@@ -486,6 +488,7 @@
                 <button onclick={() => replyText += '**text**'} class="p-1.5 rounded hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer" title="Bold"><strong class="font-serif font-bold">B</strong></button>
                 <button onclick={() => replyText += '*text*'} class="p-1.5 rounded hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer" title="Italic"><em class="font-serif">I</em></button>
                 <button onclick={() => replyText += '<u>text</u>'} class="p-1.5 rounded hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer" title="Underline"><span class="underline">U</span></button>
+                <button onclick={() => onPopOut(replyType, replyToRecipients, replyText)} class="p-1.5 rounded hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer" title="Pop out reply"><CornerUpLeft class="w-4 h-4" /></button>
               </div>
               <div class="flex items-center gap-2">
                 <button onclick={() => showReplyDraft = false} class="px-3 py-1.5 text-xs text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer">Discard</button>

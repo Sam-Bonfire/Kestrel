@@ -11,20 +11,26 @@
   let {
     isOpen = false,
     onClose = () => {},
-    onSend = (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }) => {}
+    onSend = (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }) => {},
+    initialTo = [],
+    initialSubject = '',
+    initialBody = ''
   } = $props<{
     isOpen?: boolean;
     onClose?: () => void;
     onSend?: (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }) => void;
+    initialTo?: string[];
+    initialSubject?: string;
+    initialBody?: string;
   }>();
 
-  let toRecipients = $state<string[]>([]);
+  let toRecipients = $state<string[]>(initialTo);
   let ccRecipients = $state<string[]>([]);
   let bccRecipients = $state<string[]>([]);
   let showCc = $state(false);
   let showBcc = $state(false);
-  let subject = $state('');
-  let body = $state('');
+  let subject = $state(initialSubject);
+  let body = $state(initialBody);
   let attachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>([]);
   let fromAccount = $state('');
   let accounts = $state<any[]>([]);
