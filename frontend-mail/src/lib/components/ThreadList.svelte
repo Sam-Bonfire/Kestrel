@@ -5,7 +5,7 @@
   import { isTyping } from '$lib/utils/keyboard';
   import { 
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
-    ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check,
+    ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check, ListPlus,
     Clock, AlertTriangle, Sparkles, Tag, Plus, X, Folder, ChevronRight,
     Reply, ReplyAll, Forward, BellOff, AlertOctagon
   } from 'lucide-svelte';
@@ -26,6 +26,7 @@
     date: string;
     isUnread: boolean;
     isStarred: boolean;
+    isReplyLater?: boolean;
     hasAttachment: boolean;
     labels: string[];
     category?: string;
@@ -40,6 +41,7 @@
     selectedThreadId = $bindable<string | null>(null),
     currentView = 'inbox',
     onSelectThread = (id: string) => {},
+    onToggleReplyLater = (id: string) => {},
     onToggleStar = (id: string) => {},
     onArchive = (id: string) => {},
     onDelete = (id: string) => {},
@@ -65,6 +67,7 @@
     selectedThreadId?: string | null;
     currentView?: string;
     onSelectThread?: (id: string) => void;
+    onToggleReplyLater?: (id: string) => void;
     onToggleStar?: (id: string) => void;
     onArchive?: (id: string) => void;
     onDelete?: (id: string) => void;
@@ -574,6 +577,14 @@
               >
                 <Star class="w-3.5 h-3.5 {thread.isStarred ? 'fill-current' : ''}" />
               </button>
+              <!-- Reply Later -->
+              <button
+                onclick={(e) => { e.stopPropagation(); onToggleReplyLater(thread.id); }}
+                title="Reply Later"
+                class="p-1 rounded hover:bg-white/5 transition-colors cursor-pointer {thread.isReplyLater ? 'text-orange-400' : 'text-neutral-400 hover:text-white'}"
+              >
+                <ListPlus class="w-3.5 h-3.5" />
+              </button>
 
               <!-- Archive -->
               <button
@@ -652,6 +663,13 @@
     >
       <Reply class="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
       <span>Reply</span>
+    </button>
+    <button
+      onclick={() => { onToggleReplyLater(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors"
+    >
+      <ListPlus class="w-3.5 h-3.5 text-orange-400" />
+      <span>Reply Later</span>
     </button>
     <button 
       onclick={() => { onReplyAll(threadContextMenu!.threadId); threadContextMenu = null; }}
