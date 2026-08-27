@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Clock, MapPin, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare } from 'lucide-svelte';
   import { scale } from 'svelte/transition';
+  import EventHoverPopover from './EventHoverPopover.svelte';
 
   export interface CalendarEvent {
     id: string;
@@ -361,6 +362,33 @@
   import { onMount } from 'svelte';
   let scrollContainer: HTMLDivElement | null = $state(null);
 
+  // Hover Popover State
+  let hoveredEvent = $state<CalendarEvent | null>(null);
+  let hoverAnchorElement = $state<HTMLElement | null>(null);
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  let isHoveringPopover = $state(false);
+
+  function handlePointerEnter(e: PointerEvent, ev: CalendarEvent) {
+    if (resizing || dragCreate?.active || ev.id === selectedEventId) return;
+    const target = e.currentTarget as HTMLElement;
+    if (hoverTimer) clearTimeout(hoverTimer);
+
+    hoverTimer = setTimeout(() => {
+      hoveredEvent = ev;
+      hoverAnchorElement = target;
+    }, 250);
+  }
+
+  function handlePointerLeave(e: PointerEvent) {
+    if (hoverTimer) clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      if (!isHoveringPopover) {
+        hoveredEvent = null;
+        hoverAnchorElement = null;
+      }
+    }, 150);
+  }
+
   $effect(() => {
     // Auto-scroll timeline to startHour
     if (scrollContainer && viewMode !== 'month' && viewMode !== 'agenda') {
@@ -449,7 +477,13 @@
             {#each getEventsForDate(dateStr) as ev}
               <button
                 in:scale={{ duration: 200, start: 0.95 }}
-                onclick={(e) => onEventClick(ev, e)}
+                onclick={(e) => {
+                  hoveredEvent = null;
+                  hoverAnchorElement = null;
+                  onEventClick(ev, e);
+                }}
+                onpointerenter={(e) => handlePointerEnter(e, ev)}
+                onpointerleave={handlePointerLeave}
                 class="w-full px-2 py-0.5 rounded text-[10px] text-left font-medium truncate shadow-sm cursor-pointer transition-all hover:scale-[1.03] hover:shadow-lg hover:z-20 {(COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue).bg} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-10' : 'border-transparent'}"
               >
                 {ev.title}
@@ -627,7 +661,14 @@
                   e.dataTransfer!.setData('text/plain', ev.id);
                   e.dataTransfer!.effectAllowed = 'move';
                 }}
-                onclick={(e) => { e.stopPropagation(); onEventClick(ev, e); }}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  hoveredEvent = null;
+                  hoverAnchorElement = null;
+                  onEventClick(ev, e);
+                }}
+                onpointerenter={(e) => handlePointerEnter(e, ev)}
+                onpointerleave={handlePointerLeave}
                 data-event-card
                 class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-move overflow-hidden
                   {colStyle.bg} {colStyle.border} {isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}"
@@ -663,3 +704,17 @@
     </div>
   {/if}
 </div>
+
+<EventHoverPopover
+  event={hoveredEvent}
+  anchor={hoverAnchorElement}
+  onMouseEnter={() => {
+    isHoveringPopover = true;
+    if (hoverTimer) clearTimeout(hoverTimer);
+  }}
+  onMouseLeave={() => {
+    isHoveringPopover = false;
+    hoveredEvent = null;
+    hoverAnchorElement = null;
+  }}
+/>
