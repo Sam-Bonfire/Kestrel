@@ -522,6 +522,17 @@ export async function updateEvent(
   });
 }
 
+export async function rsvpExternal(
+  externalId: string,
+  status: string,
+  token?: string,
+): Promise<CalendarEvent> {
+  return request<CalendarEvent>('POST', '/events/rsvp_external', {
+    token,
+    body: { external_id: externalId, status },
+  });
+}
+
 export async function deleteEvent(
   eventId: string,
   token?: string,

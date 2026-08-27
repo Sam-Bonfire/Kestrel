@@ -1,4 +1,3 @@
-<script lang="ts">
   import { X, Calendar as CalendarIcon, Edit2, Sparkles, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, X as XIcon, HelpCircle, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -16,7 +15,7 @@
     organizer?: string;
     priority?: string;
     status?: string;
-    attendees?: { name?: string; email: string; status?: 'accepted' | 'declined' | 'tentative' | 'needsAction' }[];
+    attendees?: { name?: string; email: string; status?: 'accepted' | 'declined' | 'tentative' | 'needsAction'; rsvp?: 'yes' | 'no' | 'maybe' }[];
     rsvpStatus?: 'yes' | 'no' | 'maybe' | 'none';
     isAllDay?: boolean;
     calendarId?: string;
@@ -78,7 +77,6 @@
   let status = $state('Scheduled');
   let category = $state('Work');
   let color = $state('blue');
-  let rsvpStatus = $state<'yes' | 'no' | 'maybe' | 'none'>('none');
   import { ContactAutocomplete } from '@kestrel/shared';
   type SelectedContact = {
     name?: string | null;
@@ -159,6 +157,15 @@
       onSave(initialSnapshot);
     }
     onClose();
+  }
+
+  function updateRsvp(status: string) {
+    if (!event || !event.id) return;
+    const newRsvpStatus = status === 'accepted' ? 'yes' : status === 'declined' ? 'no' : 'maybe';
+    event.rsvpStatus = newRsvpStatus;
+    import('@kestrel/shared/api').then(({ updateEvent }) => {
+      updateEvent(event!.id!, { status }).catch(console.error);
+    });
   }
 </script>
 
@@ -419,15 +426,15 @@
                           <div class="w-7 h-7 rounded-full bg-emerald-800/20 border border-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
                             {(att.name || att.email).charAt(0).toUpperCase()}
                           </div>
-                          {#if att.status === 'accepted'}
+                          {#if att.status === 'accepted' || att.rsvp === 'yes'}
                             <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border border-[#131313] flex items-center justify-center">
                               <Check class="w-2 h-2 text-white stroke-[3.5]" />
                             </div>
-                          {:else if att.status === 'declined'}
+                          {:else if att.status === 'declined' || att.rsvp === 'no'}
                             <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 rounded-full border border-[#131313] flex items-center justify-center">
                               <XIcon class="w-2 h-2 text-white stroke-[3.5]" />
                             </div>
-                          {:else if att.status === 'tentative'}
+                          {:else if att.status === 'tentative' || att.rsvp === 'maybe'}
                             <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border border-[#131313] flex items-center justify-center">
                               <HelpCircle class="w-2 h-2 text-white stroke-[3.5]" />
                             </div>
@@ -448,9 +455,9 @@
                 <div class="space-y-1">
                   <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Your RSVP Status</span>
                   <div class="flex items-center gap-1.5 bg-[#1a1a1a]/60 p-1.5 rounded-xl">
-                    <button class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400 font-bold' : 'text-neutral-500 hover:text-white'}">Yes</button>
-                    <button class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400 font-bold' : 'text-neutral-500 hover:text-white'}">No</button>
-                    <button class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}">Maybe</button>
+                    <button onclick={() => updateRsvp('accepted')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400 font-bold' : 'text-neutral-500 hover:text-white'}">Yes</button>
+                    <button onclick={() => updateRsvp('declined')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400 font-bold' : 'text-neutral-500 hover:text-white'}">No</button>
+                    <button onclick={() => updateRsvp('tentative')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}">Maybe</button>
                     <div class="w-px h-5 bg-neutral-800 mx-1"></div>
                     <button onclick={() => isEditing = true} class="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer" title="Edit Response">
                       <Edit2 class="w-3 h-3" />

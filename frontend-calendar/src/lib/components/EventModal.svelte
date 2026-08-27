@@ -78,6 +78,10 @@
     { name: 'teal', hex: '#0fa3b1', dot: 'bg-teal-500' }
   ];
 
+  function updateRsvp(status: string) {
+    rsvpStatus = status === 'accepted' ? 'yes' : status === 'declined' ? 'no' : 'maybe';
+  }
+
   function handleSave() {
     if (!title.trim()) return;
 
@@ -233,6 +237,16 @@
               rows="3"
               class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-500 resize-none"
             ></textarea>
+          </div>
+        </div>
+
+        <!-- RSVP Status Block -->
+        <div class="space-y-3 border-b border-neutral-800 pb-4">
+          <span class="text-xs font-mono uppercase tracking-wider text-neutral-500">Your RSVP Status</span>
+          <div class="flex items-center gap-1.5 bg-[#1a1a1a]/60 p-1.5 rounded-xl border border-neutral-800">
+            <button type="button" onclick={() => updateRsvp('accepted')} class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400' : 'text-neutral-500 hover:text-white'}">Yes</button>
+            <button type="button" onclick={() => updateRsvp('declined')} class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400' : 'text-neutral-500 hover:text-white'}">No</button>
+            <button type="button" onclick={() => updateRsvp('tentative')} class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400' : 'text-neutral-500 hover:text-white'}">Maybe</button>
           </div>
         </div>
 
