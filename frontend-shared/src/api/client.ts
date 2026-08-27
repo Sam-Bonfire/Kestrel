@@ -563,6 +563,21 @@ export interface LabelCustomization {
   colorName: string;
 }
 
+export interface Snippet {
+  id: string;
+  title: string;
+  shortcut: string;
+  template: string;
+}
+
+export interface Signature {
+  id: string;
+  accountId: string | null;
+  name: string;
+  htmlContent: string;
+  isDefault: boolean;
+}
+
 export interface SettingsPayload {
   mailDenseMode?: boolean;
   mailDefaultLandingView?: string;
@@ -570,4 +585,6 @@ export interface SettingsPayload {
   labelCustomizations?: Record<string, LabelCustomization>;
   syncInterval?: number;
   theme?: string;
+  snippets?: Snippet[];
+  signatures?: Signature[];
 }

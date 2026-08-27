@@ -32,6 +32,19 @@ export async function initializeSettings() {
     if ((settings as any).theme !== undefined) {
        // but theme is declared below, let's just let it load from localStorage for now and we'll sync it, wait I appended theme below
     }
+
+    // Also trigger snippet & signature template sync since we load settings together
+    import('./templates.svelte.js').then((m) => {
+      if (settings.snippets !== undefined) {
+        m.templateStore.snippets = settings.snippets;
+        localStorage.setItem('kestrel:settings:snippets', JSON.stringify(settings.snippets));
+      }
+      if (settings.signatures !== undefined) {
+        m.templateStore.signatures = settings.signatures;
+        localStorage.setItem('kestrel:settings:signatures', JSON.stringify(settings.signatures));
+      }
+    });
+
   } catch (err) {
     console.error('Failed to load settings from backend', err);
   } finally {

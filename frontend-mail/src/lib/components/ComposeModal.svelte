@@ -6,7 +6,7 @@
   import { apiClient } from '@kestrel/shared/api';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { mailSignature } from '@kestrel/shared/stores';
+  import { templateStore } from '@kestrel/shared';
 
   let {
     isOpen = false,
@@ -30,13 +30,22 @@
   let accounts = $state<any[]>([]);
   let isSending = $state(false);
 
+  let previousFromAccount = $state('');
+
+  $effect(() => {
+    if (fromAccount && fromAccount !== previousFromAccount) {
+      previousFromAccount = fromAccount;
+      // Auto-inject default signature
+      const defaultSig = templateStore.signatures.find(s => s.accountId === fromAccount && s.isDefault);
+      if (defaultSig && (!body || body.trim() === '')) {
+        body = '\n\n' + defaultSig.htmlContent;
+      }
+    }
+  });
+
   $effect(() => {
     if (isOpen) {
       loadAccounts();
-      const sig = get(mailSignature);
-      if (sig && body === '') {
-        body = `<br><br>--<br>${sig}`;
-      }
     } else {
       // Reset form when closed
       toRecipients = [];
@@ -131,6 +140,60 @@
       }
     }
     target.value = ''; // Reset input
+  }
+
+  function handleBodyInput(e: Event) {
+    const target = e.target as HTMLTextAreaElement;
+    const currentBody = target.value;
+
+    // Check the text right up to the cursor to see if it matches a snippet
+    const cursorPosition = target.selectionStart;
+    const textBeforeCursor = currentBody.substring(0, cursorPosition);
+    const textAfterCursor = currentBody.substring(cursorPosition);
+
+    for (const snippet of templateStore.snippets) {
+      // Escape shortcut to avoid regex bugs if shortcut is e.g., '/.thanks'
+      const escapedShortcut = snippet.shortcut.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Look for the shortcut followed by a space right at the cursor position
+      const regex = new RegExp(escapedShortcut + '(\\s)$');
+      if (regex.test(textBeforeCursor)) {
+        let replacement = snippet.template;
+
+        // Find variables like {{name}} and prompt for them
+        const varRegex = /\{\{([^}]+)\}\}/g;
+        let match;
+        const variablesToReplace: { original: string, name: string }[] = [];
+        while ((match = varRegex.exec(replacement)) !== null) {
+          variablesToReplace.push({ original: match[0], name: match[1] });
+        }
+
+        for (const v of variablesToReplace) {
+          const val = window.prompt(`Enter value for ${v.name}:`, '');
+          if (val !== null) {
+            replacement = replacement.replace(new RegExp(v.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), val);
+          }
+        }
+
+        // Rebuild body with the replacement
+        body = textBeforeCursor.replace(regex, replacement + '$1') + textAfterCursor;
+
+        // Use timeout to reset cursor position after svelte updates the DOM
+        setTimeout(() => {
+          const newPos = cursorPosition - snippet.shortcut.length + replacement.length;
+          target.selectionStart = newPos;
+          target.selectionEnd = newPos;
+        }, 0);
+
+        break; // Only expand one at a time
+      }
+    }
+  }
+
+  function appendSignature(sigId: string) {
+    const sig = templateStore.signatures.find(s => s.id === sigId);
+    if (sig) {
+      body += '\n\n' + sig.htmlContent;
+    }
   }
 </script>
 
@@ -234,6 +297,7 @@
       <div class="p-4 flex-1">
         <textarea
           bind:value={body}
+          oninput={handleBodyInput}
           placeholder="Write your email response or message here..."
           rows="10"
           class="w-full h-full bg-transparent text-[var(--color-text-primary)] text-xs outline-none resize-none leading-relaxed border-none"
@@ -255,6 +319,17 @@
             <button onclick={() => applyFormat('- ')} title="List" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><List class="w-3.5 h-3.5" /></button>
             <button onclick={() => applyFormat('[', '](https://)')} title="Link" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><Link class="w-3.5 h-3.5" /></button>
             <button onclick={() => fileInput.click()} title="Attach File" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><Paperclip class="w-3.5 h-3.5" /></button>
+
+            {#if templateStore.signatures.length > 0}
+              <div class="relative ml-2 flex items-center">
+                <select class="appearance-none bg-transparent outline-none border-none text-[10px] text-[var(--color-text-secondary)] hover:text-white cursor-pointer" onchange={(e) => { if (e.currentTarget.value) appendSignature(e.currentTarget.value); e.currentTarget.value = ''; }}>
+                  <option value="" disabled selected>Insert Signature...</option>
+                  {#each templateStore.signatures as sig}
+                    <option value={sig.id} class="bg-[var(--color-canvas-card)] text-[var(--color-text-primary)]">{sig.name}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
           </div>
         </div>
 

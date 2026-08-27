@@ -59,6 +59,8 @@ export type {
   Calendar,
   CalendarEvent,
   EventSearchResult,
+  Snippet,
+  Signature,
 } from './api/index.js';
 
 // ── Auth store & Settings store ─────────────────────────────────
@@ -86,6 +88,11 @@ export {
   getSyncState,
   getGlobalSyncState,
 } from './stores/sync.svelte.js';
+
+export {
+  templateStore,
+  TemplateStore,
+} from './stores/templates.svelte.js';
 
 // ── Offline queue ───────────────────────────────────────────────
 export {
