@@ -696,6 +696,31 @@
     allEmails = allEmails.map(e => ids.includes(e.id) ? { ...e, isStarred } : e);
     import('@kestrel/shared/api').then(api => api.bulkAction(ids, 'toggle_star', isStarred));
   }
+  function bulkApplyLabel(ids: string[], label: string) {
+    // If all selected already have it, we remove. Otherwise, we add.
+    const allHaveLabel = ids.every(id => {
+      const email = allEmails.find(e => e.id === id);
+      return email && email.labels.includes(label);
+    });
+
+    if (allHaveLabel) {
+      allEmails = allEmails.map(e => {
+        if (ids.includes(e.id) && e.labels.includes(label)) {
+          return { ...e, labels: e.labels.filter((l: string) => l !== label) };
+        }
+        return e;
+      });
+      import('@kestrel/shared/api').then(api => api.bulkAction(ids, 'remove_label', true, label));
+    } else {
+      allEmails = allEmails.map(e => {
+        if (ids.includes(e.id) && !e.labels.includes(label)) {
+          return { ...e, labels: [...e.labels, label] };
+        }
+        return e;
+      });
+      import('@kestrel/shared/api').then(api => api.bulkAction(ids, 'apply_label', true, label));
+    }
+  }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────
   import { isTyping } from '$lib/utils/keyboard';
@@ -811,6 +836,7 @@
       onBulkDelete={bulkDelete}
       onBulkToggleUnread={bulkToggleUnread}
       onBulkToggleStar={bulkToggleStar}
+      onBulkApplyLabel={bulkApplyLabel}
       onApplyLabel={applyLabel}
       onMoveTo={moveTo}
       onReply={initiateReply}

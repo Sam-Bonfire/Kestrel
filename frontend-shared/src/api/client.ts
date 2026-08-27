@@ -404,15 +404,16 @@ export async function updateLabels(id: string, labels: string[], token?: string)
   });
 }
 
-export type BulkActionType = 'mark_read' | 'archive' | 'trash' | 'toggle_star';
+export type BulkActionType = 'mark_read' | 'archive' | 'trash' | 'toggle_star' | 'apply_label' | 'remove_label';
 
-export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, token?: string): Promise<void> {
+export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, label?: string, token?: string): Promise<void> {
   await request('POST', '/messages/bulk', {
     token,
     body: {
       message_ids,
       action,
       action_value,
+      label,
     },
   });
 }

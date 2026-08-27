@@ -51,6 +51,7 @@
     onBulkDelete = (ids: string[]) => {},
     onBulkToggleUnread = (ids: string[], isUnread: boolean) => {},
     onBulkToggleStar = (ids: string[], isStarred: boolean) => {},
+    onBulkApplyLabel = (ids: string[], label: string) => {},
     onApplyLabel = (id: string, label: string) => {},
     onMoveTo = (id: string, label: string) => {},
     onReply = (id: string) => {},
@@ -77,6 +78,7 @@
     onBulkDelete?: (ids: string[]) => void;
     onBulkToggleUnread?: (ids: string[], isUnread: boolean) => void;
     onBulkToggleStar?: (ids: string[], isStarred: boolean) => void;
+    onBulkApplyLabel?: (ids: string[], label: string) => void;
     onApplyLabel?: (id: string, label: string) => void;
     onMoveTo?: (id: string, label: string) => void;
     onReply?: (id: string) => void;
@@ -95,11 +97,13 @@
 
   // Checkbox state tracking
   let checkedThreads = $state<Record<string, boolean>>({});
+  let lastCheckedId = $state<string | null>(null);
 
   // Context Menu state
   let threadContextMenu = $state<{ x: number; y: number; threadId: string } | null>(null);
   let showLabelDropdown = $state(false);
   let showMoveToDropdown = $state(false);
+  let showBulkLabelDropdown = $state(false);
 
   // Filter Toolbar Toggle
   let showFiltersBar = $state(false);
@@ -171,10 +175,25 @@
 
   function toggleCheck(id: string, e: MouseEvent) {
     e.stopPropagation();
-    checkedThreads = {
-      ...checkedThreads,
-      [id]: !checkedThreads[id]
-    };
+    if (e.shiftKey && lastCheckedId) {
+      const lastIdx = filteredList.findIndex((t: EmailThread) => t.id === lastCheckedId);
+      const currIdx = filteredList.findIndex((t: EmailThread) => t.id === id);
+      if (lastIdx !== -1 && currIdx !== -1) {
+        const start = Math.min(lastIdx, currIdx);
+        const end = Math.max(lastIdx, currIdx);
+        const nextChecked = { ...checkedThreads };
+        for (let i = start; i <= end; i++) {
+          nextChecked[filteredList[i].id] = true;
+        }
+        checkedThreads = nextChecked;
+      }
+    } else {
+      checkedThreads = {
+        ...checkedThreads,
+        [id]: !checkedThreads[id]
+      };
+    }
+    lastCheckedId = id;
   }
 
   function handleKeyDown(event: KeyboardEvent) {
@@ -189,6 +208,38 @@
       event.preventDefault();
       selectedIndex = Math.max(selectedIndex - 1, 0);
       onSelectThread(filteredList[selectedIndex].id);
+    } else if (event.key === 'x') {
+      if (filteredList[selectedIndex]) {
+        const id = filteredList[selectedIndex].id;
+        checkedThreads = { ...checkedThreads, [id]: !checkedThreads[id] };
+        lastCheckedId = id;
+      }
+    } else if (event.key === 'a' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      toggleSelectAll();
+    } else if (event.key === 'Escape') {
+      if (checkedIds.length > 0) {
+        checkedThreads = {};
+      }
+    } else if (checkedIds.length > 0) {
+      if (event.key === 'e') {
+        onBulkArchive(checkedIds);
+        checkedThreads = {};
+      } else if (event.key === '#' || event.key === 'Delete') {
+        onBulkDelete(checkedIds);
+        checkedThreads = {};
+      } else if (event.key === 'u') {
+        onBulkToggleUnread(checkedIds, true);
+        checkedThreads = {};
+      } else if (event.key === 'i') {
+        onBulkToggleUnread(checkedIds, false);
+        checkedThreads = {};
+      } else if (event.key === 's') {
+        const firstChecked = filteredList.find((t: EmailThread) => t.id === checkedIds[0]);
+        const targetStar = firstChecked ? !firstChecked.isStarred : true;
+        onBulkToggleStar(checkedIds, targetStar);
+        checkedThreads = {};
+      }
     }
   }
 
@@ -438,6 +489,33 @@
           >
             <Trash2 class="w-3.5 h-3.5" strokeWidth={1.5} />
           </button>
+
+          <div class="relative ml-1">
+            <button
+              onclick={(e) => { e.stopPropagation(); showBulkLabelDropdown = !showBulkLabelDropdown; }}
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Apply Label"
+            >
+              <Tag class="w-3.5 h-3.5 text-pink-400" strokeWidth={1.5} />
+            </button>
+            {#if showBulkLabelDropdown}
+              <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1a1919] border border-white/10 rounded-xl shadow-xl w-44 py-1 max-h-40 overflow-y-auto z-50">
+                {#each allLabels as label}
+                  <button
+                    onclick={() => {
+                      if (onBulkApplyLabel) onBulkApplyLabel(checkedIds, label);
+                      showBulkLabelDropdown = false;
+                      checkedThreads = {};
+                    }}
+                    class="w-full px-3 py-1.5 text-left text-white text-[11px] hover:bg-[var(--color-canvas-hover)] transition-colors truncate cursor-pointer bg-transparent border-none outline-none"
+                  >
+                    {label.split('/').pop()}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
           <div class="w-px h-4 bg-white/10 mx-1"></div>
           <button
             onclick={() => checkedThreads = {}}
