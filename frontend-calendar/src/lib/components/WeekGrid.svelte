@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Clock, MapPin, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare } from 'lucide-svelte';
+  import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare } from 'lucide-svelte';
+  import { detectConferenceLink } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
 
   export interface CalendarEvent {
@@ -403,11 +404,19 @@
                     <Clock class="w-3.5 h-3.5" />
                     <span>{ev.startTime} - {ev.endTime}</span>
                   </span>
-                  {#if ev.location}
-                    <span class="flex items-center gap-1 truncate max-w-[200px]">
-                      <MapPin class="w-3.5 h-3.5" />
-                      <span class="truncate">{ev.location}</span>
-                    </span>
+                  {#if ev.location || ev.description}
+                    {@const confLinkAllDay = ev.location ? detectConferenceLink(ev.location) : ev.description ? detectConferenceLink(ev.description) : null}
+                    {#if confLinkAllDay}
+                      <span class="flex items-center gap-1 truncate max-w-[200px]">
+                        <Video class="w-3.5 h-3.5" />
+                        <span class="truncate">{confLinkAllDay.displayLabel}</span>
+                      </span>
+                    {:else if ev.location}
+                      <span class="flex items-center gap-1 truncate max-w-[200px]">
+                        <MapPin class="w-3.5 h-3.5" />
+                        <span class="truncate">{ev.location}</span>
+                      </span>
+                    {/if}
                   {/if}
                 </div>
                 {#if ev.description}
@@ -637,11 +646,19 @@
                 <div class="text-[10px] opacity-75 font-mono mt-0.5 pointer-events-none">
                   {ev.startTime} - {resizing?.id === ev.id ? (resizePreviewEnd ?? ev.endTime) : ev.endTime}
                 </div>
-                {#if ev.location && height > 50}
-                  <div class="text-[9px] opacity-80 truncate flex items-center gap-1 mt-1 pointer-events-none">
-                    <MapPin class="w-3 h-3 text-current shrink-0" />
-                    <span class="truncate">{ev.location}</span>
-                  </div>
+                {#if (ev.location || ev.description) && height > 50}
+                  {@const confLinkGrid = ev.location ? detectConferenceLink(ev.location) : ev.description ? detectConferenceLink(ev.description) : null}
+                  {#if confLinkGrid}
+                    <div class="text-[9px] opacity-80 truncate flex items-center gap-1 mt-1 pointer-events-none">
+                      <Video class="w-3 h-3 text-current shrink-0" />
+                      <span class="truncate">{confLinkGrid.displayLabel}</span>
+                    </div>
+                  {:else if ev.location}
+                    <div class="text-[9px] opacity-80 truncate flex items-center gap-1 mt-1 pointer-events-none">
+                      <MapPin class="w-3 h-3 text-current shrink-0" />
+                      <span class="truncate">{ev.location}</span>
+                    </div>
+                  {/if}
                 {/if}
 
                 <!-- Drag-to-resize handle (bottom edge) -->

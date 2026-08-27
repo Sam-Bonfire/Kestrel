@@ -2,6 +2,8 @@
   import { X, Calendar as CalendarIcon, Edit2, Sparkles, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import { detectConferenceLink } from '@kestrel/shared';
+  import { openUrl } from '@tauri-apps/plugin-opener';
 
   export interface EventDetail {
     id?: string;
@@ -477,17 +479,36 @@
               {/if}
             </div>
 
-            <!-- Location Field -->
-            {#if event.location}
-              <div class="space-y-1">
-                <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
-                  <MapPin class="w-3.5 h-3.5 text-neutral-500/60" />
-                  <span>Location</span>
+            <!-- Location / Video Conference Field -->
+            {#if event.location || event.description}
+              {@const confLink = event.location ? detectConferenceLink(event.location) : event.description ? detectConferenceLink(event.description) : null}
+              {#if confLink}
+                <div class="space-y-2 pt-3">
+                  <div class="flex items-center gap-2">
+                    <Video class="w-4 h-4 text-blue-400 shrink-0" />
+                    <div class="flex-1 min-w-0">
+                      <div class="text-xs font-semibold text-white truncate">{confLink.displayLabel}</div>
+                      <div class="text-[10px] text-neutral-500 font-mono truncate">{confLink.provider}</div>
+                    </div>
+                    <button
+                      onclick={() => openUrl(confLink.url)}
+                      class="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-[11px] font-bold transition-colors shadow-sm cursor-pointer"
+                    >
+                      Join
+                    </button>
+                  </div>
                 </div>
-                <div class="text-xs text-white bg-neutral-900/30 rounded-lg p-2.5 font-medium">
-                  {event.location}
+              {:else if event.location}
+                <div class="space-y-1">
+                  <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
+                    <MapPin class="w-3.5 h-3.5 text-neutral-500/60" />
+                    <span>Location</span>
+                  </div>
+                  <div class="text-xs text-white bg-neutral-900/30 rounded-lg p-2.5 font-medium">
+                    {event.location}
+                  </div>
                 </div>
-              </div>
+              {/if}
             {/if}
 
           </div>
