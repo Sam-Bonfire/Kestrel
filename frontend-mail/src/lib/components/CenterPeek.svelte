@@ -7,6 +7,7 @@
     ChevronUp,
     ChevronDown,
     Star,
+    ListPlus,
     Archive,
     ArchiveRestore,
     Trash2,
@@ -52,6 +53,7 @@
     isUnread: boolean;
     isStarred: boolean;
     isArchived: boolean;
+    isReplyLater?: boolean;
     isTrash: boolean;
     labels: string[];
     avatar?: string;
@@ -66,6 +68,7 @@
     hasNext = false,
     onArchive = (id: string) => {},
     onDelete = (id: string) => {},
+    onToggleReplyLater = (id: string) => {},
     onToggleStar = (id: string) => {},
     onToggleUnread = (id: string) => {},
     onAddLabel = (id: string, label: string) => {},
@@ -82,7 +85,12 @@
     onDownloadMessage = (id: string) => {},
     historicalMessages = [] as { sender: string; body: string; timestamp: string }[],
     allLabels = [] as string[],
-    initialReplyMode = null
+    initialReplyMode = null,
+    isBatchMode = false,
+    batchIndex = 0,
+    batchTotal = 0,
+    onSkipNext = () => {},
+    onExitBatch = () => {}
   } = $props<{
     email?: Email | null;
     onClose?: () => void;
@@ -91,6 +99,7 @@
     hasNext?: boolean;
     onArchive?: (id: string) => void;
     onDelete?: (id: string) => void;
+    onToggleReplyLater?: (id: string) => void;
     onToggleStar?: (id: string) => void;
     onToggleUnread?: (id: string) => void;
     onAddLabel?: (id: string, label: string) => void;
@@ -108,17 +117,31 @@
     historicalMessages?: { sender: string; body: string; timestamp: string }[];
     allLabels?: string[];
     initialReplyMode?: 'reply' | 'reply_all' | 'forward' | null;
+    isBatchMode?: boolean;
+    batchIndex?: number;
+    batchTotal?: number;
+    onSkipNext?: () => void;
+    onExitBatch?: () => void;
   }>();
 
   // UI state variables
   let showReplyDraft = $state(false);
   let replyType = $state<'reply' | 'reply_all' | 'forward'>('reply');
   let replyToRecipients = $state<string[]>([]);
+  let textareaEl: HTMLTextAreaElement | null = null;
   let replyText = $state('');
   let newLabelText = $state('');
   let showAddLabelInput = $state(false);
   let labelSearchQuery = $state('');
   let moveSearchQuery = $state('');
+  $effect(() => {
+    if (isBatchMode && email) {
+      replyType = 'reply';
+      replyToRecipients = email.senderEmail ? [email.senderEmail] : [email.sender];
+      showReplyDraft = true;
+      setTimeout(() => textareaEl?.focus(), 50);
+    }
+  });
 
   let activeMenu = $state<'snooze' | 'label' | 'more' | 'move' | null>(null);
 
@@ -217,6 +240,15 @@
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}
     >
+      {#if isBatchMode}
+        <div class="px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between text-blue-400 shrink-0">
+          <div class="text-xs md:text-sm font-medium">Batch Processing: {batchIndex + 1} of {batchTotal} items remaining</div>
+          <div class="flex items-center gap-2 md:gap-3">
+            <button onclick={onSkipNext} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1 md:px-3 md:py-1.5 bg-white/5 rounded-md hover:bg-white/10">Skip / Next (Tab)</button>
+            <button onclick={onExitBatch} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1">Exit (Esc)</button>
+          </div>
+        </div>
+      {/if}
       <!-- Header Toolbar -->
       <div 
         id="peek-header" 
@@ -357,6 +389,13 @@
               >
                 <Star class="w-4 h-4 {email.isStarred ? 'fill-current text-amber-400' : 'text-[var(--color-text-secondary)]'}" />
               </button>
+              <button
+                onclick={() => email && onToggleReplyLater(email.id)}
+                class="p-1.5 rounded-full hover:bg-white/5 transition-colors cursor-pointer {email.isReplyLater ? 'text-orange-400' : 'text-[var(--color-text-secondary)] hover:text-white'}"
+                title="Reply Later"
+              >
+                <ListPlus class="w-4 h-4" />
+              </button>
               <button class="p-1.5 rounded-full hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer">
                 <Reply class="w-4 h-4" />
               </button>
@@ -475,6 +514,7 @@
             </div>
 
             <textarea
+              bind:this={textareaEl}
               bind:value={replyText}
               placeholder={replyType === 'forward' ? "Add forwarding note..." : "Write your response..."}
               rows="5"
