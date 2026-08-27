@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Calendar as CalendarIcon, Edit2, Sparkles, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
+  import { X, Calendar as CalendarIcon, Edit2, Sparkles, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, X as XIcon, HelpCircle, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -16,7 +16,7 @@
     organizer?: string;
     priority?: string;
     status?: string;
-    attendees?: { name: string; email: string; rsvp: 'yes' | 'no' | 'maybe' }[];
+    attendees?: { name?: string; email: string; status?: 'accepted' | 'declined' | 'tentative' | 'needsAction' }[];
     rsvpStatus?: 'yes' | 'no' | 'maybe' | 'none';
     isAllDay?: boolean;
     calendarId?: string;
@@ -44,13 +44,13 @@
 
   let popoverStyle = $derived.by(() => {
     if (isDocked || isMobileOrTablet) return ''; // Docked and Mobile use fixed classes
-    
+
     const PANEL_WIDTH = 340; // Reduced from 450
     const PANEL_HEIGHT = 500; // Estimated height
     const MARGIN = 16;
 
     if (!clickPosition) return `top: 50%; left: 50%; transform: translate(-50%, -50%); width: ${PANEL_WIDTH}px; max-width: 90vw;`;
-    
+
     // Advanced Bounding Box Math for Floating Panel
     let x = clickPosition.x + 20;
     let y = clickPosition.y - 20;
@@ -58,10 +58,10 @@
     if (typeof window !== 'undefined') {
       if (x + PANEL_WIDTH > window.innerWidth - MARGIN) x = clickPosition.x - PANEL_WIDTH - 20;
       if (x < MARGIN) x = MARGIN;
-      
+
       if (y + PANEL_HEIGHT > window.innerHeight - MARGIN) y = window.innerHeight - PANEL_HEIGHT - MARGIN;
       if (y < MARGIN) y = MARGIN;
-      
+
       maxH = window.innerHeight - y - MARGIN;
     }
     return `top: ${y}px; left: ${x}px; width: ${PANEL_WIDTH}px; max-width: 90vw; max-height: ${maxH}px;`;
@@ -79,7 +79,16 @@
   let category = $state('Work');
   let color = $state('blue');
   let rsvpStatus = $state<'yes' | 'no' | 'maybe' | 'none'>('none');
-  let attendeesInput = $state('');
+  import { ContactAutocomplete } from '@kestrel/shared';
+  type SelectedContact = {
+    name?: string | null;
+    email: string;
+    avatar_url?: string | null;
+    status?: string;
+    rsvp?: string;
+  };
+  let attendeeEmails = $state<string[]>([]);
+  let attendees = $state<SelectedContact[]>([]);
   let isAllDay = $state(false);
   let calendarId = $state('');
   let organizer = $state('');
@@ -95,7 +104,7 @@
         initialSnapshot = JSON.parse(JSON.stringify(event));
         currentEventId = event.id;
       }
-      
+
       title = event.title || '';
       description = event.description || '';
       location = event.location || '';
@@ -111,9 +120,11 @@
       calendarId = event.calendarId || (accounts?.length > 0 && accounts[0].calendars?.length > 0 ? accounts[0].calendars[0].id : '');
       organizer = event.organizer || '';
       if (event.attendees && event.attendees.length > 0) {
-        attendeesInput = event.attendees.map((a: any) => a.email).join(', ');
+        attendeeEmails = event.attendees.map((a: any) => a.email);
+        attendees = [...event.attendees];
       } else {
-        attendeesInput = '';
+        attendeeEmails = [];
+        attendees = [];
       }
     }
   });
@@ -137,9 +148,9 @@
       calendarId,
       organizer,
       rsvpStatus,
-      attendees: attendeesInput.split(',').map(email => ({ name: email.trim(), email: email.trim(), rsvp: 'none' })).filter(a => a.email)
+      attendees
     });
-    
+
     if (close) onClose();
   }
 
@@ -173,9 +184,9 @@
     class="bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden font-sans shadow-2xl flex flex-col text-sm text-[var(--color-text-primary)] {isMobileOrTablet ? 'fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl max-h-[90vh] overflow-y-auto' : isDocked ? 'fixed inset-y-0 right-0 w-80 border-l z-50 rounded-none h-screen' : 'fixed z-50 max-h-[90vh] rounded-xl'}"
     style={popoverStyle}
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => { 
-      if (e.key === 'Escape') handleEscape(); 
-      e.stopPropagation(); 
+    onkeydown={(e) => {
+      if (e.key === 'Escape') handleEscape();
+      e.stopPropagation();
     }}
     role="dialog"
   >
@@ -198,9 +209,9 @@
       </div>
     </div>
 
-    
+
     <!-- Scrollable content area -->
-    <div 
+    <div
       class="p-6 pt-2 space-y-5 flex-1 overflow-y-auto"
       onchange={() => { if (event?.id && isEditing) handleSave(false); }}
     >
@@ -266,9 +277,9 @@
         <div class="space-y-3">
           <div class="flex items-center gap-4 group">
             <User class="w-4 h-4 text-neutral-500 shrink-0" />
-            <input type="text" placeholder="Add guests (comma separated emails)" bind:value={attendeesInput} class="w-full bg-transparent border-none outline-none text-xs text-white placeholder:text-neutral-400" />
+            <div class="flex-1 w-full"><ContactAutocomplete bind:recipients={attendeeEmails} bind:contacts={attendees} placeholder="Add guests..." /></div>
           </div>
-          
+
           <div class="flex items-center gap-4 group cursor-pointer">
             <Video class="w-4 h-4 text-neutral-500 shrink-0" />
             <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">Conferencing</span>
@@ -312,7 +323,7 @@
               </select>
             </div>
           </div>
-          
+
           <div class="pl-8 flex items-center gap-6">
             <span class="text-xs text-white">Busy</span>
             <span class="text-xs text-white">Default visibility</span>
@@ -331,7 +342,7 @@
       {:else}
         <!-- VIEW MODE DETAILS VIEW -->
         <div class="space-y-5">
-          
+
           <!-- Event Title Block -->
           <div class="space-y-1">
             <h3 class="text-sm font-bold text-white leading-snug">
@@ -341,7 +352,7 @@
 
           <!-- Planned Execution Date Block - BORDERLESS -->
           <div class="space-y-2.5 bg-neutral-900/30 p-3.5 rounded-xl">
-            
+
             <div class="flex items-start gap-2.5">
               <Clock class="w-3.5 h-3.5 text-neutral-400 mt-0.5 flex-shrink-0" />
               <div class="space-y-0.5">
@@ -380,7 +391,7 @@
           <!-- Organizer & Attendees block -->
           {#if event.organizer || (event.attendees && event.attendees.length > 0)}
             <div class="space-y-2.5 pt-1">
-              
+
               <!-- Organizer -->
               {#if event.organizer}
                 <div class="space-y-1">
@@ -406,16 +417,24 @@
                       <div class="flex items-center gap-2 bg-neutral-900/30 p-2.5 rounded-xl">
                         <div class="relative">
                           <div class="w-7 h-7 rounded-full bg-emerald-800/20 border border-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
-                            {att.name.charAt(0).toUpperCase()}
+                            {(att.name || att.email).charAt(0).toUpperCase()}
                           </div>
-                          {#if att.rsvp === 'yes'}
+                          {#if att.status === 'accepted'}
                             <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border border-[#131313] flex items-center justify-center">
                               <Check class="w-2 h-2 text-white stroke-[3.5]" />
+                            </div>
+                          {:else if att.status === 'declined'}
+                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 rounded-full border border-[#131313] flex items-center justify-center">
+                              <XIcon class="w-2 h-2 text-white stroke-[3.5]" />
+                            </div>
+                          {:else if att.status === 'tentative'}
+                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border border-[#131313] flex items-center justify-center">
+                              <HelpCircle class="w-2 h-2 text-white stroke-[3.5]" />
                             </div>
                           {/if}
                         </div>
                         <div class="flex-1 min-w-0">
-                          <div class="text-xs text-white font-semibold truncate">{att.name}</div>
+                          <div class="text-xs text-white font-semibold truncate">{att.name || att.email.split('@')[0]}</div>
                           <div class="text-[10px] text-neutral-500 font-mono truncate">{att.email}</div>
                         </div>
                       </div>
@@ -445,7 +464,7 @@
 
           <!-- AI notes and online meeting shortcuts -->
           <div class="space-y-2 pt-3 border-t border-neutral-800/20">
-            
+
             <button
               type="button"
               class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-500/5 to-indigo-500/5 hover:from-purple-500/10 hover:to-indigo-500/10 text-xs font-semibold text-purple-300 transition-all cursor-pointer flex items-center justify-between"
@@ -461,7 +480,7 @@
 
           <!-- Other attributes (Priority, Location, etc.) -->
           <div class="space-y-3 pt-3 border-t border-neutral-800/20">
-            
+
             <!-- Priority Field -->
             <div class="flex items-center justify-between text-xs py-1.5">
               <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
@@ -522,8 +541,8 @@
 <!-- Footer Actions -->
     {#if !event.id}
       <div class="px-6 py-4 flex items-center justify-end">
-        <button 
-          onclick={() => handleSave(true)} 
+        <button
+          onclick={() => handleSave(true)}
           class="px-5 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-md"
         >
           Save
