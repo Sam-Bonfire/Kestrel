@@ -594,7 +594,8 @@ pub async fn bulk_action(
             }
             BulkActionType::ApplyLabel => {
                 if let Some(label_to_apply) = &params.label {
-                    if let Some(msg) = find_message_from_db(&state, *msg_id).await? {
+                    let msg_opt = find_message_from_db(&state, *msg_id).await?;
+                    if let Some(msg) = msg_opt {
                         let mut labels: Vec<String> = msg
                             .labels
                             .and_then(|l| serde_json::from_str(&l).ok())
@@ -619,7 +620,8 @@ pub async fn bulk_action(
             }
             BulkActionType::RemoveLabel => {
                 if let Some(label_to_remove) = &params.label {
-                    if let Some(msg) = find_message_from_db(&state, *msg_id).await? {
+                    let msg_opt = find_message_from_db(&state, *msg_id).await?;
+                    if let Some(msg) = msg_opt {
                         let mut labels: Vec<String> = msg
                             .labels
                             .and_then(|l| serde_json::from_str(&l).ok())
