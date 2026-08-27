@@ -608,6 +608,87 @@ pub async fn update_event(
     }))
 }
 
+// --- K-225: POST /api/v1/events/rsvp_external ---
+
+#[derive(Deserialize)]
+pub struct RsvpExternalRequest {
+    pub external_id: String,
+    pub status: String,
+}
+
+pub async fn rsvp_external(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Json(body): Json<RsvpExternalRequest>,
+) -> Result<Json<EventDetail>, KestrelError> {
+    // In a real scenario we might need to know the account, but we iterate available accounts for the user.
+    let accounts = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_user_id(user_id)
+            .await?
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_user_id(user_id)
+            .await?
+        }
+    };
+
+    let mut found_event = None;
+    for acc in accounts {
+        let repo: Box<dyn crate::core::repository::EventRepository> = match &state.db {
+            crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+                crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone()),
+            ),
+            crate::db::pool::DbPool::Postgres(pool) => Box::new(
+                crate::db::postgres::event_repository::PostgresEventRepository::new(pool.clone()),
+            ),
+        };
+
+        if let Ok(Some(ev)) = repo.find_by_external_id(acc.id.0, &body.external_id).await {
+            found_event = Some((ev, acc));
+            break;
+        }
+    }
+
+    let (mut event, _account) =
+        found_event.ok_or_else(|| KestrelError::NotFound("Event not found".to_string()))?;
+
+    verify_event_ownership(&state, user_id, &event).await?;
+
+    event.status = Some(body.status.clone());
+    event.updated_at = Utc::now().timestamp();
+
+    upsert_event_to_db(&state, &event).await?;
+
+    Ok(Json(EventDetail {
+        id: event.id.0,
+        account_id: event.account_id.0,
+        calendar_id: event.calendar_id.0,
+        external_id: event.external_id,
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        start_time: event.start_time,
+        end_time: event.end_time,
+        is_all_day: event.is_all_day,
+        recurrence_rules: event.recurrence_rules,
+        organizer_email: event.organizer_email,
+        organizer_name: event.organizer_name,
+        attendees: event.attendees,
+        status: event.status,
+        created_at: event.created_at,
+        updated_at: event.updated_at,
+    }))
+}
+
 // --- K-054: DELETE /api/v1/events/:id ---
 
 pub async fn delete_event(

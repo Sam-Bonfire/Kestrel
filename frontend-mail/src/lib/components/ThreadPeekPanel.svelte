@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Reply, Archive, Trash2, ShieldAlert, ShieldCheck } from 'lucide-svelte';
+  import { X, Reply, Archive, Trash2, ShieldAlert, ShieldCheck, ListPlus } from 'lucide-svelte';
 
   export let thread: {
     id: string;
@@ -7,9 +7,11 @@
     subject: string;
     date: string;
     htmlBody: string;
+    isReplyLater?: boolean;
   } | null = null;
 
   export let onClose: () => void = () => {};
+  export let onToggleReplyLater: (id: string) => void = () => {};
 
   let allowImages = false;
   let previousThreadId: string | undefined = undefined;
@@ -54,6 +56,9 @@
         </button>
         <button class="p-1.5 rounded hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-red-400 transition-colors">
           <Trash2 class="w-4 h-4" />
+        </button>
+        <button onclick={() => thread && onToggleReplyLater(thread.id)} class="p-1.5 rounded hover:bg-[var(--color-canvas-hover)] transition-colors {thread && thread.isReplyLater ? 'text-orange-400' : 'text-[var(--color-text-secondary)] hover:text-white'}">
+          <ListPlus class="w-4 h-4" />
         </button>
 
         <div class="w-px h-4 bg-[var(--color-border-hairline)] mx-1"></div>

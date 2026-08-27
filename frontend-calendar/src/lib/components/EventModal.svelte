@@ -47,7 +47,15 @@
   let category = $state('Work');
   let color = $state('blue');
   let rsvpStatus = $state<'yes' | 'no' | 'maybe' | 'none'>('none');
-  let attendees = $state<string[]>([]);
+  type SelectedContact = {
+    name?: string | null;
+    email: string;
+    avatar_url?: string | null;
+    status?: string;
+    rsvp?: string;
+  };
+  let attendeeEmails = $state<string[]>([]);
+  let attendees = $state<SelectedContact[]>([]);
   let isAllDay = $state(false);
   let calendarId = $state('');
   let organizer = $state('');
@@ -71,6 +79,10 @@
     { name: 'amber', hex: '#dfab00', dot: 'bg-amber-500' },
     { name: 'teal', hex: '#0fa3b1', dot: 'bg-teal-500' }
   ];
+
+  function updateRsvp(status: string) {
+    rsvpStatus = status === 'accepted' ? 'yes' : status === 'declined' ? 'no' : 'maybe';
+  }
 
   function handleSave() {
     if (!title.trim()) return;
@@ -102,6 +114,7 @@
     category = 'Work';
     rsvpStatus = 'none';
     attendees = [];
+    attendeeEmails = [];
     isAllDay = false;
     organizer = '';
     onClose();
@@ -198,7 +211,7 @@
           <div class="flex items-start gap-4 group">
             <User class="w-4 h-4 text-neutral-500 shrink-0 mt-2" />
             <div class="flex-1 w-full max-w-[calc(100%-2rem)]">
-              <ContactAutocomplete bind:recipients={attendees} placeholder="Add participants..." />
+              <ContactAutocomplete bind:recipients={attendeeEmails} bind:contacts={attendees} placeholder="Add participants..." />
             </div>
           </div>
           
@@ -264,6 +277,16 @@
               rows="3"
               class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-500 resize-none"
             ></textarea>
+          </div>
+        </div>
+
+        <!-- RSVP Status Block -->
+        <div class="space-y-3 border-b border-neutral-800 pb-4">
+          <span class="text-xs font-mono uppercase tracking-wider text-neutral-500">Your RSVP Status</span>
+          <div class="flex items-center gap-1.5 bg-[#1a1a1a]/60 p-1.5 rounded-xl border border-neutral-800">
+            <button type="button" onclick={() => updateRsvp('accepted')} class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400' : 'text-neutral-500 hover:text-white'}">Yes</button>
+            <button type="button" onclick={() => updateRsvp('declined')} class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400' : 'text-neutral-500 hover:text-white'}">No</button>
+            <button type="button" onclick={() => updateRsvp('tentative')} class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400' : 'text-neutral-500 hover:text-white'}">Maybe</button>
           </div>
         </div>
 

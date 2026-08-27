@@ -29,6 +29,7 @@ export {
   createEvent,
   updateEvent,
   deleteEvent,
+  rsvpExternal,
 } from './client.js';
 
 export * from './client.js';
@@ -47,5 +48,7 @@ export type {
   Calendar,
   CalendarEvent,
   EventSearchResult,
+  Snippet,
+  Signature,
 } from './client.js';
 export { getSettings, updateSettings } from './client.js';

@@ -404,15 +404,16 @@ export async function updateLabels(id: string, labels: string[], token?: string)
   });
 }
 
-export type BulkActionType = 'mark_read' | 'archive' | 'trash' | 'toggle_star';
+export type BulkActionType = 'mark_read' | 'archive' | 'trash' | 'toggle_star' | 'apply_label' | 'remove_label';
 
-export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, token?: string): Promise<void> {
+export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, label?: string, token?: string): Promise<void> {
   await request('POST', '/messages/bulk', {
     token,
     body: {
       message_ids,
       action,
       action_value,
+      label,
     },
   });
 }
@@ -521,6 +522,17 @@ export async function updateEvent(
   });
 }
 
+export async function rsvpExternal(
+  externalId: string,
+  status: string,
+  token?: string,
+): Promise<CalendarEvent> {
+  return request<CalendarEvent>('POST', '/events/rsvp_external', {
+    token,
+    body: { external_id: externalId, status },
+  });
+}
+
 export async function deleteEvent(
   eventId: string,
   token?: string,
@@ -563,6 +575,21 @@ export interface LabelCustomization {
   colorName: string;
 }
 
+export interface Snippet {
+  id: string;
+  title: string;
+  shortcut: string;
+  template: string;
+}
+
+export interface Signature {
+  id: string;
+  accountId: string | null;
+  name: string;
+  htmlContent: string;
+  isDefault: boolean;
+}
+
 export interface SettingsPayload {
   mailDenseMode?: boolean;
   mailDefaultLandingView?: string;
@@ -570,4 +597,6 @@ export interface SettingsPayload {
   labelCustomizations?: Record<string, LabelCustomization>;
   syncInterval?: number;
   theme?: string;
+  snippets?: Snippet[];
+  signatures?: Signature[];
 }
