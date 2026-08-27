@@ -40,7 +40,7 @@ async function request<T>(
   opts: RequestOptions = {},
 ): Promise<T> {
   const { token, body, ...init } = opts;
-
+  
   if (!navigator.onLine && method !== 'GET') {
     enqueueMutation(path, method, body);
     return undefined as T; // Return early for void operations (or mock for others)
@@ -104,7 +104,7 @@ export async function replayOfflineQueue(): Promise<void> {
     } catch (err) {
       console.error('Failed to replay mutation', mut, err);
       // Stop replay on first network failure to maintain order
-      if (err instanceof TypeError) break;
+      if (err instanceof TypeError) break; 
     }
   }
 }
@@ -211,25 +211,13 @@ export interface Calendar {
 
 export interface CalendarEvent {
   id: string;
-  account_id: string;
   calendar_id: string;
-  external_id: string;
   title: string;
   description: string;
-  start?: string;
-  end?: string;
-  start_time: number;
-  end_time: number;
-  all_day?: boolean;
-  is_all_day: boolean;
+  start: string;
+  end: string;
+  all_day: boolean;
   location: string;
-  organizer_email?: string;
-  organizer_name?: string;
-  attendees?: string;
-  status?: string;
-  rsvpStatus?: 'yes' | 'no' | 'maybe' | 'none';
-  created_at: number;
-  updated_at: number;
 }
 
 export interface EventSearchResult {
@@ -416,15 +404,16 @@ export async function updateLabels(id: string, labels: string[], token?: string)
   });
 }
 
-export type BulkActionType = 'mark_read' | 'archive' | 'trash' | 'toggle_star';
+export type BulkActionType = 'mark_read' | 'archive' | 'trash' | 'toggle_star' | 'apply_label' | 'remove_label';
 
-export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, token?: string): Promise<void> {
+export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, label?: string, token?: string): Promise<void> {
   await request('POST', '/messages/bulk', {
     token,
     body: {
       message_ids,
       action,
       action_value,
+      label,
     },
   });
 }
@@ -533,7 +522,6 @@ export async function updateEvent(
   });
 }
 
-
 export async function rsvpExternal(
   externalId: string,
   status: string,
@@ -587,6 +575,21 @@ export interface LabelCustomization {
   colorName: string;
 }
 
+export interface Snippet {
+  id: string;
+  title: string;
+  shortcut: string;
+  template: string;
+}
+
+export interface Signature {
+  id: string;
+  accountId: string | null;
+  name: string;
+  htmlContent: string;
+  isDefault: boolean;
+}
+
 export interface SettingsPayload {
   mailDenseMode?: boolean;
   mailDefaultLandingView?: string;
@@ -594,4 +597,6 @@ export interface SettingsPayload {
   labelCustomizations?: Record<string, LabelCustomization>;
   syncInterval?: number;
   theme?: string;
+  snippets?: Snippet[];
+  signatures?: Signature[];
 }

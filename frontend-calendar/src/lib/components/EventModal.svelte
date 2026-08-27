@@ -45,7 +45,15 @@
   let category = $state('Work');
   let color = $state('blue');
   let rsvpStatus = $state<'yes' | 'no' | 'maybe' | 'none'>('none');
-  let attendees = $state<string[]>([]);
+  type SelectedContact = {
+    name?: string | null;
+    email: string;
+    avatar_url?: string | null;
+    status?: string;
+    rsvp?: string;
+  };
+  let attendeeEmails = $state<string[]>([]);
+  let attendees = $state<SelectedContact[]>([]);
   let isAllDay = $state(false);
   let calendarId = $state('');
   let organizer = $state('');
@@ -104,6 +112,7 @@
     category = 'Work';
     rsvpStatus = 'none';
     attendees = [];
+    attendeeEmails = [];
     isAllDay = false;
     organizer = '';
     onClose();
@@ -200,7 +209,7 @@
           <div class="flex items-start gap-4 group">
             <User class="w-4 h-4 text-neutral-500 shrink-0 mt-2" />
             <div class="flex-1 w-full max-w-[calc(100%-2rem)]">
-              <ContactAutocomplete bind:recipients={attendees} placeholder="Add participants..." />
+              <ContactAutocomplete bind:recipients={attendeeEmails} bind:contacts={attendees} placeholder="Add participants..." />
             </div>
           </div>
           

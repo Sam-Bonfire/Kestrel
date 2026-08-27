@@ -1,5 +1,4 @@
-<script lang="ts">
-  import { X, Calendar as CalendarIcon, Edit2, Sparkles, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
+  import { X, Calendar as CalendarIcon, Edit2, Sparkles, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, X as XIcon, HelpCircle, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -16,7 +15,7 @@
     organizer?: string;
     priority?: string;
     status?: string;
-    attendees?: { name: string; email: string; rsvp: 'yes' | 'no' | 'maybe' }[];
+    attendees?: { name?: string; email: string; status?: 'accepted' | 'declined' | 'tentative' | 'needsAction'; rsvp?: 'yes' | 'no' | 'maybe' }[];
     rsvpStatus?: 'yes' | 'no' | 'maybe' | 'none';
     isAllDay?: boolean;
     calendarId?: string;
@@ -78,8 +77,16 @@
   let status = $state('Scheduled');
   let category = $state('Work');
   let color = $state('blue');
-  let rsvpStatus = $state<'yes' | 'no' | 'maybe' | 'none'>('none');
-  let attendeesInput = $state('');
+  import { ContactAutocomplete } from '@kestrel/shared';
+  type SelectedContact = {
+    name?: string | null;
+    email: string;
+    avatar_url?: string | null;
+    status?: string;
+    rsvp?: string;
+  };
+  let attendeeEmails = $state<string[]>([]);
+  let attendees = $state<SelectedContact[]>([]);
   let isAllDay = $state(false);
   let calendarId = $state('');
   let organizer = $state('');
@@ -111,9 +118,11 @@
       calendarId = event.calendarId || (accounts?.length > 0 && accounts[0].calendars?.length > 0 ? accounts[0].calendars[0].id : '');
       organizer = event.organizer || '';
       if (event.attendees && event.attendees.length > 0) {
-        attendeesInput = event.attendees.map((a: any) => a.email).join(', ');
+        attendeeEmails = event.attendees.map((a: any) => a.email);
+        attendees = [...event.attendees];
       } else {
-        attendeesInput = '';
+        attendeeEmails = [];
+        attendees = [];
       }
     }
   });
@@ -137,7 +146,7 @@
       calendarId,
       organizer,
       rsvpStatus,
-      attendees: attendeesInput.split(',').map(email => ({ name: email.trim(), email: email.trim(), rsvp: 'none' })).filter(a => a.email)
+      attendees
     });
 
     if (close) onClose();
@@ -275,7 +284,7 @@
         <div class="space-y-3">
           <div class="flex items-center gap-4 group">
             <User class="w-4 h-4 text-neutral-500 shrink-0" />
-            <input type="text" placeholder="Add guests (comma separated emails)" bind:value={attendeesInput} class="w-full bg-transparent border-none outline-none text-xs text-white placeholder:text-neutral-400" />
+            <div class="flex-1 w-full"><ContactAutocomplete bind:recipients={attendeeEmails} bind:contacts={attendees} placeholder="Add guests..." /></div>
           </div>
 
           <div class="flex items-center gap-4 group cursor-pointer">
@@ -415,16 +424,24 @@
                       <div class="flex items-center gap-2 bg-neutral-900/30 p-2.5 rounded-xl">
                         <div class="relative">
                           <div class="w-7 h-7 rounded-full bg-emerald-800/20 border border-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
-                            {att.name.charAt(0).toUpperCase()}
+                            {(att.name || att.email).charAt(0).toUpperCase()}
                           </div>
-                          {#if att.rsvp === 'yes'}
+                          {#if att.status === 'accepted' || att.rsvp === 'yes'}
                             <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border border-[#131313] flex items-center justify-center">
                               <Check class="w-2 h-2 text-white stroke-[3.5]" />
+                            </div>
+                          {:else if att.status === 'declined' || att.rsvp === 'no'}
+                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 rounded-full border border-[#131313] flex items-center justify-center">
+                              <XIcon class="w-2 h-2 text-white stroke-[3.5]" />
+                            </div>
+                          {:else if att.status === 'tentative' || att.rsvp === 'maybe'}
+                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border border-[#131313] flex items-center justify-center">
+                              <HelpCircle class="w-2 h-2 text-white stroke-[3.5]" />
                             </div>
                           {/if}
                         </div>
                         <div class="flex-1 min-w-0">
-                          <div class="text-xs text-white font-semibold truncate">{att.name}</div>
+                          <div class="text-xs text-white font-semibold truncate">{att.name || att.email.split('@')[0]}</div>
                           <div class="text-[10px] text-neutral-500 font-mono truncate">{att.email}</div>
                         </div>
                       </div>

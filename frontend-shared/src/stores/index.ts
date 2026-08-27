@@ -24,3 +24,8 @@ export {
   inputGuard,
   registerShortcuts
 } from './shortcuts.js';
+
+export {
+  templateStore,
+  TemplateStore,
+} from './templates.svelte.js';

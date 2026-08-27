@@ -48,5 +48,7 @@ export type {
   Calendar,
   CalendarEvent,
   EventSearchResult,
+  Snippet,
+  Signature,
 } from './client.js';
 export { getSettings, updateSettings } from './client.js';

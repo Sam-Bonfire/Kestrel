@@ -2,11 +2,21 @@
   import { X } from 'lucide-svelte';
   import { invoke } from '@tauri-apps/api/core';
 
+  export interface SelectedContact {
+    name?: string | null;
+    email: string;
+    avatar_url?: string | null;
+    status?: string;
+    rsvp?: string;
+  }
+
   let {
     recipients = $bindable([] as string[]),
+    contacts = $bindable([] as SelectedContact[]),
     placeholder = 'Add recipient...'
   } = $props<{
     recipients?: string[];
+    contacts?: SelectedContact[];
     placeholder?: string;
   }>();
 
@@ -64,11 +74,15 @@
     }
   }
 
-  function addEmail(emailStr: string) {
+  function addEmail(emailStr: string, contactObj?: Contact) {
     const emails = emailStr.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
     for (const email of emails) {
       if (email && !recipients.includes(email)) {
         recipients = [...recipients, email];
+        const newContact = contactObj && contactObj.email === email
+            ? { name: contactObj.name, email: contactObj.email, avatar_url: contactObj.avatar_url, status: 'needsAction', rsvp: 'none' }
+            : { name: email.split('@')[0], email, status: 'needsAction', rsvp: 'none' };
+        contacts = [...contacts, newContact];
       }
     }
     inputValue = '';
@@ -91,7 +105,7 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (isDropdownOpen && focusedIndex >= 0 && searchResults[focusedIndex]) {
-        addEmail(searchResults[focusedIndex].email);
+        addEmail(searchResults[focusedIndex].email, searchResults[focusedIndex]);
       } else if (inputValue.trim()) {
         addEmail(inputValue);
       }
@@ -104,13 +118,14 @@
         addEmail(inputValue);
       } else if (isDropdownOpen && focusedIndex >= 0) {
         e.preventDefault();
-        addEmail(searchResults[focusedIndex].email);
+        addEmail(searchResults[focusedIndex].email, searchResults[focusedIndex]);
       } else if (e.key === 'Tab' && inputValue.trim()) {
          e.preventDefault();
          addEmail(inputValue);
       }
     } else if (e.key === 'Backspace' && !inputValue && recipients.length > 0) {
       recipients = recipients.slice(0, -1);
+      contacts = contacts.slice(0, -1);
     }
   }
 
@@ -128,6 +143,7 @@
 
   function removeEmail(index: number) {
     recipients = recipients.filter((_: string, i: number) => i !== index);
+    contacts = contacts.filter((_: SelectedContact, i: number) => i !== index);
   }
 </script>
 
@@ -163,7 +179,7 @@
       {#each searchResults as contact, i}
         <li
           class="px-3 py-2 cursor-pointer flex items-center gap-3 {i === focusedIndex ? 'bg-[var(--color-bg-hover)]' : 'hover:bg-[var(--color-bg-hover)]'}"
-          onmousedown={() => addEmail(contact.email)}
+          onmousedown={() => addEmail(contact.email, contact)}
         >
           <div class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
             {#if contact.avatar_url}

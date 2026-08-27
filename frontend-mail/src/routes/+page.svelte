@@ -121,13 +121,20 @@
   let currentView      = $state('inbox');
   let searchQuery      = $state('');
   let selectedThreadId = $state<string | null>(null);
+  let previousSelectedThreadId = $state<string | null>(null);
   let isComposeOpen    = $state(false);
+  let composeInitialTo = $state<string[]>([]);
+  let composeInitialSubject = $state('');
+  let composeInitialBody = $state('');
   let isCommandOpen    = $state(false);
   let isSettingsOpen   = $state(false);
   let isMailSettingsOpen = $state(false);
   let activeAccountId  = $state('all');
   let isMobileSidebarOpen = $state(false);
   let initialReplyMode = $state<'reply'|'reply_all'|'forward'|null>(null);
+  let isBatchMode = $state(false);
+  let batchQueue = $state<string[]>([]);
+  let batchIndex = $state(0);
 
   // Custom labels created dynamically by user
   let customLabels = $state<string[]>([]);
@@ -276,6 +283,7 @@
     const counts: Record<string, string | number> = {};
 
     counts['inbox'] = getCountStr(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft);
+    counts['reply-later'] = getCountStr(e => e.isReplyLater && !e.isTrash);
     counts['unread'] = getCountStr(e => e.isUnread && !e.isTrash && !e.isSpam);
     counts['sent'] = getCountStr(e => e.isUnread && e.labels.includes('Sent'));
     counts['drafts'] = getCountStr(e => e.isDraft);
@@ -298,6 +306,7 @@
       .filter(e => {
         if (activeAccountId !== 'all' && e.accountId !== activeAccountId) return false;
         if (currentView === 'inbox')    return !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft;
+        if (currentView === 'reply-later') return e.isReplyLater && !e.isTrash;
         if (currentView === 'unread')   return e.isUnread && !e.isTrash && !e.isSpam;
         if (currentView === 'sent')     return e.labels.includes('Sent');
         if (currentView === 'drafts')   return e.isDraft;
@@ -322,6 +331,7 @@
         date: formatDate(e.timestamp),
         isUnread: e.isUnread,
         isStarred: e.isStarred,
+      isReplyLater: e.isReplyLater,
         hasAttachment: false,
         labels: e.labels,
         category: e.category,
@@ -341,6 +351,7 @@
           date: formatDate(new Date(e.date_received * 1000).toISOString()),
           isUnread: !e.is_read,
           isStarred: false,
+      isReplyLater: false,
           hasAttachment: false,
           labels: [],
           category: 'Primary'
@@ -411,6 +422,12 @@
   }
 
   // ── Email actions ────────────────────────────────────────────────
+  function toggleReplyLater(id: string) {
+    const email = allEmails.find(e => e.id === id);
+    if (!email) return;
+    const newState = !email.isReplyLater;
+    allEmails = allEmails.map(e => e.id === id ? { ...e, isReplyLater: newState } : e);
+  }
   function toggleStar(id: string) {
     const email = allEmails.find(e => e.id === id);
     if (!email) return;
@@ -556,6 +573,14 @@
       window.open(url.toString(), '_blank');
     }
   }
+  function startBatchMode() {
+    if (threads.length > 0) {
+      batchQueue = threads.map((t: any) => t.id);
+      batchIndex = 0;
+      isBatchMode = true;
+      selectedThreadId = batchQueue[batchIndex];
+    }
+  }
   function filterMessages(emailAddress: string) {
     // In a real app this would open the settings/filters modal prefilled with the sender
     searchQuery = `from:${emailAddress}`;
@@ -592,6 +617,7 @@
       timestamp: new Date().toISOString(),
       isUnread: false,
       isStarred: false,
+      isReplyLater: false,
       isArchived: false,
       isTrash: false,
       isDraft: false,
@@ -618,6 +644,7 @@
       timestamp: new Date().toISOString(),
       isUnread: false,
       isStarred: false,
+      isReplyLater: false,
       isArchived: false,
       isTrash: false,
       isDraft: false,
@@ -627,6 +654,16 @@
       category: 'Primary'
     };
     allEmails = [replyMsg, ...allEmails];
+    if (isBatchMode) {
+      toggleReplyLater(id);
+      if (batchIndex < batchQueue.length - 1) {
+        batchIndex++;
+        selectedThreadId = batchQueue[batchIndex];
+      } else {
+        isBatchMode = false;
+        selectedThreadId = null;
+      }
+    }
     import('@kestrel/shared/api').then(api => api.sendMessage({
       to: parent.senderEmail,
       subject: replyMsg.subject,
@@ -662,6 +699,31 @@
     allEmails = allEmails.map(e => ids.includes(e.id) ? { ...e, isStarred } : e);
     import('@kestrel/shared/api').then(api => api.bulkAction(ids, 'toggle_star', isStarred));
   }
+  function bulkApplyLabel(ids: string[], label: string) {
+    // If all selected already have it, we remove. Otherwise, we add.
+    const allHaveLabel = ids.every(id => {
+      const email = allEmails.find(e => e.id === id);
+      return email && email.labels.includes(label);
+    });
+
+    if (allHaveLabel) {
+      allEmails = allEmails.map(e => {
+        if (ids.includes(e.id) && e.labels.includes(label)) {
+          return { ...e, labels: e.labels.filter((l: string) => l !== label) };
+        }
+        return e;
+      });
+      import('@kestrel/shared/api').then(api => api.bulkAction(ids, 'remove_label', true, label));
+    } else {
+      allEmails = allEmails.map(e => {
+        if (ids.includes(e.id) && !e.labels.includes(label)) {
+          return { ...e, labels: [...e.labels, label] };
+        }
+        return e;
+      });
+      import('@kestrel/shared/api').then(api => api.bulkAction(ids, 'apply_label', true, label));
+    }
+  }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────
   import { isTyping } from '$lib/utils/keyboard';
@@ -689,8 +751,26 @@
       if (!authState.isAuthenticated) return;
       if (isTyping(e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
+      if (selectedThreadId && (e.key === 'h' || e.key === 'H' || (e.key === 'R' && e.shiftKey))) { toggleReplyLater(selectedThreadId); }
+      if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        if (batchIndex < batchQueue.length - 1) {
+          batchIndex++;
+          selectedThreadId = batchQueue[batchIndex];
+        } else {
+          isBatchMode = false;
+          selectedThreadId = null;
+        }
+      }
+      if (currentView === 'reply-later' && !isBatchMode && (e.key === 'p' || e.key === 'P' || e.key === ' ')) {
+        e.preventDefault();
+        startBatchMode();
+      }
       if (e.key === 'c') isComposeOpen = true;
-      if (e.key === 'Escape') { selectedThreadId = null; isCommandOpen = false; isComposeOpen = false; }
+      if (e.key === 'Escape') {
+        if (isBatchMode) { isBatchMode = false; }
+        selectedThreadId = null; isCommandOpen = false; isComposeOpen = false;
+      }
     };
     window.addEventListener('keydown', handler);
     return () => {
@@ -721,6 +801,14 @@
     />
   {/snippet}
 
+    {#if currentView === 'reply-later' && !isBatchMode && threads.length > 0}
+      <div class="flex items-center justify-between px-6 py-3 border-b border-white/10 bg-[#131313]">
+        <div class="text-sm text-neutral-400">Press <kbd class="px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs">P</kbd> or <kbd class="px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs">Space</kbd> to start batch processing</div>
+        <button onclick={startBatchMode} class="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors">
+          Process All
+        </button>
+      </div>
+    {/if}
     <!-- Mail panel: full width thread list, no reader pane -->
     <ThreadList
       threads={finalThreads}
@@ -742,6 +830,7 @@
         });
       }}
       onToggleStar={toggleStar}
+      onToggleReplyLater={toggleReplyLater}
       onArchive={archive}
       onDelete={trash}
       onSnooze={snooze}
@@ -750,6 +839,7 @@
       onBulkDelete={bulkDelete}
       onBulkToggleUnread={bulkToggleUnread}
       onBulkToggleStar={bulkToggleStar}
+      onBulkApplyLabel={bulkApplyLabel}
       onApplyLabel={applyLabel}
       onMoveTo={moveTo}
       onReply={initiateReply}
@@ -830,11 +920,37 @@
       onDelete={trash}
       onSnooze={snooze}
       onToggleStar={toggleStar}
+      onToggleReplyLater={toggleReplyLater}
+      isBatchMode={isBatchMode}
+      batchIndex={batchIndex}
+      batchTotal={batchQueue.length}
+      onSkipNext={() => {
+        if (batchIndex < batchQueue.length - 1) {
+          batchIndex++;
+          selectedThreadId = batchQueue[batchIndex];
+        } else {
+          isBatchMode = false;
+          selectedThreadId = null;
+        }
+      }}
+      onExitBatch={() => {
+        isBatchMode = false;
+        selectedThreadId = null;
+      }}
       onToggleUnread={toggleUnread}
       onAddLabel={applyLabel}
       onRemoveLabel={removeLabel}
       onMoveTo={moveTo}
       onSendReply={handleSendReply}
+          onPopOut={(type: string, recipients: string[], body: string) => {
+            composeInitialTo = recipients;
+            let baseSubject = activeEmail?.subject || '';
+            composeInitialSubject = baseSubject.toLowerCase().startsWith('re:') || baseSubject.toLowerCase().startsWith('fwd:')
+              ? baseSubject
+              : (type === 'forward' ? `Fwd: ${baseSubject}` : `Re: ${baseSubject}`);
+            composeInitialBody = body;
+            isComposeOpen = true;
+          }}
       allLabels={allLabels}
       onReportSpam={reportSpam}
       onMute={muteThread}
@@ -877,6 +993,7 @@
           timestamp: new Date().toISOString(),
           isUnread: false,
           isStarred: false,
+      isReplyLater: false,
           isArchived: false,
           isTrash: false,
           isDraft: false,
@@ -918,6 +1035,7 @@
           timestamp: new Date().toISOString(),
           isUnread: false,
           isStarred: false,
+      isReplyLater: false,
           isArchived: false,
           isTrash: false,
           isDraft: false,

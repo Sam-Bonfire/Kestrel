@@ -92,6 +92,8 @@ pub enum BulkActionType {
     Archive,
     Trash,
     ToggleStar,
+    ApplyLabel,
+    RemoveLabel,
 }
 
 #[derive(Deserialize)]
@@ -100,6 +102,7 @@ pub struct BulkActionParams {
     pub action: BulkActionType,
     // Provide an action_value, e.g. boolean for mark_read
     pub action_value: Option<bool>,
+    pub label: Option<String>,
 }
 
 // --- K-039: GET /api/v1/messages ---
@@ -562,29 +565,82 @@ pub async fn bulk_action(
             }
             BulkActionType::ToggleStar => {
                 let val = params.action_value.unwrap_or(true);
-                let msg = find_message_from_db(&state, *msg_id).await?.unwrap();
-                let mut labels: Vec<String> = msg
-                    .labels
-                    .and_then(|l| serde_json::from_str(&l).ok())
-                    .unwrap_or_default();
+                if let Some(msg) = find_message_from_db(&state, *msg_id).await? {
+                    let mut labels: Vec<String> = msg
+                        .labels
+                        .and_then(|l| serde_json::from_str(&l).ok())
+                        .unwrap_or_default();
 
-                let star_label = "STARRED".to_string();
-                if val && !labels.contains(&star_label) {
-                    labels.push(star_label);
-                } else if !val {
-                    labels.retain(|l| l != "STARRED");
-                }
-
-                let labels_json = serde_json::to_string(&labels).ok();
-
-                match &state.db {
-                    DbPool::Sqlite(pool) => {
-                        let repo = SqliteMessageRepository::new(pool.clone());
-                        repo.set_labels(*msg_id, labels_json).await?;
+                    let star_label = "STARRED".to_string();
+                    if val && !labels.contains(&star_label) {
+                        labels.push(star_label);
+                    } else if !val {
+                        labels.retain(|l| l != "STARRED");
                     }
-                    DbPool::Postgres(pool) => {
-                        let repo = PostgresMessageRepository::new(pool.clone());
-                        repo.set_labels(*msg_id, labels_json).await?;
+
+                    let labels_json = serde_json::to_string(&labels).ok();
+
+                    match &state.db {
+                        DbPool::Sqlite(pool) => {
+                            let repo = SqliteMessageRepository::new(pool.clone());
+                            repo.set_labels(*msg_id, labels_json).await?;
+                        }
+                        DbPool::Postgres(pool) => {
+                            let repo = PostgresMessageRepository::new(pool.clone());
+                            repo.set_labels(*msg_id, labels_json).await?;
+                        }
+                    }
+                }
+            }
+            BulkActionType::ApplyLabel => {
+                if let Some(label_to_apply) = &params.label {
+                    let msg_opt = find_message_from_db(&state, *msg_id).await?;
+                    if let Some(msg) = msg_opt {
+                        let mut labels: Vec<String> = msg
+                            .labels
+                            .and_then(|l| serde_json::from_str(&l).ok())
+                            .unwrap_or_default();
+
+                        if !labels.contains(label_to_apply) {
+                            labels.push(label_to_apply.clone());
+                            let labels_json = serde_json::to_string(&labels).ok();
+                            match &state.db {
+                                DbPool::Sqlite(pool) => {
+                                    let repo = SqliteMessageRepository::new(pool.clone());
+                                    repo.set_labels(*msg_id, labels_json).await?;
+                                }
+                                DbPool::Postgres(pool) => {
+                                    let repo = PostgresMessageRepository::new(pool.clone());
+                                    repo.set_labels(*msg_id, labels_json).await?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            BulkActionType::RemoveLabel => {
+                if let Some(label_to_remove) = &params.label {
+                    let msg_opt = find_message_from_db(&state, *msg_id).await?;
+                    if let Some(msg) = msg_opt {
+                        let mut labels: Vec<String> = msg
+                            .labels
+                            .and_then(|l| serde_json::from_str(&l).ok())
+                            .unwrap_or_default();
+
+                        if labels.contains(label_to_remove) {
+                            labels.retain(|l| l != label_to_remove);
+                            let labels_json = serde_json::to_string(&labels).ok();
+                            match &state.db {
+                                DbPool::Sqlite(pool) => {
+                                    let repo = SqliteMessageRepository::new(pool.clone());
+                                    repo.set_labels(*msg_id, labels_json).await?;
+                                }
+                                DbPool::Postgres(pool) => {
+                                    let repo = PostgresMessageRepository::new(pool.clone());
+                                    repo.set_labels(*msg_id, labels_json).await?;
+                                }
+                            }
+                        }
                     }
                 }
             }

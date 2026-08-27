@@ -944,12 +944,20 @@
       onEmptySlotClick={openNewEventPanel}
       onChangeViewMode={(m) => viewMode = m}
       onEventUpdate={(id, updates) => {
+        const oldEvent = events.find(ev => ev.id === id);
+        if (!oldEvent) return;
+        const oldEventCopy = { ...oldEvent };
+
+        // Optimistically update
+        events = events.map(ev => ev.id === id ? { ...ev, ...updates } : ev);
+
         import('@kestrel/shared/api').then(({ updateEvent }) => {
-          updateEvent(id, updates as unknown as Partial<import('@kestrel/shared/api').CalendarEvent>).then(() => {
-            events = events.map(ev => ev.id === id ? { ...ev, ...updates } : ev);
+          updateEvent(id, updates).then(() => {
             showToast('Event updated successfully', 'success');
           }).catch(err => {
             console.error('Failed to update event:', err);
+            // Revert on failure
+            events = events.map(ev => ev.id === id ? oldEventCopy : ev);
             showToast('Failed to update event', 'error');
           });
         });
