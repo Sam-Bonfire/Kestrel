@@ -11,10 +11,11 @@ use crate::db::pool::DbPool;
 use crate::db::postgres::message_repository::PostgresMessageRepository;
 use crate::db::sqlite::message_repository::SqliteMessageRepository;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct SearchParams {
     pub q: String,
     #[serde(default = "default_search_limit")]
+    #[specta(type = f64)]
     pub limit: i64,
 }
 
@@ -22,7 +23,7 @@ fn default_search_limit() -> i64 {
     20
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct SearchResult {
     pub id: Uuid,
     pub account_id: Uuid,
@@ -32,13 +33,15 @@ pub struct SearchResult {
     pub sender_name: Option<String>,
     pub sender_email: String,
     pub snippet: Option<String>,
+    #[specta(type = f64)]
     pub date_received: i64,
     pub is_read: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct SearchResponse {
     pub results: Vec<SearchResult>,
+    #[specta(type = f64)]
     pub total: usize,
     pub query: String,
 }

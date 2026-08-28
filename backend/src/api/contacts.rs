@@ -11,9 +11,10 @@ use crate::{
     core::repository::{AccountRepository, ContactRepository},
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, specta::Type)]
 pub struct SearchQuery {
     pub q: String,
+    #[specta(type = Option<f64>)]
     pub limit: Option<i64>,
 }
 

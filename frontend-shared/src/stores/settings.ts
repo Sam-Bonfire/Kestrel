@@ -23,23 +23,19 @@ export async function initializeSettings() {
   isInitializing = true;
   try {
     const settings = await getSettings();
-    if (settings.mailDenseMode !== undefined) mailDenseMode.set(settings.mailDenseMode);
-    if (settings.mailDefaultLandingView !== undefined) mailDefaultLandingView.set(settings.mailDefaultLandingView);
-    if (settings.mailSignature !== undefined) mailSignature.set(settings.mailSignature);
-    if (settings.labelCustomizations !== undefined) labelCustomizations.set(settings.labelCustomizations);
-    if (settings.syncInterval !== undefined) syncInterval.set(settings.syncInterval);
-    // theme load is currently disabled as we only save it in localStorage directly, wait actually I should fix it down below
-    if ((settings as any).theme !== undefined) {
-       // but theme is declared below, let's just let it load from localStorage for now and we'll sync it, wait I appended theme below
-    }
+    if (settings.mailDenseMode != null) mailDenseMode.set(settings.mailDenseMode);
+    if (settings.mailDefaultLandingView != null) mailDefaultLandingView.set(settings.mailDefaultLandingView);
+    if (settings.mailSignature != null) mailSignature.set(settings.mailSignature);
+    if (settings.labelCustomizations != null) labelCustomizations.set(settings.labelCustomizations);
+    if (settings.syncInterval != null) syncInterval.set(settings.syncInterval);
 
     // Also trigger snippet & signature template sync since we load settings together
     import('./templates.svelte.js').then((m) => {
-      if (settings.snippets !== undefined) {
+      if (settings.snippets != null) {
         m.templateStore.snippets = settings.snippets;
         localStorage.setItem('kestrel:settings:snippets', JSON.stringify(settings.snippets));
       }
-      if (settings.signatures !== undefined) {
+      if (settings.signatures != null) {
         m.templateStore.signatures = settings.signatures;
         localStorage.setItem('kestrel:settings:signatures', JSON.stringify(settings.signatures));
       }

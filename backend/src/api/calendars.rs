@@ -19,7 +19,7 @@ use crate::db::sqlite::event_repository::SqliteEventRepository;
 
 // --- K-048: GET /api/v1/calendars ---
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct CalendarSummary {
     pub id: Uuid,
     pub account_id: Uuid,
@@ -27,13 +27,16 @@ pub struct CalendarSummary {
     pub name: String,
     pub color: Option<String>,
     pub is_primary: bool,
+    #[specta(type = f64)]
     pub created_at: i64,
+    #[specta(type = f64)]
     pub updated_at: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct CalendarListResponse {
     pub calendars: Vec<CalendarSummary>,
+    #[specta(type = f64)]
     pub total: usize,
 }
 
@@ -82,7 +85,7 @@ async fn list_calendars_from_db(
 
 // --- K-049: GET /api/v1/calendars/:id ---
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct CalendarDetail {
     pub id: Uuid,
     pub account_id: Uuid,
@@ -90,7 +93,9 @@ pub struct CalendarDetail {
     pub name: String,
     pub color: Option<String>,
     pub is_primary: bool,
+    #[specta(type = f64)]
     pub created_at: i64,
+    #[specta(type = f64)]
     pub updated_at: i64,
 }
 
@@ -135,12 +140,14 @@ async fn find_calendar_from_db(
 
 // --- K-050: GET /api/v1/events ---
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct EventListParams {
     pub calendar_id: Option<Uuid>,
     #[serde(default = "default_start_time")]
+    #[specta(type = f64)]
     pub start_time: i64,
     #[serde(default = "default_end_time")]
+    #[specta(type = f64)]
     pub end_time: i64,
 }
 
@@ -152,26 +159,27 @@ fn default_end_time() -> i64 {
     Utc::now().timestamp() + 30 * 24 * 60 * 60 // 30 days from now
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct EventSummary {
     pub id: Uuid,
     pub account_id: Uuid,
     pub calendar_id: Uuid,
     pub external_id: String,
     pub title: String,
-    pub description: Option<String>,
-    pub location: Option<String>,
+    #[specta(type = f64)]
     pub start_time: i64,
+    #[specta(type = f64)]
     pub end_time: i64,
     pub is_all_day: bool,
+    pub location: Option<String>,
     pub status: Option<String>,
-    pub created_at: i64,
-    pub updated_at: i64,
+    pub has_conflict: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct EventListResponse {
     pub events: Vec<EventSummary>,
+    #[specta(type = f64)]
     pub total: usize,
 }
 
@@ -183,13 +191,13 @@ pub async fn list_events(
     let events = list_events_from_db(
         &state,
         user_id,
+        params.calendar_id,
         params.start_time,
         params.end_time,
-        params.calendar_id,
     )
     .await?;
-    let total = events.len();
 
+    let total = events.len();
     let summaries: Vec<EventSummary> = events
         .into_iter()
         .map(|e| EventSummary {
@@ -198,14 +206,12 @@ pub async fn list_events(
             calendar_id: e.calendar_id.0,
             external_id: e.external_id,
             title: e.title,
-            description: e.description,
-            location: e.location,
             start_time: e.start_time,
             end_time: e.end_time,
             is_all_day: e.is_all_day,
+            location: e.location,
             status: e.status,
-            created_at: e.created_at,
-            updated_at: e.updated_at,
+            has_conflict: e.has_conflict,
         })
         .collect();
 
@@ -218,9 +224,9 @@ pub async fn list_events(
 async fn list_events_from_db(
     state: &AppState,
     user_id: Uuid,
+    calendar_id: Option<Uuid>,
     start_time: i64,
     end_time: i64,
-    calendar_id: Option<Uuid>,
 ) -> Result<Vec<CalendarEvent>, KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
@@ -240,7 +246,7 @@ async fn list_events_from_db(
 
 // --- K-051: GET /api/v1/events/:id ---
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct EventDetail {
     pub id: Uuid,
     pub account_id: Uuid,
@@ -249,7 +255,9 @@ pub struct EventDetail {
     pub title: String,
     pub description: Option<String>,
     pub location: Option<String>,
+    #[specta(type = f64)]
     pub start_time: i64,
+    #[specta(type = f64)]
     pub end_time: i64,
     pub is_all_day: bool,
     pub recurrence_rules: Option<String>,
@@ -257,7 +265,9 @@ pub struct EventDetail {
     pub organizer_name: Option<String>,
     pub attendees: Option<String>,
     pub status: Option<String>,
+    #[specta(type = f64)]
     pub created_at: i64,
+    #[specta(type = f64)]
     pub updated_at: i64,
 }
 
@@ -311,26 +321,31 @@ async fn find_event_from_db(
 
 // --- K-052: POST /api/v1/events ---
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct CreateEventRequest {
     pub calendar_id: Uuid,
     pub title: String,
     pub description: Option<String>,
     pub location: Option<String>,
+    #[specta(type = f64)]
     pub start_time: i64,
+    #[specta(type = f64)]
     pub end_time: i64,
     pub is_all_day: bool,
     pub recurrence_rules: Option<String>,
     pub attendees: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct CreateEventResponse {
     pub id: Uuid,
     pub calendar_id: Uuid,
     pub title: String,
+    #[specta(type = f64)]
     pub start_time: i64,
+    #[specta(type = f64)]
     pub end_time: i64,
+    #[specta(type = f64)]
     pub created_at: i64,
 }
 
@@ -471,12 +486,14 @@ async fn upsert_event_to_db(state: &AppState, event: &CalendarEvent) -> Result<(
 
 // --- K-053: PATCH /api/v1/events/:id ---
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct UpdateEventRequest {
     pub title: Option<String>,
     pub description: Option<Option<String>>,
     pub location: Option<Option<String>>,
+    #[specta(type = Option<f64>)]
     pub start_time: Option<i64>,
+    #[specta(type = Option<f64>)]
     pub end_time: Option<i64>,
     pub is_all_day: Option<bool>,
     pub recurrence_rules: Option<Option<String>>,

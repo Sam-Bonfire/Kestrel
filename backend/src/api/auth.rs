@@ -38,35 +38,35 @@ pub struct Claims {
 
 // --- Request / Response types ---
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct RegisterRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct RegisterResponse {
     pub user_id: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct TokenRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct TokenResponse {
     pub token: String,
     pub user_id: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct LoginParams {
     pub provider: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct CallbackParams {
     pub code: Option<String>,
 }
@@ -292,7 +292,7 @@ pub async fn token(
 
 // --- GET /api/v1/auth/me ---
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct MeResponse {
     pub user_id: String,
 }

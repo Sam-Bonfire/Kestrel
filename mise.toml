@@ -19,6 +19,11 @@ run = [
     "mise run setup"
 ]
 
+[tasks.codegen]
+description = "Export Specta v2 Rust types to frontend-shared TypeScript definitions"
+dir = "backend"
+run = "cargo run --bin export_types"
+
 [tasks."dev:backend"]
 description = "Start the Axum daemon in development mode"
 dir = "backend"
