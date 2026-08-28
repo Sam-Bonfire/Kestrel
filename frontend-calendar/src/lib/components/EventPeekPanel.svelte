@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Calendar as CalendarIcon, Edit2, Sparkles, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, X as XIcon, HelpCircle, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
+  import { X, Calendar as CalendarIcon, Edit2, ChevronRight, ExternalLink, Clock, MapPin, AlignLeft, Users, Bell, Flag, Check, X as XIcon, HelpCircle, ChevronDown, MoreHorizontal, Square, ArrowRight, Globe, CornerUpLeft, Repeat, User, Video, Link, Trash2 } from 'lucide-svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { detectConferenceLink } from '@kestrel/shared';
@@ -47,8 +47,8 @@
   let popoverStyle = $derived.by(() => {
     if (isDocked || isMobileOrTablet) return ''; // Docked and Mobile use fixed classes
 
-    const PANEL_WIDTH = 340; // Reduced from 450
-    const PANEL_HEIGHT = 500; // Estimated height
+    const PANEL_WIDTH = 400; // Comfortable width for desktop
+    const PANEL_HEIGHT = 560; // Estimated height
     const MARGIN = 16;
 
     if (!clickPosition) return `top: 50%; left: 50%; transform: translate(-50%, -50%); width: ${PANEL_WIDTH}px; max-width: 90vw;`;
@@ -202,375 +202,269 @@
     role="dialog"
   >
     <!-- Header -->
-    <div class="px-3 py-2 flex items-center justify-between">
-      <button class="flex items-center gap-1.5 hover:bg-white/5 px-2 py-1.5 rounded cursor-pointer transition-colors">
-        <span class="font-bold text-white text-xs">Event</span>
-        <ChevronDown class="w-3.5 h-3.5 text-neutral-400" />
-      </button>
+    <div class="px-4 py-3 flex items-center justify-between border-b border-neutral-800/40">
+      <div class="flex items-center gap-2">
+        <div class="w-3 h-3 rounded-full shrink-0" style="background-color: {color || '#3b82f6'};"></div>
+        <span class="font-bold text-white text-xs">{category || 'Event'}</span>
+      </div>
       <div class="flex items-center gap-1">
         {#if event.id}
-          <button onclick={onDelete} class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer">
+          <button onclick={onDelete} class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer" title="Delete event">
             <Trash2 class="w-4 h-4" />
           </button>
         {/if}
 
-        <button onclick={onClose} class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer">
+        <button onclick={onClose} class="p-1.5 rounded hover:bg-white/5 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Close">
           <X class="w-4 h-4" />
         </button>
       </div>
     </div>
 
+    <!-- Scrollable Organized Center Peek Body -->
+    <div class="px-5 py-4 space-y-4 flex-1 overflow-y-auto">
+      <!-- Title (Inline Editable) -->
+      <div>
+        <input
+          type="text"
+          bind:value={title}
+          placeholder="Untitled Event"
+          oninput={() => { if (event?.id) handleSave(false); }}
+          class="w-full bg-transparent border-none outline-none text-base font-bold text-white leading-snug hover:bg-white/5 p-1 -m-1 rounded transition-colors placeholder:text-neutral-500"
+        />
+      </div>
 
-    <!-- Scrollable content area -->
-    <div
-      class="p-6 pt-2 space-y-5 flex-1 overflow-y-auto"
-      onchange={() => { if (event?.id && isEditing) handleSave(false); }}
-    >
-      {#if isEditing}
-        <!-- Title Input Block -->
-        <div>
-          <input
-            id="title"
-            type="text"
-            placeholder="Add title"
-            bind:value={title}
-            class="w-full bg-transparent border-none outline-none text-white text-lg placeholder:text-neutral-500 pb-2 border-b border-transparent focus:border-blue-500 transition-colors"
-            required
-            autocomplete="off"
-          />
-        </div>
-
-        <!-- Date & Time Block -->
-        <div class="space-y-3">
-          <div class="flex items-center gap-4">
-            <Clock class="w-4 h-4 text-neutral-400 shrink-0" />
-            <div class="flex items-center gap-3 flex-1 min-w-0">
-              <input type="time" bind:value={startTime} disabled={isAllDay} class="bg-transparent hover:bg-white/5 p-1 rounded outline-none text-white text-xs border-none cursor-pointer w-20" style="color-scheme: dark;" />
-              <ArrowRight class="w-3.5 h-3.5 text-neutral-500 shrink-0" />
-              <input type="time" bind:value={endTime} disabled={isAllDay} class="bg-transparent hover:bg-white/5 p-1 rounded outline-none text-white text-xs border-none cursor-pointer w-20" style="color-scheme: dark;" />
+      <!-- Planned Execution Date / Time Block (Inline Editable) -->
+      <div class="space-y-2.5 bg-neutral-900/50 p-3 rounded-xl border border-neutral-800/40">
+        <div class="flex items-start gap-2.5">
+          <Clock class="w-4 h-4 text-neutral-400 mt-1 shrink-0" />
+          <div class="space-y-1.5 flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <input
+                type="time"
+                bind:value={startTime}
+                disabled={isAllDay}
+                onchange={() => { if (event?.id) handleSave(false); }}
+                class="bg-transparent hover:bg-white/5 px-1.5 py-1 rounded outline-none text-white text-sm font-bold border-none cursor-pointer"
+                style="color-scheme: dark; min-width: 95px;"
+              />
+              <span class="text-neutral-500 text-xs">→</span>
+              <input
+                type="time"
+                bind:value={endTime}
+                disabled={isAllDay}
+                onchange={() => { if (event?.id) handleSave(false); }}
+                class="bg-transparent hover:bg-white/5 px-1.5 py-1 rounded outline-none text-white text-sm font-bold border-none cursor-pointer"
+                style="color-scheme: dark; min-width: 95px;"
+              />
               {#if !isAllDay}
-                <span class="text-neutral-500 text-xs">1h</span>
+                <span class="text-[11px] text-neutral-500 font-normal font-mono">(1h)</span>
               {/if}
             </div>
-          </div>
 
-          <div class="pl-8">
-            <input type="date" bind:value={date} class="bg-transparent hover:bg-white/5 p-1 rounded outline-none text-white text-xs border-none cursor-pointer" style="color-scheme: dark;" />
-          </div>
-
-          <div class="pl-8 flex items-center justify-between">
-            <label class="flex items-center gap-3 cursor-pointer">
-              <!-- Switch toggle -->
-              <div class="relative inline-block w-8 h-4">
-                <input type="checkbox" bind:checked={isAllDay} class="peer sr-only" />
-                <div class="w-full h-full bg-neutral-600 rounded-full peer-checked:bg-blue-400 transition-colors"></div>
-                <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
-              </div>
-              <span class="text-xs text-white">All-day</span>
-            </label>
-          </div>
-
-          <div class="pl-8 pt-1 flex items-center justify-between group cursor-pointer">
-            <div class="flex items-center gap-3">
-              <Globe class="w-4 h-4 text-neutral-500 shrink-0" />
-              <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">GMT+5:30 <span class="text-white">Calcutta</span></span>
-            </div>
-            <CornerUpLeft class="w-3.5 h-3.5 text-neutral-500" />
-          </div>
-
-          <div class="pl-8 flex items-center gap-3 group cursor-pointer">
-            <Repeat class="w-4 h-4 text-neutral-500 shrink-0" />
-            <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">Repeat</span>
-          </div>
-        </div>
-
-        <!-- Additions Block -->
-        <div class="space-y-3">
-          <div class="flex items-center gap-4 group">
-            <User class="w-4 h-4 text-neutral-500 shrink-0" />
-            <div class="flex-1 w-full"><ContactAutocomplete bind:recipients={attendeeEmails} bind:contacts={attendees} placeholder="Add guests..." /></div>
-          </div>
-
-          <div class="flex items-center gap-4 group cursor-pointer">
-            <Video class="w-4 h-4 text-neutral-500 shrink-0" />
-            <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">Conferencing</span>
-          </div>
-
-          <div class="flex items-center gap-4 group">
-            <MapPin class="w-4 h-4 text-neutral-500 shrink-0" />
-            <input type="text" placeholder="Location" bind:value={location} class="w-full bg-transparent border-none outline-none text-xs text-white placeholder:text-neutral-400" />
-          </div>
-        </div>
-
-        <!-- Links and Description Block -->
-        <div class="space-y-3">
-          <div class="flex items-center gap-4 group cursor-pointer">
-            <Link class="w-4 h-4 text-neutral-500 shrink-0" />
-            <span class="text-xs text-neutral-400 group-hover:text-white transition-colors">Add links and attachments</span>
-          </div>
-          <div class="pl-8 pt-1">
-            <textarea
-              placeholder="Description"
-              bind:value={description}
-              rows="3"
-              class="w-full bg-transparent border-none outline-none text-xs text-white placeholder:text-neutral-500 resize-none"
-            ></textarea>
-          </div>
-        </div>
-
-        <!-- Calendar & Visibility Block -->
-        <div class="space-y-4">
-          <div class="flex items-center gap-4">
-            <div class="w-3.5 h-3.5 rounded shrink-0" style="background-color: {color};"></div>
-            <div class="flex-1 min-w-0 flex items-center gap-3">
-              <select bind:value={calendarId} class="w-full bg-transparent border-none outline-none text-xs text-white cursor-pointer hover:bg-white/5 p-1 rounded truncate">
-                {#each (accounts || []) as acc}
-                  <optgroup label={acc.email} class="bg-[#131313] text-neutral-400">
-                    {#each acc.calendars as cal}
-                      <option value={cal.id} class="text-white bg-[#1a1a1a]">{cal.name}</option>
-                    {/each}
-                  </optgroup>
-                {/each}
-              </select>
+            <div class="flex items-center justify-between gap-2 pt-0.5">
+              <input
+                type="date"
+                bind:value={date}
+                onchange={() => { if (event?.id) handleSave(false); }}
+                class="bg-transparent hover:bg-white/5 px-1.5 py-1 rounded outline-none text-neutral-300 text-xs font-mono border-none cursor-pointer"
+                style="color-scheme: dark;"
+              />
+              <label class="flex items-center gap-2 cursor-pointer pr-1">
+                <div class="relative inline-block w-7 h-3.5">
+                  <input
+                    type="checkbox"
+                    bind:checked={isAllDay}
+                    onchange={() => { if (event?.id) handleSave(false); }}
+                    class="peer sr-only"
+                  />
+                  <div class="w-full h-full bg-neutral-600 rounded-full peer-checked:bg-blue-400 transition-colors"></div>
+                  <div class="absolute left-0.5 top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform peer-checked:translate-x-3.5"></div>
+                </div>
+                <span class="text-[10px] text-neutral-400 font-mono">All-day</span>
+              </label>
             </div>
           </div>
-
-          <div class="pl-8 flex items-center gap-6">
-            <span class="text-xs text-white">Busy</span>
-            <span class="text-xs text-white">Default visibility</span>
-          </div>
-
-          <div class="flex items-center gap-4 group pt-1">
-            <Bell class="w-4 h-4 text-neutral-500 shrink-0" />
-            <select class="w-full bg-transparent border-none outline-none text-xs text-white cursor-pointer hover:bg-white/5 p-1 rounded">
-              <option value="10m">10 minutes before</option>
-              <option value="30m">30 minutes before</option>
-              <option value="1h">1 hour before</option>
-              <option value="none">No reminder</option>
-            </select>
-          </div>
         </div>
-      {:else}
-        <!-- VIEW MODE DETAILS VIEW -->
-        <div class="space-y-5">
 
-          <!-- Event Title Block -->
+        <!-- Timezone details -->
+        <div class="flex items-center justify-between pt-2 border-t border-neutral-800/30 text-[10px] text-neutral-500 font-mono">
+          <div class="flex items-center gap-1.5">
+            <Globe class="w-3.5 h-3.5 text-neutral-500" />
+            <span>Calcutta Time (GMT+5:30)</span>
+          </div>
+          <CornerUpLeft class="w-3.5 h-3.5 text-neutral-500" />
+        </div>
+      </div>
+
+      <!-- Organizer & Attendees Block -->
+      <div class="space-y-2.5 pt-0.5">
+        {#if organizer}
           <div class="space-y-1">
-            <h3 class="text-sm font-bold text-white leading-snug">
-              {event.title}
-            </h3>
-          </div>
-
-          <!-- Planned Execution Date Block - BORDERLESS -->
-          <div class="space-y-2.5 bg-neutral-900/30 p-3.5 rounded-xl">
-
-            <div class="flex items-start gap-2.5">
-              <Clock class="w-3.5 h-3.5 text-neutral-400 mt-0.5 flex-shrink-0" />
-              <div class="space-y-0.5">
-                <div class="text-xs text-white font-bold flex items-center gap-2">
-                  {event.isAllDay ? "All Day" : `${event.startTime} → ${event.endTime}`}
-                  {#if !event.isAllDay}
-                     <span class="text-[10px] text-neutral-500 font-normal font-mono">(1h)</span>
-                  {/if}
-                </div>
-                <div class="text-[11px] text-neutral-400 font-mono">
-                  {new Date(event.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                </div>
+            <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Organizer</span>
+            <div class="flex items-center gap-2.5 bg-neutral-900/40 p-2.5 rounded-xl border border-neutral-800/30">
+              <div class="w-7 h-7 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center text-xs font-bold font-mono">
+                {organizer.charAt(0).toUpperCase()}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-xs text-white font-semibold truncate">{organizer}</div>
+                <div class="text-[10px] text-neutral-500 font-mono">Organizer</div>
               </div>
             </div>
-
-            <!-- Propose New Time Button -->
-            <button
-              type="button"
-              class="w-full mt-2 py-1.5 px-2.5 rounded-lg bg-[#1a1a1a]/60 hover:bg-neutral-800/80 text-[10px] font-semibold text-neutral-200 transition-colors cursor-pointer flex items-center justify-between"
-            >
-              <span>Propose new time</span>
-              <ExternalLink class="w-3 h-3 text-neutral-400" />
-            </button>
-
-            <!-- Timezone details -->
-            <div class="flex items-center justify-between mt-2 pt-2 border-t border-neutral-800/20 text-[9px] text-neutral-500 font-mono">
-              <div class="flex items-center gap-1.5">
-                <Globe class="w-3.5 h-3.5 text-neutral-500" />
-                <span>Calcutta Time (GMT+5:30)</span>
-              </div>
-              <CornerUpLeft class="w-3 h-3 text-neutral-500" />
-            </div>
-
           </div>
+        {/if}
 
-          <!-- Organizer & Attendees block -->
-          {#if event.organizer || (event.attendees && event.attendees.length > 0)}
-            <div class="space-y-2.5 pt-1">
-
-              <!-- Organizer -->
-              {#if event.organizer}
-                <div class="space-y-1">
-                  <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Organizer</span>
-                  <div class="flex items-center gap-2 bg-neutral-900/30 p-2.5 rounded-xl">
-                    <div class="w-7 h-7 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center text-xs font-bold font-mono">
-                      {event.organizer.charAt(0).toUpperCase()}
+        <!-- Attendees Profile List -->
+        <div class="space-y-1.5">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Attendees</span>
+          
+          {#if attendees && attendees.length > 0}
+            <div class="space-y-1.5">
+              {#each attendees as att}
+                <div class="flex items-center gap-2.5 bg-neutral-900/40 p-2.5 rounded-xl border border-neutral-800/30 group">
+                  <div class="relative">
+                    <div class="w-7 h-7 rounded-full bg-emerald-800/20 border border-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
+                      {(att.name || att.email).charAt(0).toUpperCase()}
                     </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="text-xs text-white font-semibold truncate">{event.organizer}</div>
-                      <div class="text-[10px] text-neutral-500 font-mono">Organizer</div>
-                    </div>
-                  </div>
-                </div>
-              {/if}
-
-              <!-- Attendees List -->
-              {#if event.attendees && event.attendees.length > 0}
-                <div class="space-y-1">
-                  <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Attendees</span>
-                  <div class="space-y-1.5">
-                    {#each event.attendees as att}
-                      <div class="flex items-center gap-2 bg-neutral-900/30 p-2.5 rounded-xl">
-                        <div class="relative">
-                          <div class="w-7 h-7 rounded-full bg-emerald-800/20 border border-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
-                            {(att.name || att.email).charAt(0).toUpperCase()}
-                          </div>
-                          {#if att.status === 'accepted' || att.rsvp === 'yes'}
-                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border border-[#131313] flex items-center justify-center">
-                              <Check class="w-2 h-2 text-white stroke-[3.5]" />
-                            </div>
-                          {:else if att.status === 'declined' || att.rsvp === 'no'}
-                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 rounded-full border border-[#131313] flex items-center justify-center">
-                              <XIcon class="w-2 h-2 text-white stroke-[3.5]" />
-                            </div>
-                          {:else if att.status === 'tentative' || att.rsvp === 'maybe'}
-                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border border-[#131313] flex items-center justify-center">
-                              <HelpCircle class="w-2 h-2 text-white stroke-[3.5]" />
-                            </div>
-                          {/if}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                          <div class="text-xs text-white font-semibold truncate">{att.name || att.email.split('@')[0]}</div>
-                          <div class="text-[10px] text-neutral-500 font-mono truncate">{att.email}</div>
-                        </div>
+                    {#if att.status === 'accepted' || att.rsvp === 'yes'}
+                      <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border border-[#131313] flex items-center justify-center">
+                        <Check class="w-2 h-2 text-white stroke-[3.5]" />
                       </div>
-                    {/each}
+                    {:else if att.status === 'declined' || att.rsvp === 'no'}
+                      <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 rounded-full border border-[#131313] flex items-center justify-center">
+                        <XIcon class="w-2 h-2 text-white stroke-[3.5]" />
+                      </div>
+                    {:else if att.status === 'tentative' || att.rsvp === 'maybe'}
+                      <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border border-[#131313] flex items-center justify-center">
+                        <HelpCircle class="w-2 h-2 text-white stroke-[3.5]" />
+                      </div>
+                    {/if}
                   </div>
-                </div>
-              {/if}
-
-              <!-- Interactive RSVP Picker Pill Container -->
-              {#if event.rsvpStatus}
-                <div class="space-y-1">
-                  <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Your RSVP Status</span>
-                  <div class="flex items-center gap-1.5 bg-[#1a1a1a]/60 p-1.5 rounded-xl">
-                    <button onclick={() => updateRsvp('accepted')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400 font-bold' : 'text-neutral-500 hover:text-white'}">Yes</button>
-                    <button onclick={() => updateRsvp('declined')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400 font-bold' : 'text-neutral-500 hover:text-white'}">No</button>
-                    <button onclick={() => updateRsvp('tentative')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {event.rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}">Maybe</button>
-                    <div class="w-px h-5 bg-neutral-800 mx-1"></div>
-                    <button onclick={() => isEditing = true} class="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer" title="Edit Response">
-                      <Edit2 class="w-3 h-3" />
-                    </button>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-xs text-white font-semibold truncate">{att.name || att.email.split('@')[0]}</div>
+                    <div class="text-[10px] text-neutral-500 font-mono truncate">{att.email}</div>
                   </div>
+                  <button
+                    onclick={() => {
+                      attendees = attendees.filter(a => a.email !== att.email);
+                      attendeeEmails = attendeeEmails.filter(e => e !== att.email);
+                      if (event?.id) handleSave(false);
+                    }}
+                    class="p-1 text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded hover:bg-neutral-800 cursor-pointer"
+                    title="Remove attendee"
+                  >
+                    <X class="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              {/if}
-
+              {/each}
             </div>
           {/if}
 
-          <!-- AI notes and online meeting shortcuts -->
-          <div class="space-y-2 pt-3 border-t border-neutral-800/20">
-
-            <button
-              type="button"
-              class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-500/5 to-indigo-500/5 hover:from-purple-500/10 hover:to-indigo-500/10 text-xs font-semibold text-purple-300 transition-all cursor-pointer flex items-center justify-between"
-            >
-              <div class="flex items-center gap-2">
-                <Sparkles class="w-3.5 h-3.5 text-purple-400 animate-pulse" />
-                <span>Add AI meeting notes</span>
-              </div>
-              <ChevronRight class="w-3.5 h-3.5 text-purple-400/70" />
-            </button>
-
+          <!-- Quick Add Attendee Autocomplete -->
+          <div class="pt-1">
+            <ContactAutocomplete
+              bind:recipients={attendeeEmails}
+              bind:contacts={attendees}
+              showChips={false}
+              placeholder="+ Add attendee by name or email..."
+            />
           </div>
-
-          <!-- Other attributes (Priority, Location, etc.) -->
-          <div class="space-y-3 pt-3 border-t border-neutral-800/20">
-
-            <!-- Priority Field -->
-            <div class="flex items-center justify-between text-xs py-1.5">
-              <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
-                <Flag class="w-3.5 h-3.5 text-neutral-500/60" />
-                <span>Priority</span>
-              </div>
-              {#if event.priority && event.priority !== 'None'}
-                <span class="px-2 py-0.5 rounded-full text-[9px] font-mono font-semibold {event.priority === 'High' ? 'bg-rose-500/15 text-rose-400' : event.priority === 'Medium' ? 'bg-amber-500/15 text-amber-400' : 'bg-blue-500/15 text-blue-400'}">
-                  {event.priority}
-                </span>
-              {:else}
-                <span class="text-neutral-600 font-mono text-[10px]">None</span>
-              {/if}
-            </div>
-
-            <!-- Location / Video Conference Field -->
-            {#if event.location || event.description}
-              {@const confLink = event.location ? detectConferenceLink(event.location) : event.description ? detectConferenceLink(event.description) : null}
-              {#if confLink}
-                <div class="space-y-2 pt-3">
-                  <div class="flex items-center gap-2">
-                    <Video class="w-4 h-4 text-blue-400 shrink-0" />
-                    <div class="flex-1 min-w-0">
-                      <div class="text-xs font-semibold text-white truncate">{confLink.displayLabel}</div>
-                      <div class="text-[10px] text-neutral-500 font-mono truncate">{confLink.provider}</div>
-                    </div>
-                    <button
-                      onclick={() => openUrl(confLink.url)}
-                      class="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-[11px] font-bold transition-colors shadow-sm cursor-pointer"
-                    >
-                      Join
-                    </button>
-                  </div>
-                </div>
-              {:else if event.location}
-                <div class="space-y-1">
-                  <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
-                    <MapPin class="w-3.5 h-3.5 text-neutral-500/60" />
-                    <span>Location</span>
-                  </div>
-                  <div class="text-xs text-white bg-neutral-900/30 rounded-lg p-2.5 font-medium">
-                    {event.location}
-                  </div>
-                </div>
-              {/if}
-            {/if}
-
-          </div>
-
-          <!-- Description / Notes text -->
-          {#if event.description}
-            <div class="space-y-1.5 pt-3 border-t border-neutral-800/20">
-              <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
-                <AlignLeft class="w-3.5 h-3.5 text-neutral-500/60" />
-                <span>Notes & Description</span>
-              </div>
-              <p class="text-xs text-neutral-300 leading-relaxed bg-neutral-900/20 rounded-xl p-3.5 max-h-40 overflow-y-auto whitespace-pre-line">
-                {event.description}
-              </p>
-            </div>
-          {/if}
-
-          <!-- CTA Action button (Manage in Workspace) -->
-          <div class="pt-2">
-            <button
-              type="button"
-              class="w-full py-2 rounded-lg bg-neutral-900/80 hover:bg-neutral-800/80 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center justify-center gap-2"
-            >
-              <ExternalLink class="w-3.5 h-3.5" />
-              <span>Manage in Workspace</span>
-            </button>
-          </div>
-
         </div>
-      {/if}
+
+        <!-- RSVP Response Pill -->
+        <div class="space-y-1">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Your RSVP Status</span>
+          <div class="flex items-center gap-1 bg-[#1a1a1a]/80 p-1.5 rounded-xl border border-neutral-800/40">
+            <button onclick={() => updateRsvp('accepted')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'yes' ? 'bg-emerald-500/15 text-emerald-400 font-bold' : 'text-neutral-500 hover:text-white'}">Yes</button>
+            <button onclick={() => updateRsvp('declined')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'no' ? 'bg-rose-500/15 text-rose-400 font-bold' : 'text-neutral-500 hover:text-white'}">No</button>
+            <button onclick={() => updateRsvp('tentative')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}">Maybe</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Location / Conference Field (Inline Editable) -->
+      <div class="space-y-1 pt-2 border-t border-neutral-800/20">
+        <div class="flex items-center justify-between text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+          <div class="flex items-center gap-1">
+            <MapPin class="w-3.5 h-3.5 text-neutral-500/60" />
+            <span>Location</span>
+          </div>
+          {#if location}
+            {@const confLink = detectConferenceLink(location)}
+            {#if confLink}
+              <button
+                onclick={() => openUrl(confLink.url)}
+                class="px-2.5 py-0.5 rounded bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-[10px] font-bold transition-colors cursor-pointer"
+              >
+                Join {confLink.provider}
+              </button>
+            {/if}
+          {/if}
+        </div>
+        <input
+          type="text"
+          placeholder="Add location or video link..."
+          bind:value={location}
+          oninput={() => { if (event?.id) handleSave(false); }}
+          class="w-full text-xs text-white bg-neutral-900/40 rounded-lg p-2.5 font-medium border border-neutral-800/30 outline-none hover:border-neutral-700 transition-colors placeholder:text-neutral-500"
+        />
+      </div>
+
+      <!-- Notes / Description (Inline Editable) -->
+      <div class="space-y-1 pt-2 border-t border-neutral-800/20">
+        <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
+          <AlignLeft class="w-3.5 h-3.5 text-neutral-500/60" />
+          <span>Notes & Description</span>
+        </div>
+        <textarea
+          placeholder="Add notes or description..."
+          bind:value={description}
+          oninput={() => { if (event?.id) handleSave(false); }}
+          rows="3"
+          class="w-full text-xs text-neutral-300 leading-relaxed bg-neutral-900/30 rounded-xl p-3 max-h-36 overflow-y-auto whitespace-pre-line border border-neutral-800/30 outline-none hover:border-neutral-700 transition-colors placeholder:text-neutral-500 resize-none"
+        ></textarea>
+      </div>
+
+      <!-- Priority & Calendar Attributes -->
+      <div class="space-y-2 pt-2 border-t border-neutral-800/20">
+        <div class="flex items-center justify-between text-xs py-1">
+          <div class="flex items-center gap-1 text-neutral-500 font-mono text-[10px]">
+            <Flag class="w-3.5 h-3.5 text-neutral-500/60" />
+            <span>Priority</span>
+          </div>
+          <select
+            bind:value={priority}
+            onchange={() => { if (event?.id) handleSave(false); }}
+            class="bg-neutral-800 hover:bg-neutral-700 text-white text-[10px] font-mono font-semibold rounded px-2 py-0.5 outline-none border border-neutral-700 cursor-pointer"
+          >
+            <option value="None">None</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+
+        <div class="flex items-center justify-between text-xs py-1">
+          <span class="text-neutral-500 font-mono text-[10px]">Calendar</span>
+          <select
+            bind:value={calendarId}
+            onchange={() => { if (event?.id) handleSave(false); }}
+            class="bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded px-2.5 py-1 outline-none border border-neutral-700 cursor-pointer"
+          >
+            {#each (accounts || []) as acc}
+              <optgroup label={acc.email} class="bg-[#131313] text-neutral-400">
+                {#each acc.calendars as cal}
+                  <option value={cal.id} class="text-white bg-[#1a1a1a]">{cal.name}</option>
+                {/each}
+              </optgroup>
+            {/each}
+          </select>
+        </div>
+      </div>
     </div>
-<!-- Footer Actions -->
+
+    <!-- Footer Actions (Save button only shown when creating a new event) -->
     {#if !event.id}
-      <div class="px-6 py-4 flex items-center justify-end">
+      <div class="px-5 py-3 flex items-center justify-end border-t border-neutral-800/40">
         <button
           onclick={() => handleSave(true)}
           class="px-5 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-md"

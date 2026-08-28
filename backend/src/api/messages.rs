@@ -14,12 +14,13 @@ use crate::db::sqlite::message_repository::SqliteMessageRepository;
 
 // --- Request / Response types ---
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct MessageListParams {
     pub account_id: Option<Uuid>,
     pub folder: Option<String>,
     pub cursor: Option<String>,
     #[serde(default = "default_limit")]
+    #[specta(type = f64)]
     pub limit: i64,
 }
 
@@ -27,14 +28,15 @@ fn default_limit() -> i64 {
     50
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct MessageListResponse {
     pub messages: Vec<MessageSummary>,
     pub next_cursor: Option<String>,
+    #[specta(type = f64)]
     pub total: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct MessageSummary {
     pub id: Uuid,
     pub account_id: Uuid,
@@ -44,6 +46,7 @@ pub struct MessageSummary {
     pub sender_name: Option<String>,
     pub sender_email: String,
     pub snippet: Option<String>,
+    #[specta(type = f64)]
     pub date_received: i64,
     pub is_read: bool,
     pub is_archived: bool,
@@ -51,7 +54,7 @@ pub struct MessageSummary {
     pub labels: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct MessageDetail {
     pub id: Uuid,
     pub account_id: Uuid,
@@ -61,7 +64,9 @@ pub struct MessageDetail {
     pub sender_name: Option<String>,
     pub sender_email: String,
     pub recipients: String,
+    #[specta(type = f64)]
     pub date_sent: i64,
+    #[specta(type = f64)]
     pub date_received: i64,
     pub snippet: Option<String>,
     pub body_text: Option<String>,
@@ -71,21 +76,23 @@ pub struct MessageDetail {
     pub is_archived: bool,
     pub is_deleted: bool,
     pub has_attachments: bool,
+    #[specta(type = f64)]
     pub created_at: i64,
+    #[specta(type = f64)]
     pub updated_at: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct StarParams {
     pub is_starred: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct LabelParams {
     pub labels: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum BulkActionType {
     MarkRead,
@@ -96,7 +103,7 @@ pub enum BulkActionType {
     RemoveLabel,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct BulkActionParams {
     pub message_ids: Vec<Uuid>,
     pub action: BulkActionType,
@@ -839,14 +846,14 @@ pub async fn redirect_attachment(
 
 // --- Outbound Send Logic (Task 37) ---
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 pub struct SendAttachmentPayload {
     pub filename: String,
     pub content_type: String,
     pub base64_content: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 pub struct SendMessageRequest {
     pub account_id: Uuid,
     pub to: Vec<String>,
@@ -858,7 +865,7 @@ pub struct SendMessageRequest {
     pub attachments: Option<Vec<SendAttachmentPayload>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct SendMessageResponse {
     pub id: String,
 }

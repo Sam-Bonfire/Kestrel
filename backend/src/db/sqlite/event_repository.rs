@@ -112,6 +112,7 @@ impl EventRepository for SqliteEventRepository {
         .bind(&event.organizer_name)
         .bind(&event.attendees)
         .bind(&event.status)
+        .bind(event.has_conflict)
         .bind(event.created_at)
         .bind(event.updated_at)
         .execute(&self.pool)

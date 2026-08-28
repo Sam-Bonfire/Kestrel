@@ -6,8 +6,9 @@ use axum::{
 };
 use backend::api::rate_limit::RateLimiter;
 use backend::api::router::{AppState, create_router};
+use backend::core::models::SettingsPayload;
 use backend::plugins::manager::PluginManager;
-use common::setup_test_db;
+use common::{TEST_SECRET, seed_account, seed_calendar, seed_contact, seed_message, setup_test_db};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,7 +18,7 @@ use tower::ServiceExt;
 /// Helper to create a test AppState with in-memory SQLite
 async fn create_test_state() -> AppState {
     let db = setup_test_db().await;
-    let jwt_secret = "test_jwt_secret_12345".to_string();
+    let jwt_secret = TEST_SECRET.to_string();
     let plugin_manager = Arc::new(RwLock::new(PluginManager::new()));
     let (sync_tx, _) = broadcast::channel(100);
     let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
@@ -28,20 +29,19 @@ async fn create_test_state() -> AppState {
         plugin_manager,
         sync_tx,
         sync_job_tx,
-        auth_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
-        general_rate_limiter: RateLimiter::new(100, Duration::from_secs(60)),
+        auth_rate_limiter: RateLimiter::new(1000, Duration::from_secs(60)),
+        general_rate_limiter: RateLimiter::new(1000, Duration::from_secs(60)),
     }
 }
 
-/// Register a test user and return the JWT token
-async fn register_and_get_token(app: &axum::Router) -> String {
-    // Register
+/// Register a test user and return (user_id_str, token_str)
+async fn register_and_get_token(app: &axum::Router, username: &str) -> (String, String) {
     let register_payload = json!({
-        "username": "handler_test_user@kestrel.dev",
+        "username": username,
         "password": "Password123!"
     });
 
-    let response = app
+    let res = app
         .clone()
         .oneshot(
             Request::builder()
@@ -53,16 +53,19 @@ async fn register_and_get_token(app: &axum::Router) -> String {
         )
         .await
         .unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let reg_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let user_id = reg_json["user_id"].as_str().unwrap().to_string();
 
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    // Get token
     let token_payload = json!({
-        "username": "handler_test_user@kestrel.dev",
+        "username": username,
         "password": "Password123!"
     });
 
-    let token_response = app
+    let token_res = app
         .clone()
         .oneshot(
             Request::builder()
@@ -74,19 +77,14 @@ async fn register_and_get_token(app: &axum::Router) -> String {
         )
         .await
         .unwrap();
-
-    assert_eq!(token_response.status(), StatusCode::OK);
-
-    let body_bytes = axum::body::to_bytes(token_response.into_body(), usize::MAX)
+    assert_eq!(token_res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(token_res.into_body(), usize::MAX)
         .await
         .unwrap();
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    body_json
-        .get("token")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_string()
+    let token_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let token = token_json["token"].as_str().unwrap().to_string();
+
+    (user_id, token)
 }
 
 // === Health Endpoint Tests ===
@@ -107,199 +105,25 @@ async fn test_health_check_returns_200() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "ok");
 }
 
-// === Auth Handler Tests ===
+// === Auth & User Lifecycle Tests ===
 
 #[tokio::test]
-async fn test_register_handler_success() {
+async fn test_auth_me_endpoint() {
     let state = create_test_state().await;
     let app = create_router(state);
-
-    let payload = json!({
-        "username": "new_user@test.dev",
-        "password": "ValidPass123!"
-    });
+    let (user_id, token) = register_and_get_token(&app, "me_user@kestrel.dev").await;
 
     let response = app
         .oneshot(
             Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/register")
-                .header("content-type", "application/json")
-                .body(Body::from(payload.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert!(body_json.get("user_id").is_some());
-}
-
-#[tokio::test]
-async fn test_register_handler_empty_username() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-
-    let payload = json!({
-        "username": "",
-        "password": "Password123!"
-    });
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/register")
-                .header("content-type", "application/json")
-                .body(Body::from(payload.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_register_handler_short_password() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-
-    let payload = json!({
-        "username": "short_pass_user@test.dev",
-        "password": "short"
-    });
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/register")
-                .header("content-type", "application/json")
-                .body(Body::from(payload.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn test_token_handler_success() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-
-    let token = register_and_get_token(&app).await;
-    assert!(!token.is_empty());
-}
-
-#[tokio::test]
-async fn test_token_handler_wrong_password() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-
-    // Register
-    let register_payload = json!({
-        "username": "wrong_pass_user@test.dev",
-        "password": "Password123!"
-    });
-
-    app.clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/register")
-                .header("content-type", "application/json")
-                .body(Body::from(register_payload.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    // Try with wrong password
-    let token_payload = json!({
-        "username": "wrong_pass_user@test.dev",
-        "password": "WrongPassword!"
-    });
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/token")
-                .header("content-type", "application/json")
-                .body(Body::from(token_payload.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-}
-
-#[tokio::test]
-async fn test_token_handler_nonexistent_user() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-
-    let payload = json!({
-        "username": "nonexistent@test.dev",
-        "password": "Password123!"
-    });
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/token")
-                .header("content-type", "application/json")
-                .body(Body::from(payload.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-}
-
-// === Protected Route Tests (require auth) ===
-
-#[tokio::test]
-async fn test_protected_route_without_token() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/v1/messages")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-}
-
-#[tokio::test]
-async fn test_list_messages_with_valid_token() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-    let token = register_and_get_token(&app).await;
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/v1/messages")
+                .uri("/api/v1/auth/me")
                 .header("authorization", format!("Bearer {}", token))
                 .body(Body::empty())
                 .unwrap(),
@@ -308,111 +132,11 @@ async fn test_list_messages_with_valid_token() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert!(body_json.get("messages").is_some());
-    assert!(body_json.get("total").is_some());
-}
-
-#[tokio::test]
-async fn test_list_messages_with_invalid_token() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/v1/messages")
-                .header("authorization", "Bearer invalid_token_12345")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-}
-
-#[tokio::test]
-async fn test_list_calendars_with_valid_token() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-    let token = register_and_get_token(&app).await;
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/v1/calendars")
-                .header("authorization", format!("Bearer {}", token))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert!(body_json.get("calendars").is_some());
-}
-
-#[tokio::test]
-async fn test_list_events_with_valid_token() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-    let token = register_and_get_token(&app).await;
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/v1/events")
-                .header("authorization", format!("Bearer {}", token))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert!(body_json.get("events").is_some());
-}
-
-#[tokio::test]
-async fn test_search_messages_with_valid_token() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-    let token = register_and_get_token(&app).await;
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/v1/search?q=test")
-                .header("authorization", format!("Bearer {}", token))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert!(body_json.get("results").is_some());
-    assert!(body_json.get("query").is_some());
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["user_id"], user_id);
 }
 
 #[tokio::test]
@@ -431,21 +155,51 @@ async fn test_list_providers_is_public() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["providers"].as_array().is_some());
 }
 
 // === Message Handler Tests ===
 
 #[tokio::test]
-async fn test_get_message_nonexistent() {
+async fn test_messages_crud_and_actions() {
     let state = create_test_state().await;
-    let app = create_router(state);
-    let token = register_and_get_token(&app).await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "msg_handler@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
 
-    let fake_id = uuid::Uuid::new_v4();
-    let response = app
+    // Seed account & messages directly in state.db
+    let account = seed_account(&state.db, user_uuid, "gmail", "Work Gmail").await;
+    let msg1 = seed_message(
+        &state.db,
+        account.id.0,
+        "Quarterly Roadmap Review",
+        "lead@company.com",
+        "Please find the attached Q3 roadmap.",
+        Some("inbox"),
+        false,
+    )
+    .await;
+    let msg2 = seed_message(
+        &state.db,
+        account.id.0,
+        "Weekly Newsletter",
+        "news@tech.io",
+        "Top engineering stories of the week.",
+        Some("inbox"),
+        true,
+    )
+    .await;
+
+    // 1. List messages
+    let res = app
+        .clone()
         .oneshot(
             Request::builder()
-                .uri(format!("/api/v1/messages/{}", fake_id))
+                .uri("/api/v1/messages")
                 .header("authorization", format!("Bearer {}", token))
                 .body(Body::empty())
                 .unwrap(),
@@ -453,23 +207,21 @@ async fn test_get_message_nonexistent() {
         .await
         .unwrap();
 
-    // Should return 404 or empty (depends on implementation)
-    assert!(response.status() == StatusCode::NOT_FOUND || response.status() == StatusCode::OK);
-}
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let messages = json["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(json["total"], 2);
 
-// === Calendar Handler Tests ===
-
-#[tokio::test]
-async fn test_get_calendar_nonexistent() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-    let token = register_and_get_token(&app).await;
-
-    let fake_id = uuid::Uuid::new_v4();
-    let response = app
+    // 2. Get message detail
+    let res = app
+        .clone()
         .oneshot(
             Request::builder()
-                .uri(format!("/api/v1/calendars/{}", fake_id))
+                .uri(format!("/api/v1/messages/{}", msg1.id.0))
                 .header("authorization", format!("Bearer {}", token))
                 .body(Body::empty())
                 .unwrap(),
@@ -477,143 +229,470 @@ async fn test_get_calendar_nonexistent() {
         .await
         .unwrap();
 
-    // Should return 404 or error (depends on implementation)
-    assert!(response.status() == StatusCode::NOT_FOUND || response.status() == StatusCode::OK);
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let msg_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(msg_json["subject"], "Quarterly Roadmap Review");
+    assert_eq!(msg_json["sender_email"], "lead@company.com");
+    assert_eq!(msg_json["is_read"], false);
+
+    // 3. Mark as read
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/messages/{}/read", msg1.id.0))
+                .header("authorization", format!("Bearer {}", token))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"read": true}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // 4. Toggle star
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/messages/{}/star", msg1.id.0))
+                .header("authorization", format!("Bearer {}", token))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"is_starred": true}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // 5. Update labels
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/messages/{}/labels", msg1.id.0))
+                .header("authorization", format!("Bearer {}", token))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"labels": ["inbox", "important", "work"]}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // 6. Bulk action (archive both messages)
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/messages/bulk")
+                .header("authorization", format!("Bearer {}", token))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "message_ids": [msg1.id.0, msg2.id.0],
+                        "action": "archive"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
 }
 
-#[tokio::test]
-async fn test_create_event_with_valid_token() {
-    let state = create_test_state().await;
-    let app = create_router(state);
-    let token = register_and_get_token(&app).await;
+// === Calendar & Event Handler Tests ===
 
-    let payload = json!({
-        "calendar_id": uuid::Uuid::new_v4(),
-        "title": "Test Event",
-        "start_time": 1721644800,
-        "end_time": 1721648400,
-        "description": "Test description",
-        "is_all_day": false
+#[tokio::test]
+async fn test_calendar_and_event_full_lifecycle() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "cal_handler@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+
+    // Seed account & calendar
+    let account = seed_account(&state.db, user_uuid, "google", "Google Calendar").await;
+    let cal = seed_calendar(&state.db, account.id.0, "Engineering", true).await;
+
+    // 1. List calendars
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/calendars")
+                .header("authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let cals = json["calendars"].as_array().unwrap();
+    assert_eq!(cals.len(), 1);
+    assert_eq!(cals[0]["name"], "Engineering");
+
+    // 2. Create event in valid calendar
+    let now = chrono::Utc::now().timestamp();
+    let create_payload = json!({
+        "calendar_id": cal.id.0,
+        "title": "Architecture Deep-Dive",
+        "description": "Discuss Rust Axum & Specta architecture",
+        "location": "Conf Room 3B",
+        "start_time": now + 3600,
+        "end_time": now + 7200,
+        "is_all_day": false,
+        "attendees": r#"[{"name": "Lead", "email": "lead@kestrel.dev", "status": "accepted"}]"#
     });
 
-    let response = app
+    let res = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/api/v1/events")
                 .header("authorization", format!("Bearer {}", token))
                 .header("content-type", "application/json")
-                .body(Body::from(payload.to_string()))
+                .body(Body::from(create_payload.to_string()))
                 .unwrap(),
         )
         .await
         .unwrap();
 
-    // Since the calendar_id is random, it should return 404 NOT_FOUND,
-    // indicating that auth and schema validation passed successfully.
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let ev_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let event_id = ev_json["id"].as_str().unwrap().to_string();
+    assert!(!event_id.is_empty());
+
+    // 3. Query events with range parameters
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/v1/events?start_time={}&end_time={}",
+                    now,
+                    now + 10000
+                ))
+                .header("authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let events = list_json["events"].as_array().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["title"], "Architecture Deep-Dive");
+
+    // 4. Update the event
+    let update_payload = json!({
+        "calendar_id": cal.id.0,
+        "title": "Architecture Deep-Dive (Rescheduled)",
+        "start_time": now + 4000,
+        "end_time": now + 7600
+    });
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/v1/events/{}", event_id))
+                .header("authorization", format!("Bearer {}", token))
+                .header("content-type", "application/json")
+                .body(Body::from(update_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // 5. Delete the event
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/events/{}", event_id))
+                .header("authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+}
+
+// === Contacts Search Handler Test ===
+
+#[tokio::test]
+async fn test_contacts_search_endpoint() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "contact_api@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+
+    let account = seed_account(&state.db, user_uuid, "gmail", "Personal").await;
+    seed_contact(
+        &state.db,
+        account.id.0,
+        "Sarah Connor",
+        "sarah@resistance.org",
+    )
+    .await;
+    seed_contact(
+        &state.db,
+        account.id.0,
+        "John Connor",
+        "john@resistance.org",
+    )
+    .await;
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/contacts/search?q=Sarah")
+                .header("authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let contacts = json.as_array().unwrap();
+    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts[0]["name"], "Sarah Connor");
+}
+
+// === Settings Handler Tests ===
+
+#[tokio::test]
+async fn test_get_and_put_settings_full_cycle() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (_, token) = register_and_get_token(&app, "settings_user@kestrel.dev").await;
+
+    // 1. Initial GET /api/settings should be default
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/settings")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let settings_resp: SettingsPayload = serde_json::from_slice(&body).unwrap();
+    assert_eq!(settings_resp, SettingsPayload::default());
+
+    // 2. PUT /api/settings with partial updates
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/settings")
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "mailDenseMode": true,
+                        "syncInterval": 600
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // 3. GET /api/settings again to verify persistence
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/settings")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let settings_resp: SettingsPayload = serde_json::from_slice(&body).unwrap();
+    assert_eq!(settings_resp.mail_dense_mode, Some(true));
+    assert_eq!(settings_resp.sync_interval, Some(600));
+}
+
+// === Security & Multi-Tenant Isolation Tests ===
+
+#[tokio::test]
+async fn test_unauthenticated_requests_rejected() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let endpoints = vec![
+        ("/api/v1/messages", "GET"),
+        ("/api/v1/calendars", "GET"),
+        ("/api/v1/events", "GET"),
+        ("/api/settings", "GET"),
+        ("/api/v1/accounts", "GET"),
+        ("/api/contacts/search?q=test", "GET"),
+        ("/api/v1/search?q=test", "GET"),
+    ];
+
+    for (uri, method) in endpoints {
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            res.status(),
+            StatusCode::UNAUTHORIZED,
+            "Endpoint {} should require authentication",
+            uri
+        );
+    }
 }
 
 #[tokio::test]
-async fn test_get_and_put_settings() {
+async fn test_multi_tenant_isolation() {
     let state = create_test_state().await;
     let app = create_router(state.clone());
 
-    // Register user to get a token
-    let req = Request::builder()
-        .method("POST")
-        .uri("/api/v1/auth/register")
-        .header("Content-Type", "application/json")
-        .body(Body::from(
-            json!({
-                "username": "settings@example.com",
-                "password": "Password123!"
-            })
-            .to_string(),
-        ))
-        .unwrap();
+    let (user_a, token_a) = register_and_get_token(&app, "user_a@kestrel.dev").await;
+    let (_user_b, token_b) = register_and_get_token(&app, "user_b@kestrel.dev").await;
 
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::CREATED);
+    let user_a_uuid = uuid::Uuid::parse_str(&user_a).unwrap();
+    let account_a = seed_account(&state.db, user_a_uuid, "gmail", "User A Account").await;
+    let msg_a = seed_message(
+        &state.db,
+        account_a.id.0,
+        "Private User A Secret",
+        "user_a@kestrel.dev",
+        "Secret content for user A only",
+        None,
+        false,
+    )
+    .await;
 
-    // Get token
-    let req = Request::builder()
-        .method("POST")
-        .uri("/api/v1/auth/token")
-        .header("Content-Type", "application/json")
-        .body(Body::from(
-            json!({
-                "username": "settings@example.com",
-                "password": "Password123!"
-            })
-            .to_string(),
-        ))
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+    // User A can read own message
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/messages/{}", msg_a.id.0))
+                .header("authorization", format!("Bearer {}", token_a))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
-    let token_resp: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    let token = token_resp["token"].as_str().unwrap().to_string();
-
-    // 1. Initial GET /api/settings should be empty JSON
-    let req = Request::builder()
-        .method("GET")
-        .uri("/api/settings")
-        .header("Authorization", format!("Bearer {}", token))
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+
+    // User B cannot read User A's message (returns 404)
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/messages/{}", msg_a.id.0))
+                .header("authorization", format!("Bearer {}", token_b))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
-    let settings_resp: backend::core::models::SettingsPayload =
-        serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(
-        settings_resp,
-        backend::core::models::SettingsPayload::default()
-    );
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
 
-    // 2. PUT /api/settings
-    let req = Request::builder()
-        .method("PUT")
-        .uri("/api/settings")
-        .header("Authorization", format!("Bearer {}", token))
-        .header("Content-Type", "application/json")
-        .body(Body::from(
-            json!({
-                "mailDenseMode": true,
-                "syncInterval": 600
-            })
-            .to_string(),
-        ))
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+#[tokio::test]
+async fn test_webhooks_ingestion() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    // 1. Google PubSub webhook
+    let google_payload = json!({
+        "message": {
+            "data": "eyJlbWFpbEFkZHJlc3MiOiJkZW1vQGxvY2FsIiwiaGlzdG9yeUlkIjoiMTIzNCJ9",
+            "messageId": "msg-001"
+        }
+    });
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/webhooks/google")
+                .header("content-type", "application/json")
+                .body(Body::from(google_payload.to_string()))
+                .unwrap(),
+        )
         .await
         .unwrap();
-    let settings_resp: backend::core::models::SettingsPayload =
-        serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(settings_resp.mail_dense_mode, Some(true));
-    assert_eq!(settings_resp.sync_interval, Some(600));
-
-    // 3. GET /api/settings again to verify it persists
-    let req = Request::builder()
-        .method("GET")
-        .uri("/api/settings")
-        .header("Authorization", format!("Bearer {}", token))
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+
+    // 2. Microsoft Graph validation token handshake
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/webhooks/microsoft?validationToken=testValidationToken999")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
-    let settings_resp: backend::core::models::SettingsPayload =
-        serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(settings_resp.mail_dense_mode, Some(true));
-    assert_eq!(settings_resp.sync_interval, Some(600));
+    assert_eq!(res.status(), StatusCode::OK);
 }

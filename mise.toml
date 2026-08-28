@@ -19,6 +19,11 @@ run = [
     "mise run setup"
 ]
 
+[tasks.codegen]
+description = "Export Specta v2 Rust types to frontend-shared TypeScript definitions"
+dir = "backend"
+run = "cargo run --bin export_types"
+
 [tasks."dev:backend"]
 description = "Start the Axum daemon in development mode"
 dir = "backend"
@@ -78,6 +83,20 @@ run = "pnpm tauri android build"
 description = "Run backend cargo tests"
 dir = "backend"
 run = "cargo test"
+
+[tasks."test:frontend"]
+description = "Run frontend-shared Vitest unit and contract tests"
+dir = "frontend-shared"
+run = "pnpm test"
+
+[tasks."test:hurl"]
+description = "Execute intent-based Hurl API suites against live backend"
+run = "hurl --variable base_url=http://localhost:8080 backend/tests/hurl/*.hurl"
+
+[tasks.test]
+description = "Run all automated tests (backend + frontend)"
+depends = ["test:backend", "test:frontend"]
+run = "echo \"==> All test suites passed!\""
 
 [tasks."db:migrate"]
 description = "Run SQLx migrations locally"

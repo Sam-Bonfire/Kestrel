@@ -33,11 +33,11 @@ export class TemplateStore {
     this.isInitializing = true;
     try {
       const settings = await getSettings();
-      if (settings.snippets !== undefined) {
+      if (settings.snippets != null) {
         this.snippets = settings.snippets;
         saveItem(SNIPPETS_KEY, JSON.stringify(this.snippets));
       }
-      if (settings.signatures !== undefined) {
+      if (settings.signatures != null) {
         this.signatures = settings.signatures;
         saveItem(SIGNATURES_KEY, JSON.stringify(this.signatures));
       }

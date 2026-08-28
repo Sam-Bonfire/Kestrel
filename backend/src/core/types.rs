@@ -12,7 +12,8 @@ use uuid::Uuid;
 /// SQLite stores UUIDs as TEXT (36-char strings), but sqlx's default `Uuid`
 /// decode expects 16-byte BLOB. This wrapper decodes from TEXT for SQLite
 /// and delegates to the native UUID decode for Postgres.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, specta::Type)]
+#[specta(transparent)]
 pub struct DbUuid(pub Uuid);
 
 impl DbUuid {
@@ -112,3 +113,7 @@ impl sqlx::Type<sqlx::Postgres> for DbUuid {
         <Uuid as sqlx::Type<sqlx::Postgres>>::type_info()
     }
 }
+
+/// A transparent i64 timestamp alias that Specta safely exports as JavaScript/TypeScript `number`
+#[allow(dead_code)]
+pub type UnixTimestamp = i64;

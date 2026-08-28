@@ -88,62 +88,46 @@ pub fn create_router(state: AppState) -> Router {
 
     // Protected routes (auth middleware required)
     let protected = Router::new()
-        .route("/api/v1/auth/callback/{provider}", get(auth::callback))
         .route("/api/v1/auth/callback/:provider", get(auth::callback))
         .route("/api/v1/accounts", get(accounts::list_accounts))
-        .route("/api/v1/accounts/{id}", delete(accounts::delete_account))
+        .route("/api/v1/accounts/:id", delete(accounts::delete_account))
         .route("/api/v1/messages", get(messages::list_messages))
-        .route("/api/v1/messages/{id}", get(messages::get_message))
-        .route(
-            "/api/v1/messages/{id}/attachments/{filename}",
-            get(messages::download_attachment),
-        )
+        .route("/api/v1/messages/:id", get(messages::get_message))
         .route(
             "/api/v1/messages/:id/attachments/:filename",
             get(messages::download_attachment),
-        )
-        .route(
-            "/api/v1/messages/{id}/attachments/{filename}/redirect",
-            get(messages::redirect_attachment),
         )
         .route(
             "/api/v1/messages/:id/attachments/:filename/redirect",
             get(messages::redirect_attachment),
         )
         .route(
-            "/api/messages/{id}/attachments/{filename}/redirect",
-            get(messages::redirect_attachment),
-        )
-        .route(
             "/api/messages/:id/attachments/:filename/redirect",
             get(messages::redirect_attachment),
         )
-        .route("/api/v1/messages/{id}/read", post(messages::mark_read))
+        .route("/api/v1/messages/:id/read", post(messages::mark_read))
         .route(
-            "/api/v1/messages/{id}/archive",
+            "/api/v1/messages/:id/archive",
             post(messages::archive_message),
         )
         .route(
-            "/api/v1/messages/{id}/snooze",
+            "/api/v1/messages/:id/snooze",
             post(messages::snooze_message),
         )
         .route(
-            "/api/v1/messages/{id}/unsnooze",
+            "/api/v1/messages/:id/unsnooze",
             post(messages::unsnooze_message),
         )
-        .route("/api/v1/messages/{id}/trash", post(messages::trash_message))
-        .route("/api/v1/messages/{id}/star", post(messages::toggle_star))
-        .route("/api/v1/messages/{id}/mute", post(messages::mute_thread))
+        .route("/api/v1/messages/:id/trash", post(messages::trash_message))
+        .route("/api/v1/messages/:id/star", post(messages::toggle_star))
+        .route("/api/v1/messages/:id/mute", post(messages::mute_thread))
         .route(
-            "/api/v1/messages/{id}/report-phishing",
+            "/api/v1/messages/:id/report-phishing",
             post(messages::report_phishing),
         )
-        .route("/api/v1/messages/{id}/raw", get(messages::get_raw_eml))
+        .route("/api/v1/messages/:id/raw", get(messages::get_raw_eml))
         .route("/api/v1/senders/block", post(messages::block_sender))
-        .route(
-            "/api/v1/messages/{id}/labels",
-            post(messages::update_labels),
-        )
+        .route("/api/v1/messages/:id/labels", post(messages::update_labels))
         .route(
             "/api/v1/labels",
             get(super::labels::list_labels).patch(super::labels::update_label),
@@ -153,7 +137,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/search", get(search::search_messages))
         .route("/api/contacts/search", get(contacts::search_contacts))
         .route("/api/v1/calendars", get(calendars::list_calendars))
-        .route("/api/v1/calendars/{id}", get(calendars::get_calendar))
+        .route("/api/v1/calendars/:id", get(calendars::get_calendar))
         .route(
             "/api/v1/events",
             get(calendars::list_events).post(calendars::create_event),
@@ -163,7 +147,7 @@ pub fn create_router(state: AppState) -> Router {
             post(calendars::rsvp_external),
         )
         .route(
-            "/api/v1/events/{id}",
+            "/api/v1/events/:id",
             get(calendars::get_event)
                 .patch(calendars::update_event)
                 .delete(calendars::delete_event),

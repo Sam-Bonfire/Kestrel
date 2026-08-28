@@ -482,49 +482,74 @@
     return days;
   });
 
-  function handleSaveEvent(data: any) {
-    import('@kestrel/shared/api').then(({ createEvent }) => {
+  function handleSaveEvent(data: any, closePanel = true) {
+    import('@kestrel/shared/api').then(({ createEvent, updateEvent }) => {
       // Map form data to backend payload
       const startDateTime = new Date(`${data.date}T${data.startTime}:00`);
       const endDateTime = new Date(`${data.date}T${data.endTime}:00`);
 
-      const payload = {
-        title: data.title || 'Untitled Event',
-        description: data.description,
-        location: data.location,
-        start_time: Math.floor(startDateTime.getTime() / 1000),
-        end_time: Math.floor(endDateTime.getTime() / 1000),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        is_all_day: data.isAllDay || false,
-        organizer_email: data.organizer,
-        attendees: data.attendees ? JSON.stringify(data.attendees) : null
-      };
-
-      createEvent(payload as any).then((res: any) => {
-        const newEvent: CalendarEvent = {
-          id: res.id,
-          title: res.title || 'Untitled Event',
-          description: res.description,
-          location: res.location,
-          date: new Date(res.start_time * 1000).toISOString().split('T')[0],
-          startTime: new Date(res.start_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-          endTime: new Date(res.end_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-          isAllDay: res.is_all_day,
-          color: data.color || 'blue',
-          calendarId: data.calendarId || accounts[0]?.calendars[0]?.id || '1a',
-          category: data.category,
-          priority: data.priority,
-          status: 'Scheduled',
-          organizer: res.organizer_email || 'Unknown',
-          attendees: res.attendees ? JSON.parse(res.attendees) : [],
-          rsvpStatus: 'maybe'
+      if (data.id && !data.id.startsWith('temp-')) {
+        // Update existing event (PATCH /api/v1/events/:id)
+        const updatePayload: any = {
+          title: data.title,
+          description: data.description,
+          location: data.location,
+          start_time: Math.floor(startDateTime.getTime() / 1000),
+          end_time: Math.floor(endDateTime.getTime() / 1000),
+          is_all_day: data.isAllDay || false,
+          status: data.status || 'confirmed',
+          attendees: data.attendees ? JSON.stringify(data.attendees) : null
         };
-        events = [...events, newEvent];
-        showToast('Event created successfully', 'success');
-      }).catch(err => {
-        console.error('Failed to create event:', err);
-        showToast('Failed to create event', 'error');
-      });
+
+        // Optimistically update local events state
+        events = events.map(ev => ev.id === data.id ? { ...ev, ...data } : ev);
+
+        updateEvent(data.id, updatePayload).then(() => {
+          // Success
+        }).catch(err => {
+          console.error('Failed to update event:', err);
+          showToast(err?.message || 'Failed to update event', 'error');
+        });
+      } else {
+        // Create new event (POST /api/v1/events)
+        const resolvedCalendarId = data.calendarId || accounts[0]?.calendars[0]?.id || '1a';
+        const createPayload = {
+          calendar_id: resolvedCalendarId,
+          title: data.title || 'Untitled Event',
+          description: data.description,
+          location: data.location,
+          start_time: Math.floor(startDateTime.getTime() / 1000),
+          end_time: Math.floor(endDateTime.getTime() / 1000),
+          is_all_day: data.isAllDay || false,
+          attendees: data.attendees ? JSON.stringify(data.attendees) : null
+        };
+
+        createEvent(createPayload as any).then((res: any) => {
+          const newEvent: CalendarEvent = {
+            id: res.id,
+            title: res.title || 'Untitled Event',
+            description: res.description,
+            location: res.location,
+            date: new Date(res.start_time * 1000).toISOString().split('T')[0],
+            startTime: new Date(res.start_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+            endTime: new Date(res.end_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+            isAllDay: res.is_all_day,
+            color: data.color || 'blue',
+            calendarId: resolvedCalendarId,
+            category: data.category,
+            priority: data.priority,
+            status: 'Scheduled',
+            organizer: res.organizer_email || 'Unknown',
+            attendees: res.attendees ? JSON.parse(res.attendees) : [],
+            rsvpStatus: 'maybe'
+          };
+          events = [...events, newEvent];
+          showToast('Event created successfully', 'success');
+        }).catch(err => {
+          console.error('Failed to create event:', err);
+          showToast(err?.message || 'Failed to create event', 'error');
+        });
+      }
     });
   }
 
@@ -938,11 +963,10 @@
       selectedEventId={selectedEvent?.id}
       onEventClick={(ev, e) => {
         selectedEvent = ev;
-        if (e && viewMode === 'month') {
+        if (e) {
           clickPosition = { x: e.clientX, y: e.clientY };
         } else {
           clickPosition = null;
-          isDetailsDocked = true;
         }
       }}
       onEmptySlotClick={openNewEventPanel}

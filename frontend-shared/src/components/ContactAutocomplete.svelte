@@ -13,11 +13,13 @@
   let {
     recipients = $bindable([] as string[]),
     contacts = $bindable([] as SelectedContact[]),
-    placeholder = 'Add recipient...'
+    placeholder = 'Add recipient...',
+    showChips = true
   } = $props<{
     recipients?: string[];
     contacts?: SelectedContact[];
     placeholder?: string;
+    showChips?: boolean;
   }>();
 
   interface Contact {
@@ -149,19 +151,21 @@
 
 <div class="relative w-full">
   <div class="flex flex-wrap items-center gap-1.5 min-h-[30px] w-full cursor-text py-0.5">
-    {#each recipients as email, i}
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/25 text-xs font-mono select-none animate-fadeIn">
-        <span>{email}</span>
-        <button
-          type="button"
-          onclick={() => removeEmail(i)}
-          class="hover:bg-blue-500/30 p-0.5 rounded text-blue-400 hover:text-white transition-colors cursor-pointer"
-          title="Remove"
-        >
-          <X class="w-3 h-3" />
-        </button>
-      </span>
-    {/each}
+    {#if showChips}
+      {#each recipients as email, i}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/25 text-xs font-mono select-none animate-fadeIn">
+          <span>{email}</span>
+          <button
+            type="button"
+            onclick={() => removeEmail(i)}
+            class="hover:bg-blue-500/30 p-0.5 rounded text-blue-400 hover:text-white transition-colors cursor-pointer"
+            title="Remove"
+          >
+            <X class="w-3 h-3" />
+          </button>
+        </span>
+      {/each}
+    {/if}
 
     <input
       bind:this={inputElement}

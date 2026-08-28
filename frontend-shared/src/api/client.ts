@@ -1,4 +1,18 @@
 import { authState, logout } from '../stores/auth.svelte.js';
+export * from './generated/types.js';
+import type {
+  CreateEventRequest,
+  CreateEventResponse,
+  UpdateEventRequest,
+  EventDetail,
+  SettingsPayload,
+  SearchResponse,
+  RegisterResponse,
+  TokenResponse,
+  SendMessageRequest,
+  SendMessageResponse,
+  BulkActionType,
+} from './generated/types.js';
 
 export const API_BASE = 'http://localhost:8080/api/v1';
 
@@ -33,7 +47,11 @@ function buildHeaders(token?: string): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  const activeToken = token || authState.token; if (activeToken) { headers["Authorization"] = `Bearer ${activeToken}`; } return headers;
+  const activeToken = token || authState.token;
+  if (activeToken) {
+    headers['Authorization'] = `Bearer ${activeToken}`;
+  }
+  return headers;
 }
 
 import { enqueueMutation, dequeuePending, acknowledgeMutation } from '../offline/queue.js';
@@ -45,7 +63,7 @@ async function request<T>(
 ): Promise<T> {
   const { token, body, ...init } = opts;
   
-  if (!navigator.onLine && method !== 'GET') {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false && method !== 'GET') {
     enqueueMutation(path, method, body);
     return undefined as T; // Return early for void operations (or mock for others)
   }
@@ -53,7 +71,7 @@ async function request<T>(
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method,
-      headers: buildHeaders(),
+      headers: buildHeaders(token),
       credentials: 'include',
       body: body != null ? JSON.stringify(body) : undefined,
       ...init,
@@ -67,15 +85,18 @@ async function request<T>(
       if (res.status === 401) {
         logout();
       }
-      let parsed: unknown;
+      let parsed: any;
       try {
         parsed = await res.json();
       } catch {
         parsed = null;
       }
+      const errMsg = (parsed && typeof parsed === 'object' && ('error' in parsed || 'message' in parsed))
+        ? (parsed.error || parsed.message)
+        : `${method} ${path} failed: ${res.statusText}`;
       throw new ApiError(
         res.status,
-        `${method} ${path} failed: ${res.statusText}`,
+        errMsg,
         parsed,
       );
     }
@@ -115,25 +136,6 @@ export async function replayOfflineQueue(): Promise<void> {
 
 // ── Search (FTS5) ───────────────────────────────────────────
 
-export interface SearchResult {
-  id: string;
-  account_id: string;
-  external_id: string;
-  thread_id: string;
-  subject: string | null;
-  sender_name: string | null;
-  sender_email: string;
-  snippet: string | null;
-  date_received: number;
-  is_read: boolean;
-}
-
-export interface SearchResponse {
-  results: SearchResult[];
-  total: number;
-  query: string;
-}
-
 export async function searchMessages(query: string, limit?: number): Promise<SearchResponse> {
   const q = new URLSearchParams();
   q.append('q', query);
@@ -147,15 +149,6 @@ export async function searchMessages(query: string, limit?: number): Promise<Sea
 
 export interface HealthResponse {
   status: 'ok';
-}
-
-export interface RegisterResponse {
-  user_id: string;
-}
-
-export interface TokenResponse {
-  token: string;
-  user_id: string;
 }
 
 export interface ProviderBranding {
@@ -363,17 +356,6 @@ export function getEmlDownloadUrl(messageId: string): string {
   return `${API_BASE}/messages/${messageId}/raw`;
 }
 
-export interface SendMessageRequest {
-  to: string;
-  subject: string;
-  body: string;
-  thread_id?: string;
-}
-
-export interface SendMessageResponse {
-  id: string;
-}
-
 export async function sendMessage(
   payload: SendMessageRequest,
   token?: string,
@@ -407,8 +389,6 @@ export async function updateLabels(id: string, labels: string[], token?: string)
     body: { labels },
   });
 }
-
-export type BulkActionType = 'mark_read' | 'archive' | 'trash' | 'toggle_star' | 'apply_label' | 'remove_label';
 
 export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, label?: string, token?: string): Promise<void> {
   await request('POST', '/messages/bulk', {
@@ -509,18 +489,18 @@ export async function getEvents(
 }
 
 export async function createEvent(
-  event: Omit<CalendarEvent, 'id'>,
+  event: CreateEventRequest,
   token?: string,
-): Promise<CalendarEvent> {
-  return request<CalendarEvent>('POST', '/events', { token, body: event });
+): Promise<CreateEventResponse> {
+  return request<CreateEventResponse>('POST', '/events', { token, body: event });
 }
 
 export async function updateEvent(
   eventId: string,
-  patch: Partial<CalendarEvent>,
+  patch: UpdateEventRequest,
   token?: string,
-): Promise<CalendarEvent> {
-  return request<CalendarEvent>('PATCH', `/events/${eventId}`, {
+): Promise<EventDetail> {
+  return request<EventDetail>('PATCH', `/events/${eventId}`, {
     token,
     body: patch,
   });
@@ -565,7 +545,7 @@ export async function getSettings(): Promise<SettingsPayload> {
   return res.json();
 }
 
-export async function updateSettings(settings: SettingsPayload): Promise<SettingsPayload> {
+export async function updateSettings(settings: Partial<SettingsPayload>): Promise<SettingsPayload> {
   const base = getApiBase().replace('/api/v1', '');
   const res = await fetch(`${base}/api/settings`, {
     method: 'PUT',
@@ -577,35 +557,4 @@ export async function updateSettings(settings: SettingsPayload): Promise<Setting
     throw new ApiError(res.status, `PUT /api/settings failed: ${res.statusText}`);
   }
   return res.json();
-}
-
-export interface LabelCustomization {
-  iconName: string;
-  colorName: string;
-}
-
-export interface Snippet {
-  id: string;
-  title: string;
-  shortcut: string;
-  template: string;
-}
-
-export interface Signature {
-  id: string;
-  accountId: string | null;
-  name: string;
-  htmlContent: string;
-  isDefault: boolean;
-}
-
-export interface SettingsPayload {
-  mailDenseMode?: boolean;
-  mailDefaultLandingView?: string;
-  mailSignature?: string;
-  labelCustomizations?: Record<string, LabelCustomization>;
-  syncInterval?: number;
-  theme?: string;
-  snippets?: Snippet[];
-  signatures?: Signature[];
 }
