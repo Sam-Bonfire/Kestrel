@@ -26,6 +26,14 @@ export {
 } from './shortcuts.js';
 
 export {
+  activeToasts,
+  triggerUndoAction,
+  executeUndo,
+  dismissToast,
+  type UndoAction
+} from './undoToast.js';
+
+export {
   templateStore,
   TemplateStore,
 } from './templates.svelte.js';

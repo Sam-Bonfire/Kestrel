@@ -6,8 +6,8 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
-  import { AppShell, ReauthBanner } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount } from '@kestrel/shared/stores';
+  import { AppShell, ReauthBanner, UndoToast } from '@kestrel/shared/components';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction } from '@kestrel/shared/stores';
   import { replayOfflineQueue, searchMessages } from '@kestrel/shared/api';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
@@ -459,18 +459,63 @@
   function archive(id: string) {
     const email = allEmails.find(e => e.id === id);
     if (!email) return;
+    const oldState = { isArchived: email.isArchived };
     const newState = !email.isArchived;
-    import('@kestrel/shared/api').then(({ archiveMessage }) => archiveMessage(id).catch(err => console.error(err)));
+
     advanceSelectionAndModify(id, { isArchived: newState });
+
+    triggerUndoAction({
+      title: newState ? 'Conversation archived' : 'Conversation unarchived',
+      onCommit: async () => {
+        const { archiveMessage } = await import('@kestrel/shared/api');
+        await archiveMessage(id).catch(err => console.error('Failed to archive message:', err));
+      },
+      onUndo: () => {
+        allEmails = allEmails.map(e => e.id === id ? { ...e, ...oldState } : e);
+      },
+      type: 'info',
+    });
   }
+
   function trash(id: string) {
-    import('@kestrel/shared/api').then(({ trashMessage }) => trashMessage(id).catch(err => console.error(err)));
+    const email = allEmails.find(e => e.id === id);
+    if (!email) return;
+    const oldState = { isTrash: email.isTrash };
+
     advanceSelectionAndModify(id, { isTrash: true });
+
+    triggerUndoAction({
+      title: 'Conversation moved to Trash',
+      onCommit: async () => {
+        const { trashMessage } = await import('@kestrel/shared/api');
+        await trashMessage(id).catch(err => console.error('Failed to trash message:', err));
+      },
+      onUndo: () => {
+        allEmails = allEmails.map(e => e.id === id ? { ...e, ...oldState } : e);
+      },
+      type: 'warning',
+    });
   }
+
   function snooze(id: string) {
+    const email = allEmails.find(e => e.id === id);
+    if (!email) return;
+    const oldState = { isArchived: email.isArchived, snoozed_until: email.snoozed_until };
     const ts = Math.floor(Date.now() / 1000) + 3600; // Snooze for 1 hour
+
     advanceSelectionAndModify(id, { isArchived: false, snoozed_until: ts });
-    import('@kestrel/shared/api').then(api => { api.apiClient.post(`/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error); });
+
+    triggerUndoAction({
+      title: 'Conversation snoozed for 1 hour',
+      onCommit: async () => {
+        const api = await import('@kestrel/shared/api');
+        await api.apiClient.post(`/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error);
+      },
+      onUndo: () => {
+        allEmails = allEmails.map(e => e.id === id ? { ...e, ...oldState } : e);
+      },
+      type: 'info',
+    });
   }
 
   function reportSpam(id: string) {
@@ -1065,4 +1110,5 @@
     isOpen={isMailSettingsOpen}
     onClose={() => isMailSettingsOpen = false}
   />
+  <UndoToast />
 </AppShell>
