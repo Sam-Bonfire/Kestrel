@@ -54,6 +54,10 @@ export async function initializeSettings() {
 
 async function syncToBackend() {
   if (isInitializing || isUpdating) return;
+  // Only sync settings to backend if authenticated
+  const { authState } = await import('./auth.svelte.js');
+  if (!authState.isAuthenticated) return;
+
   isUpdating = true;
   try {
     await updateSettings({

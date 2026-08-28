@@ -261,17 +261,21 @@
 
   $effect(() => {
     if (authState.isAuthenticated) {
-      import('@tauri-apps/plugin-notification').then(({ sendNotification, onAction }) => {
+      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+        import('@tauri-apps/plugin-notification').then(({ onAction }) => {
+          onAction((event: any) => {
+            if (event.actionId === 'snooze' && event.notification?.id) {
+              // Snooze for 10 minutes
+              snoozedEvents[event.notification.id] = Date.now() + 10 * 60 * 1000;
+            } else if (event.actionId === 'dismiss' && event.notification?.id) {
+              // Dismiss permanently
+              snoozedEvents[event.notification.id] = Number.MAX_SAFE_INTEGER;
+            }
+          }).catch((err: any) => console.warn("Notification action listener error:", err));
+        }).catch(() => {});
+      }
 
-        onAction((event: any) => {
-          if (event.actionId === 'snooze' && event.notification?.id) {
-            // Snooze for 10 minutes
-            snoozedEvents[event.notification.id] = Date.now() + 10 * 60 * 1000;
-          } else if (event.actionId === 'dismiss' && event.notification?.id) {
-            // Dismiss permanently
-            snoozedEvents[event.notification.id] = Number.MAX_SAFE_INTEGER;
-          }
-        }).catch((err: any) => console.warn("Notification action listener error:", err));
+      import('@tauri-apps/plugin-notification').then(({ sendNotification }) => {
 
         const checkUpcomingEvents = () => {
           const now = new Date();
