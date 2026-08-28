@@ -22,8 +22,11 @@ const SHORTCUTS_KEY = 'kestrel:settings:shortcuts';
 
 function loadOverrides(): ShortcutOverride {
   try {
-    const val = localStorage.getItem(SHORTCUTS_KEY);
-    return val !== null ? JSON.parse(val) : {};
+    if (typeof localStorage !== 'undefined') {
+      const val = localStorage.getItem(SHORTCUTS_KEY);
+      return val !== null ? JSON.parse(val) : {};
+    }
+    return {};
   } catch {
     return {};
   }
@@ -33,7 +36,9 @@ export const customShortcuts = writable<ShortcutOverride>(loadOverrides());
 
 customShortcuts.subscribe((val) => {
   try {
-    localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(val));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(val));
+    }
   } catch {
     // Non-fatal
   }

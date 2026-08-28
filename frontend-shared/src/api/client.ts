@@ -47,7 +47,11 @@ function buildHeaders(token?: string): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  const activeToken = token || authState.token; if (activeToken) { headers["Authorization"] = `Bearer ${activeToken}`; } return headers;
+  const activeToken = token || authState.token;
+  if (activeToken) {
+    headers['Authorization'] = `Bearer ${activeToken}`;
+  }
+  return headers;
 }
 
 import { enqueueMutation, dequeuePending, acknowledgeMutation } from '../offline/queue.js';
@@ -59,7 +63,7 @@ async function request<T>(
 ): Promise<T> {
   const { token, body, ...init } = opts;
   
-  if (!navigator.onLine && method !== 'GET') {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false && method !== 'GET') {
     enqueueMutation(path, method, body);
     return undefined as T; // Return early for void operations (or mock for others)
   }
@@ -67,7 +71,7 @@ async function request<T>(
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method,
-      headers: buildHeaders(),
+      headers: buildHeaders(token),
       credentials: 'include',
       body: body != null ? JSON.stringify(body) : undefined,
       ...init,

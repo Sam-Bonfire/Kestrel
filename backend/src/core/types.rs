@@ -115,5 +115,5 @@ impl sqlx::Type<sqlx::Postgres> for DbUuid {
 }
 
 /// A transparent i64 timestamp alias that Specta safely exports as JavaScript/TypeScript `number`
+#[allow(dead_code)]
 pub type UnixTimestamp = i64;
-

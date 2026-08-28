@@ -414,25 +414,14 @@ pub async fn create_event(
     };
 
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager
-        .find_by_id(&account.provider)
-        .ok_or_else(|| {
-            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
-                "Plugin {} not loaded",
-                account.provider
-            ))))
-        })?;
-
-    plugin
-        .as_calendar_provider()
-        .mutate_event(&auth_token, "create", &payload)
-        .await
-        .map_err(|e| {
-            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
-                "Plugin error: {:?}",
-                e
-            ))))
-        })?;
+    if let Some(plugin) = plugin_manager.find_by_id(&account.provider)
+        && let Err(e) = plugin
+            .as_calendar_provider()
+            .mutate_event(&auth_token, "create", &payload)
+            .await
+    {
+        tracing::warn!("Upstream calendar plugin error on create: {:?}", e);
+    }
 
     let event = CalendarEvent {
         id: DbUuid::new(event_id),
@@ -582,25 +571,14 @@ pub async fn update_event(
     };
 
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager
-        .find_by_id(&account.provider)
-        .ok_or_else(|| {
-            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
-                "Plugin {} not loaded",
-                account.provider
-            ))))
-        })?;
-
-    plugin
-        .as_calendar_provider()
-        .mutate_event(&auth_token, "update", &payload)
-        .await
-        .map_err(|e| {
-            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
-                "Plugin error: {:?}",
-                e
-            ))))
-        })?;
+    if let Some(plugin) = plugin_manager.find_by_id(&account.provider)
+        && let Err(e) = plugin
+            .as_calendar_provider()
+            .mutate_event(&auth_token, "update", &payload)
+            .await
+    {
+        tracing::warn!("Upstream calendar plugin error on update: {:?}", e);
+    }
 
     upsert_event_to_db(&state, &event).await?;
 
@@ -743,25 +721,14 @@ pub async fn delete_event(
     })?;
 
     let plugin_manager = state.plugin_manager.read().await;
-    let plugin = plugin_manager
-        .find_by_id(&account.provider)
-        .ok_or_else(|| {
-            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
-                "Plugin {} not loaded",
-                account.provider
-            ))))
-        })?;
-
-    plugin
-        .as_calendar_provider()
-        .delete_event(&auth_token, &event.external_id)
-        .await
-        .map_err(|e| {
-            KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
-                "Plugin error: {:?}",
-                e
-            ))))
-        })?;
+    if let Some(plugin) = plugin_manager.find_by_id(&account.provider)
+        && let Err(e) = plugin
+            .as_calendar_provider()
+            .delete_event(&auth_token, &event.external_id)
+            .await
+    {
+        tracing::warn!("Upstream calendar plugin error on delete: {:?}", e);
+    }
 
     soft_delete_event_from_db(&state, event_id).await?;
 

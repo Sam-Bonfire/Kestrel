@@ -50,12 +50,12 @@ export async function initializeSettings() {
 
 async function syncToBackend() {
   if (isInitializing || isUpdating) return;
-  // Only sync settings to backend if authenticated
-  const { authState } = await import('./auth.svelte.js');
-  if (!authState.isAuthenticated) return;
-
-  isUpdating = true;
   try {
+    // Only sync settings to backend if authenticated
+    const authModule = await import('./auth.svelte.js');
+    if (!authModule?.authState?.isAuthenticated) return;
+
+    isUpdating = true;
     await updateSettings({
       mailDenseMode: get(mailDenseMode),
       mailDefaultLandingView: get(mailDefaultLandingView),
@@ -63,7 +63,7 @@ async function syncToBackend() {
       labelCustomizations: get(labelCustomizations),
       syncInterval: get(syncInterval),
       // we'll update theme too if available
-      theme: localStorage.getItem('kestrel:settings:theme') || 'system',
+      theme: (typeof localStorage !== 'undefined' ? localStorage.getItem('kestrel:settings:theme') : null) || 'system',
     });
   } catch (err) {
     console.error('Failed to sync settings to backend', err);

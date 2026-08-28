@@ -2,12 +2,12 @@ use specta::Types;
 use specta_typescript::Typescript;
 use std::path::Path;
 
-use backend_lib::api::auth::*;
-use backend_lib::api::calendars::*;
-use backend_lib::api::contacts::*;
-use backend_lib::api::messages::*;
-use backend_lib::api::search::*;
-use backend_lib::core::models::*;
+use backend::api::auth::*;
+use backend::api::calendars::*;
+use backend::api::contacts::*;
+use backend::api::messages::*;
+use backend::api::search::*;
+use backend::core::models::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let types = Types::default()
@@ -62,6 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ts = Typescript::default();
     ts.export_to(&out_file, &types, &specta_serde::Format)?;
 
-    println!("Successfully exported backend types to {}", out_file.display());
+    println!(
+        "Successfully exported backend types to {}",
+        out_file.display()
+    );
     Ok(())
 }
