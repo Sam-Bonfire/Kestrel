@@ -6,8 +6,8 @@
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
     Search, Settings, Menu, ChevronDown, X, CalendarDays
   } from 'lucide-svelte';
-  import { AppShell } from '@kestrel/shared/components';
-  import { authState } from '@kestrel/shared/stores';
+  import { AppShell, UndoToast } from '@kestrel/shared/components';
+  import { authState, triggerUndoAction } from '@kestrel/shared/stores';
 
   // State management
   $effect(() => {
@@ -979,8 +979,24 @@
         selectedEvent = null;
       }}
       onDelete={() => {
-        events = events.filter(e => e.id !== selectedEvent.id);
+        const deletedEv = selectedEvent;
+        const deletedId = selectedEvent.id;
+        events = events.filter(e => e.id !== deletedId);
         selectedEvent = null;
+
+        triggerUndoAction({
+          title: `Event "${deletedEv.title || 'Untitled'}" deleted`,
+          onCommit: async () => {
+            if (deletedId && !deletedId.startsWith('temp-')) {
+              const { deleteEvent } = await import('@kestrel/shared/api');
+              await deleteEvent(deletedId).catch(err => console.error('Failed to delete event:', err));
+            }
+          },
+          onUndo: () => {
+            events = [...events, deletedEv];
+          },
+          type: 'warning',
+        });
       }}
     />
   {:else if isDetailsDocked && !isMobileOrTablet}
@@ -1109,6 +1125,9 @@
       </button>
     </div>
   {/if}
+
+  <!-- Unified Undo Action Toast System -->
+  <UndoToast />
   {/snippet}
 </AppShell>
 

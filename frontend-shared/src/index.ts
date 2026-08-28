@@ -118,6 +118,7 @@ export {
   EmailPillInput,
   Dropdown,
   ReauthBanner,
+  UndoToast,
 } from './components/index.js';
 
 // ── Utils ───────────────────────────────────────────────────────
