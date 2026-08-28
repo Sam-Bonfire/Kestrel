@@ -9,6 +9,9 @@ concurrency:
   group: preview-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
 
   changes:
@@ -19,8 +22,8 @@ jobs:
       mail: ${{ steps.filter.outputs.mail }}
       calendar: ${{ steps.filter.outputs.calendar }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -58,26 +61,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Setup Mise
-        uses: jdx/mise-action@v2
-        with:
-          install: true
-          cache: true
-
-      - name: Restore pnpm Cache
-        uses: actions/cache/restore@v4
+      - name: Cache pnpm
+        uses: actions/cache@v6
         with:
           path: |
             ~/.local/share/pnpm/store
             node_modules
+            frontend-mail/node_modules
+            frontend-calendar/node_modules
             frontend-shared/node_modules
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
-      - name: Restore Cargo Registry Cache
-        uses: actions/cache/restore@v4
+      - name: Cache Cargo Registry
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
@@ -86,23 +85,44 @@ jobs:
           key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-registry-${{ runner.os }}-
 
-      - name: Restore Cargo Target Cache
-        uses: actions/cache/restore@v4
+      - name: Cache Cargo Target
+        uses: actions/cache@v6
         with:
           path: target/
           key: cargo-target-${{ runner.os }}-backend-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-target-${{ runner.os }}-backend-
 
+      - name: Setup Mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
       - name: Run Backend Checks
+        id: backend_checks
         run: |
           mise run setup
-          mise run check:backend
+          cargo fmt --manifest-path backend/Cargo.toml -- --check
+          cargo clippy --manifest-path backend/Cargo.toml -- -D warnings
+          cargo test --manifest-path backend/Cargo.toml 2>&1 | tee backend/test-results.log
+
+      - name: Run Shared Contract Tests
+        id: shared_tests
+        run: |
+          pnpm --filter @kestrel/shared build
+          pnpm --filter @kestrel/shared exec vitest run --reporter=json --outputFile=test-results.json
 
       - name: Build release binary for Docker validation
+        id: build_backend
         run: mise run build:backend
 
       - name: Verify Dockerfile Build
+        id: docker_build
         run: docker build -f backend/Dockerfile.ci .
+
+      - name: Generate Granular Test Summary
+        if: always()
+        run: node scripts/generate-test-summary.mjs
 
   validate-mail:
     name: Validate Mail
@@ -111,7 +131,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Cache pnpm
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.local/share/pnpm/store
+            node_modules
+            frontend-mail/node_modules
+            frontend-calendar/node_modules
+            frontend-shared/node_modules
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cache Cargo Registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ runner.os }}-
+
+      - name: Cache Cargo Target
+        uses: actions/cache@v6
+        with:
+          path: target/
+          key: cargo-target-${{ runner.os }}-mail-linux-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-mail-linux-
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -122,38 +171,20 @@ jobs:
           install: true
           cache: true
 
-      - name: Restore pnpm Cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.local/share/pnpm/store
-            node_modules
-            frontend-mail/node_modules
-            frontend-shared/node_modules
-          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
-
-      - name: Restore Cargo Registry Cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-registry-${{ runner.os }}-
-
-      - name: Restore Cargo Target Cache
-        uses: actions/cache/restore@v4
-        with:
-          path: target/
-          key: cargo-target-${{ runner.os }}-mail-linux-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-target-${{ runner.os }}-mail-linux-
-
       - name: Run Mail Checks
+        id: mail_checks
         run: |
           mise run setup
           mise run check:frontend-mail
+
+      - name: Generate Mail Summary
+        if: always()
+        run: |
+          echo "### ✉️ Kestrel Mail Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Target | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mail Linters, Clippy & Build | \`frontend-mail/\` | ${{ steps.mail_checks.outcome == 'success' && '✅ Passed' || '❌ Failed' }} | ${{ steps.mail_checks.outcome }} |" >> $GITHUB_STEP_SUMMARY
 
   validate-calendar:
     name: Validate Calendar
@@ -162,7 +193,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Cache pnpm
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.local/share/pnpm/store
+            node_modules
+            frontend-mail/node_modules
+            frontend-calendar/node_modules
+            frontend-shared/node_modules
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cache Cargo Registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ runner.os }}-
+
+      - name: Cache Cargo Target
+        uses: actions/cache@v6
+        with:
+          path: target/
+          key: cargo-target-${{ runner.os }}-calendar-linux-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-calendar-linux-
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -173,35 +233,17 @@ jobs:
           install: true
           cache: true
 
-      - name: Restore pnpm Cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.local/share/pnpm/store
-            node_modules
-            frontend-calendar/node_modules
-            frontend-shared/node_modules
-          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
-
-      - name: Restore Cargo Registry Cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-registry-${{ runner.os }}-
-
-      - name: Restore Cargo Target Cache
-        uses: actions/cache/restore@v4
-        with:
-          path: target/
-          key: cargo-target-${{ runner.os }}-calendar-linux-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-target-${{ runner.os }}-calendar-linux-
-
       - name: Run Calendar Checks
+        id: calendar_checks
         run: |
           mise run setup
           mise run check:frontend-calendar
+
+      - name: Generate Calendar Summary
+        if: always()
+        run: |
+          echo "### 📅 Kestrel Calendar Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Target | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Calendar Linters, Clippy & Build | \`frontend-calendar/\` | ${{ steps.calendar_checks.outcome == 'success' && '✅ Passed' || '❌ Failed' }} | ${{ steps.calendar_checks.outcome }} |" >> $GITHUB_STEP_SUMMARY

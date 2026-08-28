@@ -1,4 +1,4 @@
-import { getMe } from '../api/client.js';
+import { getMe, createToken } from '../api/client.js';
 import { invoke } from '@tauri-apps/api/core';
 
 declare global {
@@ -47,25 +47,12 @@ export async function initAuth() {
 
 export async function login(username: string, password: string) {
     try {
-        const res = await fetch('http://localhost:8080/api/v1/auth/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({ username, password }),
-        });
-
-        if (!res.ok) {
-            throw new Error('Login failed');
-        }
-
-        const data = await res.json();
+        const data = await createToken(username, password);
         
         authState.userId = data.user_id;
         if (data.token) {
             authState.token = data.token;
-            if (window.__TAURI_INTERNALS__) {
+            if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
                 try {
                     await invoke('set_keychain_token', { token: data.token });
                 } catch (e) {
