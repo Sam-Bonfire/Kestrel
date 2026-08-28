@@ -83,28 +83,33 @@
     // Register interactive notification category (Reply / Mark as Read / Archive)
     registerNotificationCategories().catch(console.error);
 
-    import('@tauri-apps/plugin-notification').then(({ onAction }) => {
-      onAction(async (event: any) => {
-        const messageId = event.notification?.id;
-        if (!messageId) return;
-        try {
-          if (event.actionId === 'mark_read') {
-            const api = await import('@kestrel/shared/api');
-            await api.markAsRead(messageId);
-            // Optimistically update the list so the UI reflects the change immediately
-            allEmails = allEmails.map(e => e.id === messageId ? { ...e, isUnread: false } : e);
-          } else if (event.actionId === 'archive') {
-            const api = await import('@kestrel/shared/api');
-            await api.archiveMessage(messageId);
-            allEmails = allEmails.map(e => e.id === messageId ? { ...e, isArchived: true } : e);
+    if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-notification').then(({ onAction }) => {
+        onAction(async (event: any) => {
+          const messageId = event.notification?.id;
+          try {
+            if (event.actionId === 'mark_read' && messageId) {
+              const api = await import('@kestrel/shared/api');
+              await api.markAsRead(messageId);
+              allEmails = allEmails.map(e => e.id === messageId ? { ...e, isUnread: false } : e);
+            } else if (event.actionId === 'archive' && messageId) {
+              const api = await import('@kestrel/shared/api');
+              await api.archiveMessage(messageId);
+              allEmails = allEmails.map(e => e.id === messageId ? { ...e, isArchived: true } : e);
+            } else if (event.actionId === 'reply' && event.inputValue) {
+              const api = await import('@kestrel/shared/api');
+              await api.sendMessage({
+                to: event.notification?.body?.split('\n')[0] || 'unknown',
+                subject: 'Re: Message',
+                body: event.inputValue,
+              });
+            }
+          } catch (err) {
+            console.error('Notification action failed:', err);
           }
-        } catch (err) {
-          console.error('Notification action failed:', err);
-        }
-      });
-    }).catch(() => {
-      // Ignore if not in Tauri
-    });
+        }).catch(err => console.warn("Notification action listener error:", err));
+      }).catch(() => {});
+    }
     
     return () => {
       window.removeEventListener('online', onOnline);
@@ -150,20 +155,6 @@
       return;
     }
     if (authState.isAuthenticated) {
-      import('@tauri-apps/plugin-notification').then(({ onAction }) => {
-        onAction((event: any) => {
-          if (event.actionId === 'reply' && event.inputValue) {
-            import('@kestrel/shared/api').then(api => {
-              api.sendMessage({
-                to: event.notification.body.split('\n')[0] || 'unknown',
-                subject: 'Re: Message',
-                body: event.inputValue,
-              });
-            });
-          }
-        }).catch(err => console.warn("Notification action listener error:", err));
-      }).catch(() => {});
-
       import('@kestrel/shared/api').then(({ getMessages, createSyncStream }) => {
         // Initial fetch
         getMessages().then(res => {

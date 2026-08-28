@@ -25,7 +25,7 @@ import { initializeSettings } from "./settings.js";
 
 export async function initAuth() {
     try {
-        if (window.__TAURI_INTERNALS__) {
+        if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
             try {
                 const keychainToken = await invoke<string>('get_keychain_token');
                 if (keychainToken) {
@@ -42,7 +42,6 @@ export async function initAuth() {
         authState.userId = null;
     } finally {
         authState.isInitialized = true;
-        await initializeSettings();
     }
 }
 

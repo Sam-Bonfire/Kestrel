@@ -168,7 +168,7 @@
     const newRsvpStatus = newStatus === 'accepted' ? 'yes' : newStatus === 'declined' ? 'no' : 'maybe';
     event.rsvpStatus = newRsvpStatus;
     import('@kestrel/shared/api').then(({ updateEvent }) => {
-      updateEvent(event!.id!, { status: newStatus }).catch(console.error);
+      (updateEvent as any)(event!.id!, { status: newStatus }).catch(console.error);
     });
   }
 </script>

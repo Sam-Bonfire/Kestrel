@@ -2,6 +2,10 @@ import { authState, logout } from '../stores/auth.svelte.js';
 
 export const API_BASE = 'http://localhost:8080/api/v1';
 
+export function getApiBase(): string {
+  return API_BASE;
+}
+
 /**
  * Typed API client for the Kestrel backend.
  * All functions return parsed JSON or throw ApiError.
@@ -549,25 +553,30 @@ export const apiClient = {
 // ── Settings ──────────────────────────────────────────────
 
 export async function getSettings(): Promise<SettingsPayload> {
-  return request<SettingsPayload>('GET', '/settings', {
-    // Override API_BASE to use /api/settings instead of /api/v1/settings
-  }).catch(() => {
-    // If it fails, fallback to standard fetch if the request helper prepends /api/v1
-    return fetch(`${API_BASE.replace('/api/v1', '')}/api/settings`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-    }).then(r => r.json());
+  const base = getApiBase().replace('/api/v1', '');
+  const res = await fetch(`${base}/api/settings`, {
+    method: 'GET',
+    headers: buildHeaders(),
+    credentials: 'include',
   });
+  if (!res.ok) {
+    throw new ApiError(res.status, `GET /api/settings failed: ${res.statusText}`);
+  }
+  return res.json();
 }
 
 export async function updateSettings(settings: SettingsPayload): Promise<SettingsPayload> {
-  return fetch(`${API_BASE.replace('/api/v1', '')}/api/settings`, {
+  const base = getApiBase().replace('/api/v1', '');
+  const res = await fetch(`${base}/api/settings`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(),
     credentials: 'include',
     body: JSON.stringify(settings),
-  }).then(r => r.json());
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, `PUT /api/settings failed: ${res.statusText}`);
+  }
+  return res.json();
 }
 
 export interface LabelCustomization {
