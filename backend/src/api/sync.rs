@@ -91,13 +91,21 @@ impl TokenRefresher for ReqwestTokenRefresher {
         let (token_url, client_id, client_secret) = match account.provider.as_str() {
             "gmail" => (
                 "https://oauth2.googleapis.com/token",
-                std::env::var("GMAIL_CLIENT_ID").unwrap_or_default(),
-                std::env::var("GMAIL_CLIENT_SECRET").unwrap_or_default(),
+                std::env::var("GMAIL_CLIENT_ID")
+                    .or_else(|_| std::env::var("GOOGLE_CLIENT_ID"))
+                    .unwrap_or_default(),
+                std::env::var("GMAIL_CLIENT_SECRET")
+                    .or_else(|_| std::env::var("GOOGLE_CLIENT_SECRET"))
+                    .unwrap_or_default(),
             ),
             "outlook" => (
                 "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-                std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default(),
-                std::env::var("OUTLOOK_CLIENT_SECRET").unwrap_or_default(),
+                std::env::var("OUTLOOK_CLIENT_ID")
+                    .or_else(|_| std::env::var("MICROSOFT_CLIENT_ID"))
+                    .unwrap_or_default(),
+                std::env::var("OUTLOOK_CLIENT_SECRET")
+                    .or_else(|_| std::env::var("MICROSOFT_CLIENT_SECRET"))
+                    .unwrap_or_default(),
             ),
             _ => return Err("Unknown provider".to_string()),
         };

@@ -325,10 +325,12 @@ pub async fn login(Query(params): Query<LoginParams>) -> Result<Response, Kestre
 
     let auth_url = match params.provider.as_str() {
         "gmail" => {
-            let client_id = std::env::var("GMAIL_CLIENT_ID").unwrap_or_default();
+            let client_id = std::env::var("GMAIL_CLIENT_ID")
+                .or_else(|_| std::env::var("GOOGLE_CLIENT_ID"))
+                .unwrap_or_default();
             if client_id.is_empty() {
                 return Err(KestrelError::Internal(Box::new(SimpleError(
-                    "GMAIL_CLIENT_ID not set".to_string(),
+                    "GMAIL_CLIENT_ID or GOOGLE_CLIENT_ID not set".to_string(),
                 ))));
             }
             let redirect_uri = format!("{}/api/v1/auth/callback/gmail", base_url);
@@ -341,10 +343,12 @@ pub async fn login(Query(params): Query<LoginParams>) -> Result<Response, Kestre
             )
         }
         "outlook" => {
-            let client_id = std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default();
+            let client_id = std::env::var("OUTLOOK_CLIENT_ID")
+                .or_else(|_| std::env::var("MICROSOFT_CLIENT_ID"))
+                .unwrap_or_default();
             if client_id.is_empty() {
                 return Err(KestrelError::Internal(Box::new(SimpleError(
-                    "OUTLOOK_CLIENT_ID not set".to_string(),
+                    "OUTLOOK_CLIENT_ID or MICROSOFT_CLIENT_ID not set".to_string(),
                 ))));
             }
             let redirect_uri = format!("{}/api/v1/auth/callback/outlook", base_url);
@@ -387,13 +391,21 @@ pub async fn callback(
     let (token_url, client_id, client_secret) = match provider.as_str() {
         "gmail" => (
             "https://oauth2.googleapis.com/token".to_string(),
-            std::env::var("GMAIL_CLIENT_ID").unwrap_or_default(),
-            std::env::var("GMAIL_CLIENT_SECRET").unwrap_or_default(),
+            std::env::var("GMAIL_CLIENT_ID")
+                .or_else(|_| std::env::var("GOOGLE_CLIENT_ID"))
+                .unwrap_or_default(),
+            std::env::var("GMAIL_CLIENT_SECRET")
+                .or_else(|_| std::env::var("GOOGLE_CLIENT_SECRET"))
+                .unwrap_or_default(),
         ),
         "outlook" => (
             "https://login.microsoftonline.com/common/oauth2/v2.0/token".to_string(),
-            std::env::var("OUTLOOK_CLIENT_ID").unwrap_or_default(),
-            std::env::var("OUTLOOK_CLIENT_SECRET").unwrap_or_default(),
+            std::env::var("OUTLOOK_CLIENT_ID")
+                .or_else(|_| std::env::var("MICROSOFT_CLIENT_ID"))
+                .unwrap_or_default(),
+            std::env::var("OUTLOOK_CLIENT_SECRET")
+                .or_else(|_| std::env::var("MICROSOFT_CLIENT_SECRET"))
+                .unwrap_or_default(),
         ),
         _ => return Err(KestrelError::BadRequest("Unknown provider".to_string())),
     };
