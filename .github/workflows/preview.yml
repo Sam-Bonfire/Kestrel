@@ -68,10 +68,7 @@ jobs:
         with:
           path: |
             ~/.local/share/pnpm/store
-            node_modules
-            frontend-mail/node_modules
-            frontend-calendar/node_modules
-            frontend-shared/node_modules
+            ~/AppData/Local/pnpm/store
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
@@ -138,10 +135,7 @@ jobs:
         with:
           path: |
             ~/.local/share/pnpm/store
-            node_modules
-            frontend-mail/node_modules
-            frontend-calendar/node_modules
-            frontend-shared/node_modules
+            ~/AppData/Local/pnpm/store
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
@@ -200,10 +194,7 @@ jobs:
         with:
           path: |
             ~/.local/share/pnpm/store
-            node_modules
-            frontend-mail/node_modules
-            frontend-calendar/node_modules
-            frontend-shared/node_modules
+            ~/AppData/Local/pnpm/store
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
