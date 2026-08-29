@@ -142,9 +142,11 @@ The backend can be configured using a `.env` file or native environment variable
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | No | `sqlite:./data/kestrel.db` | SQLite path or PostgreSQL connection string |
 | `PORT` | No | `8080` | Server port |
-| `HOST` | No | `0.0.0.0` | Bind address |
+| `HOST` | No | `0.0.0.0` | Bind host interface |
+| `BIND_ADDR` | No | `<HOST>:<PORT>` | Direct bind socket override (e.g. `0.0.0.0:8080`) |
 | `RUST_LOG` | No | `info,kestrel=debug` | Log level |
-| `SESSION_SECRET` | Yes (prod) | - | Secure key for session cookies |
+| `SESSION_SECRET` | Yes (prod) | - | Secret key for JWT auth & sessions (alias: `JWT_SECRET`) |
+| `JWT_SECRET` | No | (falls back to `SESSION_SECRET`) | Explicit JWT signing key |
 | `GOOGLE_CLIENT_ID` | No | - | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | No | - | Google OAuth client secret |
 | `MICROSOFT_CLIENT_ID` | No | - | Microsoft OAuth client ID |

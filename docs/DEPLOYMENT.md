@@ -138,9 +138,10 @@ Configure these variables in your `.env` file at the root of the backend deploym
 | --- | --- | --- |
 | `PORT` | The port the backend listens on inside the container. | `8080` |
 | `HOST` | The interface to bind to. Use `0.0.0.0` in Docker. | `0.0.0.0` |
+| `BIND_ADDR` | Direct socket override (e.g. `0.0.0.0:8080`). | `<HOST>:<PORT>` |
 | `KESTREL_BASE_URL` | The publicly accessible URL of the backend (used for OAuth). | *Required* |
 | `DATABASE_URL` | Connection string for SQLite or PostgreSQL. | `sqlite:/app/data/kestrel.db` |
-| `SESSION_SECRET` | Secret key for encrypting sessions. Must be a long, random string. | *Required* |
+| `SESSION_SECRET` / `JWT_SECRET` | Secret key for signing JWTs and session auth. Must be a long, random string (32+ chars). | *Required* |
 | `RUST_LOG` | Logging verbosity (e.g., `info`, `debug`). | `info` |
 
 ---

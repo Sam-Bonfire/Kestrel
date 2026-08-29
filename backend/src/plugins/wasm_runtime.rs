@@ -66,9 +66,32 @@ impl crate::plugins::bindings::KestrelPluginImports for WasmState {
         provider: String,
     ) -> Result<ClientCredentials, String> {
         let provider_upper = provider.to_uppercase();
+        let alias_upper = match provider_upper.as_str() {
+            "GMAIL" => "GOOGLE",
+            "GOOGLE" => "GMAIL",
+            "OUTLOOK" => "MICROSOFT",
+            "MICROSOFT" => "OUTLOOK",
+            _ => "",
+        };
+
         let client_id = std::env::var(format!("{}_CLIENT_ID", provider_upper))
+            .or_else(|_| {
+                if !alias_upper.is_empty() {
+                    std::env::var(format!("{}_CLIENT_ID", alias_upper))
+                } else {
+                    Err(std::env::VarError::NotPresent)
+                }
+            })
             .map_err(|_| format!("{} client ID not configured in environment", provider))?;
+
         let client_secret = std::env::var(format!("{}_CLIENT_SECRET", provider_upper))
+            .or_else(|_| {
+                if !alias_upper.is_empty() {
+                    std::env::var(format!("{}_CLIENT_SECRET", alias_upper))
+                } else {
+                    Err(std::env::VarError::NotPresent)
+                }
+            })
             .map_err(|_| format!("{} client secret not configured in environment", provider))?;
 
         Ok(ClientCredentials {
