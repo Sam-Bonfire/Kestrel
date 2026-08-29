@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   API_BASE,
+  getApiBase,
+  getServerUrl,
+  setServerUrl,
+  resetServerUrl,
+  checkServerHealth,
   ApiError,
   getHealth,
   register,
@@ -210,5 +215,58 @@ describe('API Client & Contract Validation', () => {
     });
 
     await expect(getMessage('nonexistent-id', 'mock-jwt')).rejects.toThrow(ApiError);
+  });
+
+  describe('Dynamic Server URL Management', () => {
+    afterEach(() => {
+      resetServerUrl();
+    });
+
+    it('defaults to localhost:8080 when no custom URL is stored', () => {
+      resetServerUrl();
+      expect(getServerUrl()).toBe('http://localhost:8080');
+      expect(getApiBase()).toBe('http://localhost:8080/api/v1');
+    });
+
+    it('sets and normalizes custom server URLs', () => {
+      setServerUrl('kestrel.nas.local:8080');
+      expect(getServerUrl()).toBe('http://kestrel.nas.local:8080');
+      expect(getApiBase()).toBe('http://kestrel.nas.local:8080/api/v1');
+
+      setServerUrl('https://kestrel.yourdomain.com///');
+      expect(getServerUrl()).toBe('https://kestrel.yourdomain.com');
+      expect(getApiBase()).toBe('https://kestrel.yourdomain.com/api/v1');
+    });
+
+    it('resets server URL back to default', () => {
+      setServerUrl('https://custom.server.com');
+      expect(getServerUrl()).toBe('https://custom.server.com');
+      resetServerUrl();
+      expect(getServerUrl()).toBe('http://localhost:8080');
+    });
+
+    it('checkServerHealth returns ok on 200 response', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok' }),
+      });
+
+      const res = await checkServerHealth('https://kestrel.yourdomain.com');
+      expect(res.ok).toBe(true);
+      expect(res.status).toBe('ok');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://kestrel.yourdomain.com/api/v1/health',
+        expect.anything()
+      );
+    });
+
+    it('checkServerHealth returns error on unreachable server', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'));
+
+      const res = await checkServerHealth('https://offline.server.com');
+      expect(res.ok).toBe(false);
+      expect(res.error).toBe('Connection refused');
+    });
   });
 });

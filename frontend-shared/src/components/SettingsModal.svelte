@@ -1,14 +1,51 @@
 <script lang="ts">
-  import { X, Mail, Calendar, RefreshCw, Trash2, Plus } from 'lucide-svelte';
+  import { X, Mail, Calendar, RefreshCw, Trash2, Plus, Server, CheckCircle, AlertCircle } from 'lucide-svelte';
   import { onMount } from 'svelte';
-  import { apiClient } from '../api/client';
+  import { apiClient, getServerUrl, setServerUrl, resetServerUrl, checkServerHealth } from '../api/client.js';
 
   let { isOpen = false, onClose = () => {} } = $props<{
     isOpen?: boolean;
     onClose?: () => void;
   }>();
 
-  let activeTab = $state('shortcuts'); // 'shortcuts' | 'accounts'
+  let activeTab = $state('shortcuts'); // 'shortcuts' | 'accounts' | 'server'
+
+  // --- Server State ---
+  let serverUrl = $state(getServerUrl());
+  let serverTesting = $state(false);
+  let serverStatus = $state<{ tested: boolean; ok: boolean; message: string }>({
+    tested: false,
+    ok: false,
+    message: '',
+  });
+
+  function handleSaveServer() {
+    if (!serverUrl.trim()) return;
+    const normalized = setServerUrl(serverUrl);
+    serverUrl = normalized;
+    testServerConnection();
+  }
+
+  function handleResetServer() {
+    resetServerUrl();
+    serverUrl = getServerUrl();
+    testServerConnection();
+  }
+
+  async function testServerConnection() {
+    serverTesting = true;
+    serverStatus = { tested: false, ok: false, message: '' };
+    try {
+      const res = await checkServerHealth(serverUrl);
+      if (res.ok) {
+        serverStatus = { tested: true, ok: true, message: 'Server online and reachable' };
+      } else {
+        serverStatus = { tested: true, ok: false, message: res.error || 'Cannot reach server' };
+      }
+    } finally {
+      serverTesting = false;
+    }
+  }
 
   // --- Shortcuts State ---
   let shortcuts = $state([
@@ -122,6 +159,11 @@
             class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'accounts' ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-white/5'}">
             Accounts & Sync
           </button>
+          <button 
+            onclick={() => { activeTab = 'server'; testServerConnection(); }}
+            class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'server' ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-white/5'}">
+            Server & Network
+          </button>
         </div>
         
         <!-- Content -->
@@ -205,6 +247,77 @@
                 {/if}
               </div>
             {/if}
+
+          {:else if activeTab === 'server'}
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-white font-medium">Backend Server & Network</h3>
+            </div>
+            
+            <p class="text-[var(--color-text-secondary)] text-sm mb-6">
+              Configure the remote Kestrel server or NAS endpoint this client communicates with.
+            </p>
+
+            <div class="space-y-4 bg-[var(--color-canvas-base)] p-4 rounded-lg border border-[var(--color-border-hairline)]">
+              <div>
+                <label for="settings-server-url" class="block text-sm font-medium text-white mb-1.5">
+                  Server Endpoint URL
+                </label>
+                <div class="flex items-center gap-2">
+                  <input
+                    id="settings-server-url"
+                    type="url"
+                    bind:value={serverUrl}
+                    class="flex-1 px-3 py-2 bg-[#121212] border border-[var(--color-border-hairline)] rounded-md text-sm text-white focus:outline-none focus:border-blue-500"
+                    placeholder="https://kestrel.yourdomain.com"
+                  />
+                  <button
+                    onclick={handleSaveServer}
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-md transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between pt-2 border-t border-[var(--color-border-hairline)]">
+                <div class="flex items-center gap-2 text-xs">
+                  {#if serverStatus.tested}
+                    <div class="flex items-center gap-1.5 {serverStatus.ok ? 'text-green-400' : 'text-red-400'} font-medium">
+                      {#if serverStatus.ok}
+                        <CheckCircle class="w-4 h-4 shrink-0" />
+                      {:else}
+                        <AlertCircle class="w-4 h-4 shrink-0" />
+                      {/if}
+                      <span>{serverStatus.message}</span>
+                    </div>
+                  {:else}
+                    <span class="text-[var(--color-text-secondary)]">Click test to verify server connectivity</span>
+                  {/if}
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <button
+                    onclick={testServerConnection}
+                    disabled={serverTesting}
+                    class="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-md transition-colors flex items-center gap-1.5"
+                  >
+                    {#if serverTesting}
+                      <RefreshCw class="w-3.5 h-3.5 animate-spin" />
+                      Testing...
+                    {:else}
+                      <RefreshCw class="w-3.5 h-3.5" />
+                      Test Connectivity
+                    {/if}
+                  </button>
+                  <button
+                    onclick={handleResetServer}
+                    class="px-3 py-1.5 border border-[var(--color-border-hairline)] hover:bg-white/5 text-[var(--color-text-secondary)] text-xs font-medium rounded-md transition-colors"
+                  >
+                    Reset to Default
+                  </button>
+                </div>
+              </div>
+            </div>
           {/if}
           
         </div>

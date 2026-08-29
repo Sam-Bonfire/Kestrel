@@ -14,10 +14,77 @@ import type {
   BulkActionType,
 } from './generated/types.js';
 
-export const API_BASE = 'http://localhost:8080/api/v1';
+const DEFAULT_SERVER_URL = typeof process !== 'undefined' && process.env?.VITE_API_BASE
+  ? process.env.VITE_API_BASE
+  : (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE) || 'http://localhost:8080';
+
+let memoryServerUrl: string | null = null;
+
+export function getServerUrl(): string {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('kestrel:server_url');
+      if (stored && stored.trim()) {
+        return stored.trim().replace(/\/+$/, '');
+      }
+    } catch {
+      // Fallback
+    }
+  }
+  if (memoryServerUrl) {
+    return memoryServerUrl;
+  }
+  return DEFAULT_SERVER_URL.replace(/\/+$/, '');
+}
+
+export function setServerUrl(url: string): string {
+  let normalized = url.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(normalized)) {
+    normalized = `http://${normalized}`;
+  }
+  memoryServerUrl = normalized;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem('kestrel:server_url', normalized);
+    } catch {
+      // Fallback
+    }
+  }
+  return normalized;
+}
+
+export function resetServerUrl(): void {
+  memoryServerUrl = null;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem('kestrel:server_url');
+    } catch {
+      // Fallback
+    }
+  }
+}
 
 export function getApiBase(): string {
-  return API_BASE;
+  return `${getServerUrl()}/api/v1`;
+}
+
+export const API_BASE = 'http://localhost:8080/api/v1';
+
+export async function checkServerHealth(customUrl?: string): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const targetBase = customUrl ? customUrl.trim().replace(/\/+$/, '') : getServerUrl();
+  try {
+    const res = await fetch(`${targetBase}/api/v1/health`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!res.ok) {
+      return { ok: false, error: `Server responded with HTTP ${res.status}` };
+    }
+    const data = await res.json();
+    return { ok: true, status: data?.status || 'ok' };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Cannot reach server' };
+  }
 }
 
 /**
@@ -69,7 +136,7 @@ async function request<T>(
   }
 
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(`${getApiBase()}${path}`, {
       method,
       headers: buildHeaders(token),
       credentials: 'include',
@@ -119,7 +186,7 @@ export async function replayOfflineQueue(): Promise<void> {
   const pending = dequeuePending();
   for (const mut of pending) {
     try {
-      await fetch(`${API_BASE}${mut.path}`, {
+      await fetch(`${getApiBase()}${mut.path}`, {
         method: mut.method,
         headers: buildHeaders(),
         credentials: 'include',
@@ -254,11 +321,11 @@ export async function getMe(): Promise<{ user_id: string }> {
 }
 
 export async function loginWithProvider(provider: string) {
-  window.location.href = `${API_BASE}/auth/login?provider=${encodeURIComponent(provider)}`;
+  window.location.href = `${getApiBase()}/auth/login?provider=${encodeURIComponent(provider)}`;
 }
 
 export function getCallbackUrl(): string {
-  return `${API_BASE}/auth/callback`;
+  return `${getApiBase()}/auth/callback`;
 }
 
 // ── Account endpoints ───────────────────────────────────────────
