@@ -36,10 +36,10 @@ impl Config {
     where
         F: FnMut(&str) -> Option<String>,
     {
-        if let Some(secret) = get_var("JWT_SECRET").or_else(|| get_var("SESSION_SECRET")) {
-            if !secret.is_empty() {
-                return secret;
-            }
+        if let Some(secret) = get_var("JWT_SECRET").or_else(|| get_var("SESSION_SECRET"))
+            && !secret.is_empty()
+        {
+            return secret;
         }
 
         // Generate a random secret when none is configured.
@@ -51,7 +51,9 @@ impl Config {
             .map(char::from)
             .collect();
 
-        warn!("JWT_SECRET / SESSION_SECRET not set — using random secret (tokens will not survive restarts)");
+        warn!(
+            "JWT_SECRET / SESSION_SECRET not set — using random secret (tokens will not survive restarts)"
+        );
         secret
     }
 }
@@ -66,7 +68,10 @@ mod tests {
         let mut envs = HashMap::new();
         envs.insert("HOST".to_string(), "127.0.0.1".to_string());
         envs.insert("PORT".to_string(), "9090".to_string());
-        envs.insert("SESSION_SECRET".to_string(), "custom_session_secret_123".to_string());
+        envs.insert(
+            "SESSION_SECRET".to_string(),
+            "custom_session_secret_123".to_string(),
+        );
 
         let config = Config::from_env_getter(|k| envs.get(k).cloned());
         assert_eq!(config.bind_addr, "127.0.0.1:9090");
@@ -79,8 +84,14 @@ mod tests {
         envs.insert("BIND_ADDR".to_string(), "0.0.0.0:3000".to_string());
         envs.insert("HOST".to_string(), "127.0.0.1".to_string());
         envs.insert("PORT".to_string(), "9090".to_string());
-        envs.insert("JWT_SECRET".to_string(), "custom_jwt_secret_456".to_string());
-        envs.insert("SESSION_SECRET".to_string(), "custom_session_secret_123".to_string());
+        envs.insert(
+            "JWT_SECRET".to_string(),
+            "custom_jwt_secret_456".to_string(),
+        );
+        envs.insert(
+            "SESSION_SECRET".to_string(),
+            "custom_session_secret_123".to_string(),
+        );
 
         let config = Config::from_env_getter(|k| envs.get(k).cloned());
         assert_eq!(config.bind_addr, "0.0.0.0:3000");
@@ -95,4 +106,3 @@ mod tests {
         assert_eq!(config.jwt_secret.len(), 32);
     }
 }
-
