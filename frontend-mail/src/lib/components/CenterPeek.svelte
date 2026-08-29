@@ -44,6 +44,8 @@
   import type { IcsEvent } from '@kestrel/shared';
   import EventInviteCard from './EventInviteCard.svelte';
   import DOMPurify from 'dompurify';
+  import { parseChecklists } from '@kestrel/shared';
+  import { get, set } from 'idb-keyval';
 
   export interface Email {
     id: string;
@@ -161,6 +163,17 @@
   let loadingIcs = $state(false);
 
   // ── Attachment download via Tauri ──────────────────────────────
+  // Checklist local state support
+  let checklistStates = $state<Record<string, boolean>>({});
+
+  $effect(() => {
+    if (email) {
+      get<Record<string, boolean>>(`checklist:${email.id}`).then((val) => {
+        if (val) checklistStates = val;
+      }).catch(() => {});
+    }
+  });
+
   let downloadingAttachments = $state<Record<string, boolean>>({});
 
   async function downloadAttachment(attachment: { filename: string; size: number }) {
@@ -448,15 +461,57 @@
           <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">
             <iframe 
               title="Email Body"
-              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-              srcdoc={DOMPurify.sanitize(email.body, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
+              srcdoc={DOMPurify.sanitize(parseChecklists(email.body), { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
               class="w-full min-h-[20vh] bg-white"
               onload={(e) => { 
                 const target = e.currentTarget as HTMLIFrameElement;
                 if (target.contentWindow) {
+                  const doc = target.contentWindow.document;
+
+                  // Initialize checked state from local storage
+                  const checkboxes = doc.querySelectorAll<HTMLInputElement>('.kestrel-task-checkbox');
+                  checkboxes.forEach((cb) => {
+                    const parent = cb.closest('.kestrel-task-item');
+                    const taskId = parent?.getAttribute('data-task-id');
+                    if (taskId && checklistStates[taskId] !== undefined) {
+                       cb.checked = checklistStates[taskId];
+                       const textSpan = parent?.querySelector('.kestrel-task-text') as HTMLElement;
+                       if (textSpan) {
+                         textSpan.style.textDecoration = cb.checked ? 'line-through' : 'none';
+                         textSpan.style.opacity = cb.checked ? '0.7' : '1';
+                       }
+                    }
+
+                    // Allow keyboard interaction
+                    cb.addEventListener('keydown', (e: KeyboardEvent) => {
+                      if (e.key === ' ' || e.code === 'Space') {
+                        e.preventDefault();
+                        cb.checked = !cb.checked;
+                        cb.dispatchEvent(new Event('change'));
+                      }
+                    });
+
+                    cb.addEventListener('change', () => {
+                      const parent = cb.closest('.kestrel-task-item');
+                      const taskId = parent?.getAttribute('data-task-id');
+                      if (taskId && email) {
+                        const newStates = { ...checklistStates, [taskId]: cb.checked };
+                        checklistStates = newStates;
+                        set(`checklist:${email.id}`, newStates).catch(() => {});
+
+                        const textSpan = parent?.querySelector('.kestrel-task-text') as HTMLElement;
+                        if (textSpan) {
+                          textSpan.style.textDecoration = cb.checked ? 'line-through' : 'none';
+                          textSpan.style.opacity = cb.checked ? '0.7' : '1';
+                        }
+                      }
+                    });
+                  });
+
                   // Reset height so scrollHeight shrinks if the new content is smaller
                   target.style.height = '0px';
-                  target.style.height = (target.contentWindow.document.documentElement.scrollHeight + 20) + 'px';
+                  target.style.height = (doc.documentElement.scrollHeight + 20) + 'px';
                 }
               }}
             ></iframe>

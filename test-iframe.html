@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <iframe id="myframe" sandbox="allow-same-origin" srcdoc="<input type='checkbox' id='chk'>"></iframe>
+  <script>
+    document.getElementById('myframe').onload = function(e) {
+      const doc = e.target.contentDocument;
+      console.log(doc.getElementById('chk'));
+    };
+  </script>
+</body>
+</html>

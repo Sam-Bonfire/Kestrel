@@ -1,0 +1,19 @@
+<<<<<<< SEARCH
+  import DOMPurify from 'dompurify';
+=======
+  import DOMPurify from 'dompurify';
+  import { parseChecklists } from '@kestrel/shared';
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+          <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">
+            <iframe
+              title="Email Body"
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              srcdoc={DOMPurify.sanitize(email.body, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
+=======
+          <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">
+            <iframe
+              title="Email Body"
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
+              srcdoc={DOMPurify.sanitize(parseChecklists(email.body), { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
+>>>>>>> REPLACE
