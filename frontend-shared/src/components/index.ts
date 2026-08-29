@@ -13,3 +13,4 @@ export { default as Dropdown } from './Dropdown.svelte';
 export { default as ReauthBanner } from './ReauthBanner.svelte';
 export { default as ContactAutocomplete } from './ContactAutocomplete.svelte';
 export { default as UndoToast } from './UndoToast.svelte';
+export { default as ServerConfig } from './ServerConfig.svelte';

@@ -60,9 +60,14 @@ pub fn create_router(state: AppState) -> Router {
         ])
         .allow_credentials(true);
 
-    // Public routes (no auth required)
-    let public = Router::new()
-        .route("/api/v1/health", get(health_check))
+    // Health check routes (public, unauthenticated, unrestricted by auth rate limiter)
+    let health = Router::new()
+        .route("/health", get(health_check))
+        .route("/api/health", get(health_check))
+        .route("/api/v1/health", get(health_check));
+
+    // Public auth routes (no auth required)
+    let auth_public = Router::new()
         .route("/api/v1/auth/register", post(auth::register))
         .route("/api/v1/auth/token", post(auth::token))
         .route(
@@ -163,7 +168,8 @@ pub fn create_router(state: AppState) -> Router {
             auth::auth_middleware,
         ));
 
-    public
+    health
+        .merge(auth_public)
         .merge(webhooks)
         .merge(protected)
         // Request logging with X-Request-Id
