@@ -119,6 +119,7 @@ export {
   Dropdown,
   ReauthBanner,
   UndoToast,
+  ServerConfig,
 } from './components/index.js';
 
 // ── Utils ───────────────────────────────────────────────────────

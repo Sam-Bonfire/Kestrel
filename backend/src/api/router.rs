@@ -33,18 +33,8 @@ pub struct AppState {
 }
 
 pub fn create_router(state: AppState) -> Router {
-    use axum::http::HeaderValue;
-
     let cors = CorsLayer::new()
-        .allow_origin(vec![
-            "http://localhost:1420".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:1420".parse::<HeaderValue>().unwrap(),
-            "http://localhost:1421".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:1421".parse::<HeaderValue>().unwrap(),
-            "http://localhost:5173".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
-            "tauri://localhost".parse::<HeaderValue>().unwrap(),
-        ])
+        .allow_origin(tower_http::cors::AllowOrigin::mirror_request())
         .allow_methods(vec![
             axum::http::Method::GET,
             axum::http::Method::POST,
@@ -57,12 +47,18 @@ pub fn create_router(state: AppState) -> Router {
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
             axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderName::from_static("x-request-id"),
         ])
         .allow_credentials(true);
 
-    // Public routes (no auth required)
-    let public = Router::new()
-        .route("/api/v1/health", get(health_check))
+    // Health check routes (public, unauthenticated, unrestricted by auth rate limiter)
+    let health = Router::new()
+        .route("/health", get(health_check))
+        .route("/api/health", get(health_check))
+        .route("/api/v1/health", get(health_check));
+
+    // Public auth routes (no auth required)
+    let auth_public = Router::new()
         .route("/api/v1/auth/register", post(auth::register))
         .route("/api/v1/auth/token", post(auth::token))
         .route(
@@ -163,7 +159,8 @@ pub fn create_router(state: AppState) -> Router {
             auth::auth_middleware,
         ));
 
-    public
+    health
+        .merge(auth_public)
         .merge(webhooks)
         .merge(protected)
         // Request logging with X-Request-Id
