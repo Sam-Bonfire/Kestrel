@@ -7,6 +7,7 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { templateStore } from '@kestrel/shared';
+  import type { Account } from '@kestrel/shared/api';
 
   let {
     isOpen = false,
@@ -32,19 +33,35 @@
   let subject = $state(initialSubject);
   let body = $state(initialBody);
   let attachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>([]);
+  import { ChevronDown } from 'lucide-svelte';
+
   let fromAccount = $state('');
-  let accounts = $state<any[]>([]);
+  let accounts = $state<Account[]>([]);
   let isSending = $state(false);
+  let showAccountDropdown = $state(false);
 
   let previousFromAccount = $state('');
+  let activeSignatureId = $state<string | null>(null);
+  let lastInjectedSignatureContent = $state('');
+
+  function toggleAccountDropdown() {
+    showAccountDropdown = !showAccountDropdown;
+  }
+
+  function selectAccount(accountId: string) {
+    fromAccount = accountId;
+    showAccountDropdown = false;
+  }
 
   $effect(() => {
     if (fromAccount && fromAccount !== previousFromAccount) {
       previousFromAccount = fromAccount;
-      // Auto-inject default signature
+
       const defaultSig = templateStore.signatures.find(s => s.accountId === fromAccount && s.isDefault);
-      if (defaultSig && (!body || body.trim() === '')) {
-        body = '\n\n' + defaultSig.htmlContent;
+      if (defaultSig) {
+        swapSignature(defaultSig.id);
+      } else {
+        removeSignature();
       }
     }
   });
@@ -195,11 +212,70 @@
     }
   }
 
-  function appendSignature(sigId: string) {
-    const sig = templateStore.signatures.find(s => s.id === sigId);
-    if (sig) {
-      body += '\n\n' + sig.htmlContent;
+  function removeSignature() {
+    if (!activeSignatureId) return;
+
+    const sigStart = '\n\n<!-- data-kestrel-signature: start -->\n';
+    const sigEnd = '\n<!-- data-kestrel-signature: end -->';
+
+    const startIndex = body.indexOf(sigStart);
+    const endIndex = body.indexOf(sigEnd);
+
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const currentSignatureContent = body.substring(startIndex + sigStart.length, endIndex);
+
+      if (currentSignatureContent !== lastInjectedSignatureContent) {
+        if (!window.confirm("Your signature has been modified. Are you sure you want to change it?")) {
+          return false;
+        }
+      }
+
+      body = body.substring(0, startIndex) + body.substring(endIndex + sigEnd.length);
+      activeSignatureId = null;
+      lastInjectedSignatureContent = '';
+      return true;
     }
+
+    activeSignatureId = null;
+    lastInjectedSignatureContent = '';
+    return true;
+  }
+
+  function swapSignature(sigId: string) {
+    const sig = templateStore.signatures.find(s => s.id === sigId);
+    if (!sig) return;
+
+    const sigStart = '\n\n<!-- data-kestrel-signature: start -->\n';
+    const sigEnd = '\n<!-- data-kestrel-signature: end -->';
+
+    if (activeSignatureId) {
+      const startIndex = body.indexOf(sigStart);
+      const endIndex = body.indexOf(sigEnd);
+
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        const currentSignatureContent = body.substring(startIndex + sigStart.length, endIndex);
+
+        if (currentSignatureContent !== lastInjectedSignatureContent) {
+          if (!window.confirm("Your signature has been modified. Are you sure you want to change it?")) {
+            return;
+          }
+        }
+
+        body = body.substring(0, startIndex) + sigStart + sig.htmlContent + sigEnd + body.substring(endIndex + sigEnd.length);
+        activeSignatureId = sig.id;
+        lastInjectedSignatureContent = sig.htmlContent;
+        return;
+      }
+    }
+
+    // No existing signature block found or wasn't active
+    body += sigStart + sig.htmlContent + sigEnd;
+    activeSignatureId = sig.id;
+    lastInjectedSignatureContent = sig.htmlContent;
+  }
+
+  function appendSignature(sigId: string) {
+    swapSignature(sigId);
   }
 </script>
 
@@ -218,16 +294,55 @@
       <!-- Form Inputs (Borderless, Dividers) -->
       <div class="text-xs">
         <!-- From Account Row -->
-        <div class="flex items-center px-4 py-2 border-b border-[var(--color-border-hairline)]/30">
+        <div class="flex items-center px-4 py-2 border-b border-[var(--color-border-hairline)]/30 relative">
           <span class="w-10 text-[var(--color-text-secondary)] font-mono shrink-0 select-none">From:</span>
-          <select bind:value={fromAccount} class="flex-1 bg-transparent text-[var(--color-text-primary)] outline-none border-none cursor-pointer py-0.5">
-            {#if accounts.length === 0}
-              <option value="" class="bg-[var(--color-canvas-card)]">Loading accounts...</option>
+          {#if accounts.length === 0}
+            <div class="flex-1 text-[var(--color-text-primary)] py-0.5">Loading accounts...</div>
+          {:else}
+            <button
+              type="button"
+              class="flex-1 flex items-center justify-between bg-transparent text-[var(--color-text-primary)] outline-none border-none cursor-pointer py-0.5"
+              onclick={toggleAccountDropdown}
+            >
+              <div class="flex items-center gap-2">
+                {#if accounts.find(a => a.id === fromAccount)}
+                  {@const activeAccount = accounts.find(a => a.id === fromAccount)}
+                  {#if activeAccount}
+                    <div class="w-4 h-4 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">
+                      {activeAccount.display_name.charAt(0).toUpperCase()}
+                    </div>
+                    <span>{activeAccount.display_name} &lt;{activeAccount.provider_account_id}&gt;</span>
+                  {/if}
+                {:else}
+                  <span>Select account...</span>
+                {/if}
+              </div>
+              <ChevronDown class="w-4 h-4 text-[var(--color-text-secondary)]" />
+            </button>
+
+            {#if showAccountDropdown}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div class="fixed inset-0 z-40" onclick={() => showAccountDropdown = false}></div>
+              <div class="absolute left-14 top-full mt-1 w-80 bg-[var(--color-canvas-elevated)] border border-[var(--color-border-hairline)] rounded-lg shadow-xl z-50 overflow-hidden text-xs">
+                {#each accounts as account}
+                  <button
+                    type="button"
+                    class="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-white/5 transition-colors {fromAccount === account.id ? 'bg-white/5' : ''}"
+                    onclick={() => selectAccount(account.id)}
+                  >
+                    <div class="w-5 h-5 shrink-0 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">
+                      {account.display_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="flex-1 truncate">
+                      <div class="font-medium text-[var(--color-text-primary)] truncate">{account.display_name}</div>
+                      <div class="text-[10px] text-[var(--color-text-secondary)] truncate">{account.provider_account_id}</div>
+                    </div>
+                  </button>
+                {/each}
+              </div>
             {/if}
-            {#each accounts as account}
-              <option value={account.id} class="bg-[var(--color-canvas-card)]">{account.email_address} ({account.provider})</option>
-            {/each}
-          </select>
+          {/if}
         </div>
 
         <!-- To Row -->
@@ -328,11 +443,23 @@
 
             {#if templateStore.signatures.length > 0}
               <div class="relative ml-2 flex items-center">
-                <select class="appearance-none bg-transparent outline-none border-none text-[10px] text-[var(--color-text-secondary)] hover:text-white cursor-pointer" onchange={(e) => { if (e.currentTarget.value) appendSignature(e.currentTarget.value); e.currentTarget.value = ''; }}>
-                  <option value="" disabled selected>Insert Signature...</option>
+                <select
+                  class="appearance-none bg-transparent outline-none border-none text-[10px] text-[var(--color-text-secondary)] hover:text-white cursor-pointer"
+                  onchange={(e) => {
+                    const val = e.currentTarget.value;
+                    if (val === 'none') {
+                      removeSignature();
+                    } else if (val) {
+                      swapSignature(val);
+                    }
+                    e.currentTarget.value = '';
+                  }}
+                >
+                  <option value="" disabled selected>Signatures...</option>
                   {#each templateStore.signatures as sig}
                     <option value={sig.id} class="bg-[var(--color-canvas-card)] text-[var(--color-text-primary)]">{sig.name}</option>
                   {/each}
+                  <option value="none" class="bg-[var(--color-canvas-card)] text-red-400">Remove Signature</option>
                 </select>
               </div>
             {/if}

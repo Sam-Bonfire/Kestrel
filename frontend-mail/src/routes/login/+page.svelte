@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { login } from '@kestrel/shared';
+  import { login, ServerConfig } from '@kestrel/shared';
 
   let email = $state('');
   let password = $state('');
@@ -27,7 +27,7 @@
       await login(email, password);
       window.location.href = '/';
     } catch (e: any) {
-      errorMsg = e?.message || 'Login failed. Please check your credentials.';
+      errorMsg = e?.message || 'Login failed. Please check your credentials or host URL.';
     } finally {
       loading = false;
     }
@@ -54,6 +54,9 @@
     {/if}
 
     <form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="space-y-4">
+      <!-- Host URL Selection directly on the Login screen -->
+      <ServerConfig class="pb-2 border-b border-[var(--color-border-hairline)]" />
+
       <div>
         <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] mb-2">
           Email / Username
@@ -85,8 +88,11 @@
         {loading ? 'Signing in...' : 'Sign In'}
       </button>
 
-      <div class="mt-4 text-center text-xs text-[var(--color-text-secondary)]">
-        Don't have an account? <a href="/register" class="text-white hover:underline">Register</a>
+      <div class="mt-4 flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
+        <span>Don't have an account?</span>
+        <a href="/register" class="text-blue-400 hover:underline font-semibold">
+          Register now &rarr;
+        </a>
       </div>
     </form>
 
