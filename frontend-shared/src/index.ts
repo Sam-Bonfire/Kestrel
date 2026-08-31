@@ -147,3 +147,4 @@ export { default as ContactAutocomplete } from './components/ContactAutocomplete
 
 export { parseIcs } from './utils/icsParser.js';
 export type { IcsEvent } from './utils/icsParser.js';
+export { parseChecklists } from './utils/markdownParser.js';
