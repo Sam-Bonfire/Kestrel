@@ -1,7 +1,7 @@
 <script>
   import '../app.css';
   import { onMount } from 'svelte';
-  import { initSyncEvents, closeSyncEvents } from '@kestrel/shared';
+  import { initSyncEvents, closeSyncEvents, ShortcutCheatSheet } from '@kestrel/shared';
 
   let { children } = $props();
 
@@ -16,3 +16,4 @@
 <div class="h-screen w-screen overflow-hidden">
   {@render children()}
 </div>
+<ShortcutCheatSheet />
