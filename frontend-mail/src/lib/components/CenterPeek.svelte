@@ -89,6 +89,7 @@
     onCreateEvent = (id: string) => {},
     onFilterMessages = (emailAddress: string) => {},
     onDownloadMessage = (id: string) => {},
+    onForwardAsAttachment = (id: string) => {},
     historicalMessages = [] as { sender: string; body: string; timestamp: string }[],
     allLabels = [] as string[],
     initialReplyMode = null,
@@ -121,6 +122,7 @@
     onCreateEvent?: (id: string) => void;
     onFilterMessages?: (emailAddress: string) => void;
     onDownloadMessage?: (id: string) => void;
+    onForwardAsAttachment?: (id: string) => void;
     historicalMessages?: { sender: string; body: string; timestamp: string }[];
     allLabels?: string[];
     initialReplyMode?: 'reply' | 'reply_all' | 'forward' | null;
@@ -764,7 +766,8 @@
           { id: 'block', icon: UserX, label: 'Block Sender', action: () => onBlockSender!(email!.senderEmail) },
           { id: 'event', icon: CalendarPlus, label: 'Create Event', action: () => onCreateEvent!(email!.id) },
           { id: 'filter', icon: Filter, label: 'Filter messages like these', action: () => onFilterMessages!(email!.senderEmail) },
-          { id: 'download', icon: Download, label: 'Download message', action: () => onDownloadMessage!(email!.id) }
+          { id: 'download', icon: Download, label: 'Download message', action: () => onDownloadMessage!(email!.id) },
+          { id: 'forward_attachment', icon: Paperclip, label: 'Forward as Attachment', action: () => onForwardAsAttachment(email!.id) }
         ] as option}
           {@const OptionIcon = option.icon}
           <button class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-primary)] transition-colors cursor-pointer" onclick={() => { option.action(); activeMenu = null; }}>

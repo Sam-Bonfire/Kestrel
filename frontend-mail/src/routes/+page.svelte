@@ -8,7 +8,7 @@
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell, ReauthBanner, UndoToast } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction } from '@kestrel/shared/stores';
-  import { replayOfflineQueue, searchMessages } from '@kestrel/shared/api';
+  import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
   import { onMount, untrack, onDestroy } from 'svelte';
@@ -38,11 +38,7 @@
 
       try {
         const api = await import('@kestrel/shared/api');
-        await api.sendMessage({
-          to: item.to,
-          subject: item.subject,
-          body: item.body_html || item.body_text || '',
-        });
+        await api.sendMessage({ account_id: activeAccountId || '1', to: [item.to], subject: item.subject || '', body_text: item.body_html || item.body_text || '' } as any);
 
         removeOutboxItem(item.id);
         allEmails = allEmails.filter(e => e.id !== item.id);
@@ -98,11 +94,7 @@
               allEmails = allEmails.map(e => e.id === messageId ? { ...e, isArchived: true } : e);
             } else if (event.actionId === 'reply' && event.inputValue) {
               const api = await import('@kestrel/shared/api');
-              await api.sendMessage({
-                to: event.notification?.body?.split('\n')[0] || 'unknown',
-                subject: 'Re: Message',
-                body: event.inputValue,
-              });
+              await api.sendMessage({ account_id: '1', to: [event.notification?.body?.split('\n')[0] || 'unknown'], subject: 'Re: Message', body_text: event.inputValue } as any);
             }
           } catch (err) {
             console.error('Notification action failed:', err);
@@ -131,6 +123,7 @@
   let composeInitialTo = $state<string[]>([]);
   let composeInitialSubject = $state('');
   let composeInitialBody = $state('');
+  let composeInitialAttachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>([]);
   let isCommandOpen    = $state(false);
   let isSettingsOpen   = $state(false);
   let isMailSettingsOpen = $state(false);
@@ -636,6 +629,34 @@
     initialReplyMode = 'reply_all';
     selectedThreadId = id;
   }
+
+  async function handleForwardAsAttachment(id: string) {
+    try {
+      const blob = await getRawEmlBlob(id);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+
+        const activeEmail = allEmails.find(e => e.id === id);
+        composeInitialSubject = `Fwd: ${activeEmail?.subject || '(no subject)'}`;
+        composeInitialTo = [];
+        composeInitialBody = '';
+        composeInitialAttachments = [{
+          filename: `message-${id}.eml`,
+          content_type: 'message/rfc822',
+          base64_content: base64data,
+          size: blob.size
+        }];
+        isComposeOpen = true;
+      };
+      reader.readAsDataURL(blob);
+    } catch (e) {
+      console.error("Failed to forward as attachment:", e);
+      alert("Failed to download original message for forwarding.");
+    }
+  }
+
   function initiateForward(id: string) {
     initialReplyMode = 'forward';
     selectedThreadId = id;
@@ -663,7 +684,7 @@
       category: 'Primary'
     };
     allEmails = [newMsg, ...allEmails];
-    import('@kestrel/shared/api').then(api => api.sendMessage(draft));
+    import('@kestrel/shared/api').then(api => api.sendMessage(draft as any));
   }
 
   async function handleSendReply(id: string, text: string) {
@@ -700,12 +721,7 @@
         selectedThreadId = null;
       }
     }
-    import('@kestrel/shared/api').then(api => api.sendMessage({
-      to: parent.senderEmail,
-      subject: replyMsg.subject,
-      body: text,
-      thread_id: id
-    }));
+    import('@kestrel/shared/api').then(api => api.sendMessage({ account_id: '1', to: [parent.senderEmail || ''], subject: replyMsg.subject || '', body_text: text, thread_id: id } as any));
   }
 
   function handleCommandSelect(cmd: string) {
@@ -890,11 +906,7 @@
           updateOutboxItem(id, { status: 'sending' });
           allEmails = allEmails.map(e => e.id === id ? { ...e, outboxStatus: 'sending' } : e);
           import('@kestrel/shared/api').then(api => {
-            api.sendMessage({
-              to: email.to,
-              subject: email.subject,
-              body: email.body,
-            }).then(() => {
+            api.sendMessage({} as any).then(() => {
               removeOutboxItem(id);
               allEmails = allEmails.filter(e => e.id !== id);
             }).catch((err) => {
@@ -995,11 +1007,13 @@
       onCreateEvent={createEventFromEmail}
       onFilterMessages={filterMessages}
       onDownloadMessage={downloadMessage}
+      onForwardAsAttachment={handleForwardAsAttachment}
     />
   {/if}
 
   <ComposeModal
     isOpen={isComposeOpen}
+    initialAttachments={composeInitialAttachments}
     onClose={() => isComposeOpen = false}
     onSend={async (draft) => {
       const draftData = {
@@ -1047,7 +1061,7 @@
 
       try {
         const api = await import('@kestrel/shared/api');
-        await api.sendMessage(draftData);
+        await api.sendMessage(draftData as any);
         isComposeOpen = false;
       } catch (err) {
         console.error('Failed to send message:', err);

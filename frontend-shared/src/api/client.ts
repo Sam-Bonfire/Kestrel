@@ -419,6 +419,22 @@ export async function blockSender(
   });
 }
 
+export async function getRawEmlBlob(messageId: string, token?: string): Promise<Blob> {
+  const activeToken = token || authState.token;
+  const headers: Record<string, string> = {};
+  if (activeToken) {
+    headers['Authorization'] = `Bearer ${activeToken}`;
+  }
+  const res = await fetch(`${getApiBase()}/messages/${messageId}/raw`, {
+    headers,
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch EML blob: ${res.statusText}`);
+  }
+  return res.blob();
+}
+
 export function getEmlDownloadUrl(messageId: string): string {
   return `${getApiBase()}/messages/${messageId}/raw`;
 }
