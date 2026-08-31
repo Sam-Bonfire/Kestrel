@@ -16,6 +16,7 @@
     getLabelStyle,
     Dropdown
   } from '@kestrel/shared';
+  import { mailStore } from '../stores/mailStore.svelte.js';
 
   export interface EmailThread {
     id: string;
@@ -111,7 +112,6 @@
   // Filtering states
   let activeCategory = $state<'All' | 'Primary' | 'Updates' | 'Social' | 'Forums'>('All');
   let activeLabelFilter = $state<'All' | string>('All');
-  let unreadFilterOnly = $state(false);
   let hasAttachmentFilterOnly = $state(false);
   let activeDateRange = $state<'All' | 'Today' | 'This Week' | 'This Month'>('All');
   let showCategoryFilterDropdown = $state(false);
@@ -137,7 +137,7 @@
         return t.labels.includes(activeLabelFilter);
       })
       .filter((t: EmailThread) => {
-        if (unreadFilterOnly && !t.isUnread) return false;
+        if (mailStore.unreadFilterOnly && !t.isUnread) return false;
         return true;
       })
       .filter((t: EmailThread) => {
@@ -198,6 +198,13 @@
 
   function handleKeyDown(event: KeyboardEvent) {
     if (isTyping(event)) return;
+
+    if (checkedIds.length === 0 && event.key === 'u') {
+      event.preventDefault();
+      mailStore.toggleUnreadFilter();
+      return;
+    }
+
     if (filteredList.length === 0) return;
 
     if (event.key === 'j' || event.key === 'ArrowDown') {
@@ -308,6 +315,18 @@
           <Square class="w-3.5 h-3.5" />
         {/if}
       </button>
+
+      <button
+        onclick={() => mailStore.toggleUnreadFilter()}
+        class="p-1.5 rounded-lg hover:bg-[var(--color-canvas-hover)] hover:text-white transition-colors {mailStore.unreadFilterOnly ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400' : ''}"
+        title="Toggle Unread Filter"
+      >
+        {#if mailStore.unreadFilterOnly}
+          <MailOpen class="w-3.5 h-3.5" />
+        {:else}
+          <Mail class="w-3.5 h-3.5" />
+        {/if}
+      </button>
       
       <!-- Filter Toggle Button in Toolbar -->
       <button 
@@ -396,9 +415,9 @@
 
       <!-- Unread toggle pill -->
       <button
-        onclick={() => unreadFilterOnly = !unreadFilterOnly}
+        onclick={() => mailStore.toggleUnreadFilter()}
         class="px-2.5 py-1 rounded-full text-xs border transition-colors cursor-pointer
-          {unreadFilterOnly ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold' : 'bg-[var(--color-canvas-card)] border-[var(--color-border-hairline)] text-[var(--color-text-secondary)]'}"
+          {mailStore.unreadFilterOnly ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold' : 'bg-[var(--color-canvas-card)] border-[var(--color-border-hairline)] text-[var(--color-text-secondary)]'}"
       >
         Is unread
       </button>
@@ -444,9 +463,9 @@
       </button>
 
       <!-- Clear action -->
-      {#if activeCategory !== 'All' || activeLabelFilter !== 'All' || unreadFilterOnly || hasAttachmentFilterOnly || activeDateRange !== 'All'}
+      {#if activeCategory !== 'All' || activeLabelFilter !== 'All' || mailStore.unreadFilterOnly || hasAttachmentFilterOnly || activeDateRange !== 'All'}
         <button 
-          onclick={() => { activeCategory = 'All'; activeLabelFilter = 'All'; unreadFilterOnly = false; hasAttachmentFilterOnly = false; activeDateRange = 'All'; }}
+          onclick={() => { activeCategory = 'All'; activeLabelFilter = 'All'; mailStore.setUnreadFilter(false); hasAttachmentFilterOnly = false; activeDateRange = 'All'; }}
           class="text-[10px] text-white/50 hover:text-white underline cursor-pointer ml-auto"
         >
           Clear filters
@@ -533,11 +552,25 @@
     {#if filteredList.length === 0}
       <div class="flex flex-col items-center justify-center h-full gap-4 text-[var(--color-text-secondary)] animate-fadeIn">
         <div class="w-16 h-16 rounded-full bg-[var(--color-canvas-card)] flex items-center justify-center shadow-inner">
-          <Inbox class="w-8 h-8 opacity-40 text-white" />
+          {#if mailStore.unreadFilterOnly}
+            <MailOpen class="w-8 h-8 opacity-40 text-white" />
+          {:else}
+            <Inbox class="w-8 h-8 opacity-40 text-white" />
+          {/if}
         </div>
         <div class="flex flex-col items-center gap-1">
-          <span class="text-sm font-semibold text-white">No messages here</span>
-          <span class="text-[11px] opacity-60">You're all caught up!</span>
+          {#if mailStore.unreadFilterOnly}
+            <span class="text-sm font-semibold text-white">No unread messages in this folder</span>
+            <button
+              class="mt-2 px-3 py-1 bg-[var(--color-canvas-card)] hover:bg-[var(--color-canvas-hover)] text-xs text-white rounded transition-colors cursor-pointer border border-[var(--color-border-hairline)]"
+              onclick={() => mailStore.setUnreadFilter(false)}
+            >
+              Show all messages
+            </button>
+          {:else}
+            <span class="text-sm font-semibold text-white">No messages here</span>
+            <span class="text-[11px] opacity-60">You're all caught up!</span>
+          {/if}
         </div>
       </div>
     {:else}
