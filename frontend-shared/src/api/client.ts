@@ -420,7 +420,7 @@ export async function blockSender(
 }
 
 export function getEmlDownloadUrl(messageId: string): string {
-  return `${API_BASE}/messages/${messageId}/raw`;
+  return `${getApiBase()}/messages/${messageId}/raw`;
 }
 
 export async function sendMessage(
@@ -495,7 +495,7 @@ export function getAttachmentRedirectUrl(
   messageId: string,
   filename: string,
 ): string {
-  return `${API_BASE}/messages/${messageId}/attachments/${encodeURIComponent(filename)}/redirect`;
+  return `${getApiBase()}/messages/${messageId}/attachments/${encodeURIComponent(filename)}/redirect`;
 }
 
 /**
@@ -508,7 +508,7 @@ export async function downloadAttachment(
   filename: string,
 ): Promise<ArrayBuffer> {
   const res = await fetch(
-    `${API_BASE}/messages/${messageId}/attachments/${encodeURIComponent(filename)}`,
+    `${getApiBase()}/messages/${messageId}/attachments/${encodeURIComponent(filename)}`,
     {
       method: 'GET',
       credentials: 'include',
@@ -523,7 +523,8 @@ export async function downloadAttachment(
 // ── Sync endpoints ──────────────────────────────────────────────
 
 export function createSyncStream(token?: string): EventSource {
-  const url = new URL(`${API_BASE}/sync/stream`, window.location.origin);
+  const base = getApiBase();
+  const url = new URL(`${base}/sync/stream`);
   if (token) {
     url.searchParams.set('token', token);
   }

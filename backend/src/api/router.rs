@@ -33,18 +33,8 @@ pub struct AppState {
 }
 
 pub fn create_router(state: AppState) -> Router {
-    use axum::http::HeaderValue;
-
     let cors = CorsLayer::new()
-        .allow_origin(vec![
-            "http://localhost:1420".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:1420".parse::<HeaderValue>().unwrap(),
-            "http://localhost:1421".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:1421".parse::<HeaderValue>().unwrap(),
-            "http://localhost:5173".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
-            "tauri://localhost".parse::<HeaderValue>().unwrap(),
-        ])
+        .allow_origin(tower_http::cors::AllowOrigin::mirror_request())
         .allow_methods(vec![
             axum::http::Method::GET,
             axum::http::Method::POST,
@@ -57,6 +47,7 @@ pub fn create_router(state: AppState) -> Router {
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
             axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderName::from_static("x-request-id"),
         ])
         .allow_credentials(true);
 
