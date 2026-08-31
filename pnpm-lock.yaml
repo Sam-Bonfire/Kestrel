@@ -108,6 +108,9 @@ importers:
       dompurify:
         specifier: ^3.4.12
         version: 3.4.12
+      idb-keyval:
+        specifier: ^6.3.0
+        version: 6.3.0
       lucide-svelte:
         specifier: ^0.469.0
         version: 0.469.0(svelte@5.56.7)

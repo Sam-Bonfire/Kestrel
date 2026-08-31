@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { register, login, ServerConfig } from '@kestrel/shared';
+  import { Button, Spinner, ErrorBanner, register, login, ServerConfig } from '@kestrel/shared';
 
   let email = $state('');
   let password = $state('');
@@ -37,12 +37,12 @@
   <div class="w-full max-w-md bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-xl p-8 shadow-xl">
     <div class="mb-6 text-center">
       <h1 class="text-2xl font-bold mb-2">Create a Kestrel Account</h1>
-      <p class="text-sm text-[var(--color-text-secondary)]">Sign up to get started with Kestrel Suite.</p>
+      <p class="text-sm text-[var(--color-text-secondary)]">Sign up to access your calendar and schedules.</p>
     </div>
 
     {#if errorMsg}
-      <div class="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg text-center">
-        {errorMsg}
+      <div class="mb-4">
+        <ErrorBanner message={errorMsg} />
       </div>
     {/if}
 
@@ -60,7 +60,7 @@
           bind:value={email}
           placeholder="username@kestrel.dev"
           required
-          class="w-full px-4 py-2 bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg focus:outline-none focus:border-white text-sm"
+          class="w-full px-4 py-2 bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg text-sm text-white focus:outline-none focus:border-white"
         />
       </div>
 
@@ -73,7 +73,7 @@
           type="password"
           bind:value={password}
           required
-          class="w-full px-4 py-2 bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg focus:outline-none focus:border-white text-sm"
+          class="w-full px-4 py-2 bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg text-sm text-white focus:outline-none focus:border-white"
         />
       </div>
 
@@ -86,11 +86,15 @@
           type="password"
           bind:value={confirmPassword}
           required
-          class="w-full px-4 py-2 bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg focus:outline-none focus:border-white text-sm"
+          class="w-full px-4 py-2 bg-[var(--color-canvas-base)] border border-[var(--color-border-hairline)] rounded-lg text-sm text-white focus:outline-none focus:border-white"
         />
       </div>
 
-      <button type="submit" disabled={loading} class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50 cursor-pointer">
+      <button
+        type="submit"
+        disabled={loading}
+        class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+      >
         {loading ? 'Creating account...' : 'Register Now'}
       </button>
 

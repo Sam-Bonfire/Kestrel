@@ -191,3 +191,7 @@ run = [
     "rm -rf frontend-shared/dist",
     "echo \"==> Clean complete.\""
 ]
+
+[tasks.sweep]
+description = "Clean stale build artifacts older than 14 days to free disk space"
+run = "cargo sweep --time 14"
