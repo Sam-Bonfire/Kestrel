@@ -119,6 +119,7 @@ export {
   Dropdown,
   ReauthBanner,
   UndoToast,
+  ShortcutCheatSheet,
   ServerConfig,
 } from './components/index.js';
 
