@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { X, Send, Paperclip, Bold, Italic, List, Link } from 'lucide-svelte';
+  import { X, Send, Paperclip, Bold, Italic, List, Link, ChevronDown } from 'lucide-svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { ContactAutocomplete } from '@kestrel/shared';
   import { apiClient } from '@kestrel/shared/api';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { templateStore } from '@kestrel/shared';
+  import { templateStore, mailDefaultSendAction } from '@kestrel/shared';
   import type { Account } from '@kestrel/shared/api';
 
   let {
     isOpen = false,
     onClose = () => {},
-    onSend = (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }) => {},
+    onSend = (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }, actionType?: string) => {},
     initialTo = [],
     initialSubject = '',
     initialBody = '',
@@ -20,7 +20,7 @@
   } = $props<{
     isOpen?: boolean;
     onClose?: () => void;
-    onSend?: (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }) => void;
+    onSend?: (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }, actionType?: string) => void;
     initialTo?: string[];
     initialSubject?: string;
     initialBody?: string;
@@ -35,7 +35,6 @@
   let subject = $state(initialSubject);
   let body = $state(initialBody);
   let attachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>(initialAttachments);
-  import { ChevronDown } from 'lucide-svelte';
   let fromAccount = $state('');
   let accounts = $state<Account[]>([]);
   let isSending = $state(false);
@@ -52,6 +51,25 @@
   function selectAccount(accountId: string) {
     fromAccount = accountId;
     showAccountDropdown = false;
+  }
+
+  let showSendDropdown = $state(false);
+
+  // Close dropdown if clicked outside
+  function handleWindowClick(e: MouseEvent) {
+    if (showSendDropdown) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.send-split-button')) {
+        showSendDropdown = false;
+      }
+    }
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (isOpen && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSend($mailDefaultSendAction);
+    }
   }
 
   $effect(() => {
@@ -92,7 +110,7 @@
     }
   }
 
-  async function handleSend() {
+  async function handleSend(actionType: string = $mailDefaultSendAction) {
     if (!fromAccount) {
       alert("Please select a sending account");
       return;
@@ -120,7 +138,7 @@
         bcc: bccRecipients.length > 0 ? bccRecipients.join(', ') : undefined,
         subject,
         body
-      });
+      }, actionType);
       
       toRecipients = [];
       ccRecipients = [];
@@ -280,6 +298,8 @@
   }
 </script>
 
+<svelte:window onclick={handleWindowClick} onkeydown={handleKeyDown} />
+
 {#if isOpen}
   <input type="file" bind:this={fileInput} onchange={handleAttach} class="hidden" multiple />
   <div transition:fade={{ duration: 200 }} class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
@@ -429,10 +449,31 @@
       <!-- Footer Actions & Style Controls -->
       <div class="px-4 py-3 border-t border-[var(--color-border-hairline)] flex items-center justify-between bg-[var(--color-canvas-card)]">
         <div class="flex items-center gap-2">
-          <button disabled={isSending} onclick={handleSend} class="px-4 py-1.5 rounded bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-            <Send class="w-3.5 h-3.5" />
-            <span>{isSending ? 'Sending...' : 'Send Message'}</span>
-          </button>
+          <div class="relative flex inline-flex items-stretch rounded shadow-sm send-split-button">
+            <button disabled={isSending} onclick={() => handleSend($mailDefaultSendAction)} class="px-4 py-1.5 rounded-l bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border-r border-neutral-300">
+              <Send class="w-3.5 h-3.5" />
+              <span>{isSending ? 'Sending...' : ($mailDefaultSendAction === 'send_and_archive' ? 'Send & Archive' : 'Send')}</span>
+            </button>
+            <button disabled={isSending} onclick={() => showSendDropdown = !showSendDropdown} class="px-2 py-1.5 rounded-r bg-white text-black hover:bg-neutral-200 transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+              <ChevronDown class="w-3.5 h-3.5" />
+            </button>
+            {#if showSendDropdown}
+              <div class="absolute bottom-full left-0 mb-1 w-40 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shadow-xl overflow-hidden z-50">
+                <button
+                  class="w-full text-left px-4 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-border-hairline)]/30 cursor-pointer"
+                  onclick={() => { showSendDropdown = false; handleSend('send'); }}
+                >
+                  Send
+                </button>
+                <button
+                  class="w-full text-left px-4 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-border-hairline)]/30 cursor-pointer"
+                  onclick={() => { showSendDropdown = false; handleSend('send_and_archive'); }}
+                >
+                  Send & Archive
+                </button>
+              </div>
+            {/if}
+          </div>
 
           <!-- Formatting Style Controls -->
           <div class="flex items-center gap-0.5 ml-2 border-l border-[var(--color-border-hairline)]/40 pl-2 text-[var(--color-text-secondary)]">

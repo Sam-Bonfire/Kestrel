@@ -3,11 +3,13 @@ import { getSettings, updateSettings } from '../api/client.js';
 
 const DENSE_KEY = 'kestrel:settings:dense_mode';
 const LANDING_KEY = 'kestrel:settings:landing_view';
+const SEND_ACTION_KEY = 'kestrel:settings:send_action';
 const SIG_KEY = 'kestrel:settings:signature';
 const LABELS_KEY = 'kestrel:settings:label_customizations';
 
 export const mailDenseMode = writable<boolean>(loadBool(DENSE_KEY, false));
 export const mailDefaultLandingView = writable<string>(loadStr(LANDING_KEY, 'inbox'));
+export const mailDefaultSendAction = writable<string>(loadStr(SEND_ACTION_KEY, 'send'));
 export const mailSignature = writable<string>(loadStr(SIG_KEY, ''));
 export const labelCustomizations = writable<Record<string, { iconName: string; colorName: string }>>(
   loadJson(LABELS_KEY, {})
@@ -25,6 +27,7 @@ export async function initializeSettings() {
     const settings = await getSettings();
     if (settings.mailDenseMode != null) mailDenseMode.set(settings.mailDenseMode);
     if (settings.mailDefaultLandingView != null) mailDefaultLandingView.set(settings.mailDefaultLandingView);
+    if (settings.mailDefaultSendAction != null) mailDefaultSendAction.set(settings.mailDefaultSendAction);
     if (settings.mailSignature != null) mailSignature.set(settings.mailSignature);
     if (settings.labelCustomizations != null) labelCustomizations.set(settings.labelCustomizations);
     if (settings.syncInterval != null) syncInterval.set(settings.syncInterval);
@@ -59,6 +62,7 @@ async function syncToBackend() {
     await updateSettings({
       mailDenseMode: get(mailDenseMode),
       mailDefaultLandingView: get(mailDefaultLandingView),
+      mailDefaultSendAction: get(mailDefaultSendAction),
       mailSignature: get(mailSignature),
       labelCustomizations: get(labelCustomizations),
       syncInterval: get(syncInterval),
@@ -79,6 +83,10 @@ mailDenseMode.subscribe((val) => {
 });
 mailDefaultLandingView.subscribe((val) => {
   saveItem(LANDING_KEY, val);
+  syncToBackend();
+});
+mailDefaultSendAction.subscribe((val) => {
+  saveItem(SEND_ACTION_KEY, val);
   syncToBackend();
 });
 mailSignature.subscribe((val) => {
