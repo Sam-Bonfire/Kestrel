@@ -38,7 +38,7 @@
 
       try {
         const api = await import('@kestrel/shared/api');
-        await api.sendMessage({ account_id: activeAccountId || '1', to: [item.to], subject: item.subject || '', body_text: item.body_html || item.body_text || '' } as any);
+        await api.sendMessage({ account_id: activeAccountId || '1', to: [item.to], subject: item.subject, body_text: item.body_html || item.body_text || '' } as any);
 
         removeOutboxItem(item.id);
         allEmails = allEmails.filter(e => e.id !== item.id);
@@ -94,7 +94,7 @@
               allEmails = allEmails.map(e => e.id === messageId ? { ...e, isArchived: true } : e);
             } else if (event.actionId === 'reply' && event.inputValue) {
               const api = await import('@kestrel/shared/api');
-              await api.sendMessage({ account_id: '1', to: [event.notification?.body?.split('\n')[0] || 'unknown'], subject: 'Re: Message', body_text: event.inputValue } as any);
+              await api.sendMessage({ account_id: '1', to: [event.notification?.body?.split('\\n')[0] || 'unknown'], subject: 'Re: Message', body_text: event.inputValue } as any);
             }
           } catch (err) {
             console.error('Notification action failed:', err);
@@ -906,7 +906,7 @@
           updateOutboxItem(id, { status: 'sending' });
           allEmails = allEmails.map(e => e.id === id ? { ...e, outboxStatus: 'sending' } : e);
           import('@kestrel/shared/api').then(api => {
-            api.sendMessage({} as any).then(() => {
+            api.sendMessage({ account_id: '1', to: [email.to], subject: email.subject || '', body_text: email.body } as any).then(() => {
               removeOutboxItem(id);
               allEmails = allEmails.filter(e => e.id !== id);
             }).catch((err) => {
