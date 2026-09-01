@@ -1110,19 +1110,23 @@ pub async fn get_raw_eml(
         let provider = plugin.as_mail_provider();
 
         // fetch bodies if needed
-        if body_text.is_none() && body_html.is_none() {
-            if let Ok(body) = provider.fetch_message_body(&auth_token, &msg.external_id).await {
-                body_text = body.body_text;
-                body_html = body.body_html;
-            }
+        if body_text.is_none() && body_html.is_none()
+            && let Ok(body) = provider
+                .fetch_message_body(&auth_token, &msg.external_id)
+                .await
+        {
+            body_text = body.body_text;
+            body_html = body.body_html;
         }
 
         // fetch attachment contents
         for att in &attachments {
-            if let Some(ext_id) = &att.external_id {
-                if let Ok(bytes) = provider.download_attachment(&auth_token, &msg.external_id, ext_id).await {
-                    downloaded_attachments.push((att.clone(), bytes));
-                }
+            if let Some(ext_id) = &att.external_id
+                && let Ok(bytes) = provider
+                    .download_attachment(&auth_token, &msg.external_id, ext_id)
+                    .await
+            {
+                downloaded_attachments.push((att.clone(), bytes));
             }
         }
     }
@@ -1140,16 +1144,25 @@ pub async fn get_raw_eml(
 
     eml.push_str(&format!("From: {}\r\n", msg.sender_email));
     eml.push_str(&format!("To: {}\r\n", msg.recipients));
-    eml.push_str(&format!("Subject: {}\r\n", msg.subject.as_deref().unwrap_or("")));
+    eml.push_str(&format!(
+        "Subject: {}\r\n",
+        msg.subject.as_deref().unwrap_or("")
+    ));
     eml.push_str(&format!("Date: {}\r\n", date_str));
     eml.push_str(&format!("Message-ID: <{}>\r\n", msg.external_id));
     eml.push_str("MIME-Version: 1.0\r\n");
-    eml.push_str(&format!("Content-Type: multipart/mixed; boundary=\"{}\"\r\n", boundary));
+    eml.push_str(&format!(
+        "Content-Type: multipart/mixed; boundary=\"{}\"\r\n",
+        boundary
+    ));
     eml.push_str("\r\n");
 
     // Body (multipart/alternative)
     eml.push_str(&format!("--{}\r\n", boundary));
-    eml.push_str(&format!("Content-Type: multipart/alternative; boundary=\"{}\"\r\n\r\n", alt_boundary));
+    eml.push_str(&format!(
+        "Content-Type: multipart/alternative; boundary=\"{}\"\r\n\r\n",
+        alt_boundary
+    ));
 
     if let Some(text) = &body_text {
         eml.push_str(&format!("--{}\r\n", alt_boundary));
@@ -1174,9 +1187,15 @@ pub async fn get_raw_eml(
     use base64::{Engine as _, engine::general_purpose::STANDARD as b64};
     for (att, bytes) in downloaded_attachments {
         eml.push_str(&format!("--{}\r\n", boundary));
-        eml.push_str(&format!("Content-Type: {}; name=\"{}\"\r\n", att.content_type, att.filename));
+        eml.push_str(&format!(
+            "Content-Type: {}; name=\"{}\"\r\n",
+            att.content_type, att.filename
+        ));
         eml.push_str("Content-Transfer-Encoding: base64\r\n");
-        eml.push_str(&format!("Content-Disposition: attachment; filename=\"{}\"\r\n\r\n", att.filename));
+        eml.push_str(&format!(
+            "Content-Disposition: attachment; filename=\"{}\"\r\n\r\n",
+            att.filename
+        ));
 
         let encoded = b64.encode(&bytes);
         // chunk base64 to 76 chars
