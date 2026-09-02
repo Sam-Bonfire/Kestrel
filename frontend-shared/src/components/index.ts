@@ -15,5 +15,3 @@ export { default as ContactAutocomplete } from './ContactAutocomplete.svelte';
 export { default as UndoToast } from './UndoToast.svelte';
 export { default as ShortcutCheatSheet } from './ShortcutCheatSheet.svelte';
 export { default as ServerConfig } from './ServerConfig.svelte';
-export { default as AttachmentChip } from './AttachmentChip.svelte';
-export { default as QuickLookModal } from './QuickLookModal.svelte';

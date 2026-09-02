@@ -121,8 +121,6 @@ export {
   UndoToast,
   ShortcutCheatSheet,
   ServerConfig,
-  AttachmentChip,
-  QuickLookModal,
 } from './components/index.js';
 
 // ── Utils ───────────────────────────────────────────────────────
