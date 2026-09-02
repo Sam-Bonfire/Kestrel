@@ -195,4 +195,3 @@ run = [
 [tasks.sweep]
 description = "Clean stale build artifacts older than 14 days to free disk space"
 run = "cargo sweep --time 14"
-

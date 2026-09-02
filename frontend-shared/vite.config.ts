@@ -22,17 +22,4 @@ export default defineConfig({
       include: ['src/**/*'],
     }),
   ],
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./vitest.setup.ts'],
-    environmentOptions: {
-      jsdom: {
-        resources: 'usable',
-      },
-    },
-  },
-  resolve: {
-    conditions: ['browser'],
-  },
 });

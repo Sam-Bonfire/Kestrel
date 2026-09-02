@@ -27,9 +27,6 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@tauri-apps/api": "^2.11.1",
-    "@testing-library/svelte": "^5.4.2",
-    "@types/pdfjs-dist": "^2.10.378",
-    "jsdom": "^30.0.1",
     "lucide-svelte": "^0.469.0",
     "svelte": "^5.56.7",
     "typescript": "^5.8.2",
@@ -46,7 +43,6 @@
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "^2.5.9",
     "idb-keyval": "^6.3.0",
-    "pdfjs-dist": "^6.3.289",
     "tinykeys": "^4.0.0"
   }
 }
