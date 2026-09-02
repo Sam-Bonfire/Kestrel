@@ -38,8 +38,11 @@
     labelCustomizations, 
     getLabelStyle,
     ContactAutocomplete,
-    Dropdown
+    Dropdown,
+    AttachmentChip,
+    QuickLookModal
   } from '@kestrel/shared';
+  import type { QuickLookAttachment } from '@kestrel/shared/components';
   import { parseIcs } from '@kestrel/shared';
   import type { IcsEvent } from '@kestrel/shared';
   import EventInviteCard from './EventInviteCard.svelte';
@@ -175,6 +178,31 @@
   });
 
   let downloadingAttachments = $state<Record<string, boolean>>({});
+  let activeQuickLook = $state<QuickLookAttachment | null>(null);
+
+  async function previewAttachment(attachment: { filename: string; size: number; contentType?: string }) {
+    if (!email) return;
+    try {
+      const { downloadAttachment: fetchBytes } = await import('@kestrel/shared/api');
+      const bytes = await fetchBytes(email.id, attachment.filename);
+      const data = new Uint8Array(bytes);
+      activeQuickLook = {
+        filename: attachment.filename,
+        size: attachment.size,
+        contentType: attachment.contentType,
+        data
+      };
+    } catch (err) {
+      console.error('Failed to load attachment for preview:', err);
+      // Fallback with null data so modal shows fallback/download card
+      activeQuickLook = {
+        filename: attachment.filename,
+        size: attachment.size,
+        contentType: attachment.contentType,
+        data: null
+      };
+    }
+  }
 
   async function downloadAttachment(attachment: { filename: string; size: number }) {
     if (!email) return;
@@ -521,19 +549,12 @@
           {#if email.attachments && email.attachments.length > 0}
             <div class="flex gap-3 overflow-x-auto pb-2">
               {#each email.attachments as attachment}
-                <button 
-                  onclick={() => downloadAttachment(attachment)}
-                  disabled={downloadingAttachments[`${email.id}:${attachment.filename}`]}
-                  class="flex items-center gap-3 px-3 py-2 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-lg shrink-0 cursor-pointer hover:bg-[var(--color-canvas-hover)] transition-colors text-left disabled:opacity-50"
-                >
-                  <div class="w-8 h-8 rounded bg-purple-500/10 flex items-center justify-center text-purple-400">
-                    <Paperclip class="w-4 h-4" />
-                  </div>
-                  <div class="flex flex-col">
-                    <span class="text-xs font-semibold text-white">{attachment.filename}</span>
-                    <span class="text-[10px] text-[var(--color-text-secondary)]">{(attachment.size / 1024 / 1024).toFixed(1)} MB</span>
-                  </div>
-                </button>
+                <AttachmentChip
+                  attachment={attachment}
+                  downloading={downloadingAttachments[`${email.id}:${attachment.filename}`]}
+                  onPreview={previewAttachment}
+                  onDownload={downloadAttachment}
+                />
               {/each}
             </div>
           {/if}
@@ -649,6 +670,13 @@
       </div>
     </div>
   </div>
+
+  <QuickLookModal
+    isOpen={!!activeQuickLook}
+    attachment={activeQuickLook}
+    onClose={() => activeQuickLook = null}
+    onDownload={(att) => downloadAttachment(att)}
+  />
 {/if}
 
 <svelte:window onclick={() => activeMenu = null} />
