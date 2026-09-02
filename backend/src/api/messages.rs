@@ -1110,7 +1110,8 @@ pub async fn get_raw_eml(
         let provider = plugin.as_mail_provider();
 
         // fetch bodies if needed
-        if body_text.is_none() && body_html.is_none()
+        if body_text.is_none()
+            && body_html.is_none()
             && let Ok(body) = provider
                 .fetch_message_body(&auth_token, &msg.external_id)
                 .await

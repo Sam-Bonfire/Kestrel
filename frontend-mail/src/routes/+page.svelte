@@ -94,7 +94,7 @@
               allEmails = allEmails.map(e => e.id === messageId ? { ...e, isArchived: true } : e);
             } else if (event.actionId === 'reply' && event.inputValue) {
               const api = await import('@kestrel/shared/api');
-              await api.sendMessage({ account_id: '1', to: [event.notification?.body?.split('\\n')[0] || 'unknown'], subject: 'Re: Message', body_text: event.inputValue } as any);
+              await api.sendMessage({ account_id: '1', to: [event.notification?.body?.split('\n')[0] || 'unknown'], subject: 'Re: Message', body_text: event.inputValue } as any);
             }
           } catch (err) {
             console.error('Notification action failed:', err);
