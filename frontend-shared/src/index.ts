@@ -76,6 +76,7 @@ export {
   addRevokedAccount,
   mailDenseMode,
   mailDefaultLandingView,
+  mailDefaultSendAction,
   mailSignature,
   labelCustomizations,
   initializeSettings,

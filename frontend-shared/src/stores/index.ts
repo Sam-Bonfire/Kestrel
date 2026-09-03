@@ -10,6 +10,7 @@ export {
 export {
   mailDenseMode,
   mailDefaultLandingView,
+  mailDefaultSendAction,
   mailSignature,
   labelCustomizations,
   initializeSettings,

@@ -266,6 +266,7 @@ export type SendMessageResponse = {
 export type SettingsPayload = {
 	mailDenseMode: boolean | null,
 	mailDefaultLandingView: string | null,
+	mailDefaultSendAction: string | null,
 	mailSignature: string | null,
 	labelCustomizations: { [key in string]: LabelCustomization } | null,
 	syncInterval: number | null,
