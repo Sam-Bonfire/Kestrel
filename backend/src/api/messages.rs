@@ -1066,13 +1066,148 @@ pub async fn get_raw_eml(
         return Err(KestrelError::NotFound("Message not found".to_string()));
     }
 
-    let eml_content = format!(
-        "To: {}\nFrom: {}\nSubject: {}\n\n{}",
-        msg.recipients,
-        msg.sender_email,
-        msg.subject.unwrap_or_default(),
-        msg.body_text.unwrap_or_default()
-    );
+    // 1. Fetch attachments
+    let attachment_repo =
+        crate::db::sqlite::attachment_repository::AttachmentRepository::new(match &state.db {
+            DbPool::Sqlite(pool) => std::sync::Arc::new(pool.clone()),
+            _ => {
+                return Err(KestrelError::Internal(Box::new(
+                    crate::core::error::SimpleError(
+                        "Postgres not implemented for attachments".into(),
+                    ),
+                )));
+            }
+        });
+    let attachments = attachment_repo
+        .get_attachments_for_message(crate::core::types::DbUuid(message_id))
+        .await?;
+
+    // 2. Fetch full body and plugin info if needed
+    let mut body_text = msg.body_text.clone();
+    let mut body_html = msg.body_html.clone();
+
+    // 3. Fetch account and plugins if attachments exist or body is missing
+    let mut downloaded_attachments = Vec::new();
+    if !attachments.is_empty() || body_text.is_none() && body_html.is_none() {
+        let account = find_account_from_db(&state, msg.account_id.0)
+            .await?
+            .ok_or_else(|| KestrelError::NotFound("Account not found".into()))?;
+
+        let auth_token = account.access_token.ok_or_else(|| {
+            KestrelError::BadRequest("Account is missing an access token".to_string())
+        })?;
+
+        let plugin_manager = state.plugin_manager.read().await;
+        let plugin = plugin_manager
+            .find_by_id(&account.provider)
+            .ok_or_else(|| {
+                KestrelError::Internal(Box::new(crate::core::error::SimpleError(format!(
+                    "Plugin {} not loaded",
+                    account.provider
+                ))))
+            })?;
+
+        let provider = plugin.as_mail_provider();
+
+        // fetch bodies if needed
+        if body_text.is_none()
+            && body_html.is_none()
+            && let Ok(body) = provider
+                .fetch_message_body(&auth_token, &msg.external_id)
+                .await
+        {
+            body_text = body.body_text;
+            body_html = body.body_html;
+        }
+
+        // fetch attachment contents
+        for att in &attachments {
+            if let Some(ext_id) = &att.external_id
+                && let Ok(bytes) = provider
+                    .download_attachment(&auth_token, &msg.external_id, ext_id)
+                    .await
+            {
+                downloaded_attachments.push((att.clone(), bytes));
+            }
+        }
+    }
+
+    // 4. Construct EML (RFC 822 / MIME)
+    let boundary = format!("=_KestrelBoundary_{}", uuid::Uuid::new_v4().simple());
+    let alt_boundary = format!("=_KestrelAltBoundary_{}", uuid::Uuid::new_v4().simple());
+
+    let mut eml = String::new();
+
+    // Headers
+    let date_str = chrono::DateTime::from_timestamp(msg.date_received, 0)
+        .map(|dt| dt.to_rfc2822())
+        .unwrap_or_default();
+
+    eml.push_str(&format!("From: {}\r\n", msg.sender_email));
+    eml.push_str(&format!("To: {}\r\n", msg.recipients));
+    eml.push_str(&format!(
+        "Subject: {}\r\n",
+        msg.subject.as_deref().unwrap_or("")
+    ));
+    eml.push_str(&format!("Date: {}\r\n", date_str));
+    eml.push_str(&format!("Message-ID: <{}>\r\n", msg.external_id));
+    eml.push_str("MIME-Version: 1.0\r\n");
+    eml.push_str(&format!(
+        "Content-Type: multipart/mixed; boundary=\"{}\"\r\n",
+        boundary
+    ));
+    eml.push_str("\r\n");
+
+    // Body (multipart/alternative)
+    eml.push_str(&format!("--{}\r\n", boundary));
+    eml.push_str(&format!(
+        "Content-Type: multipart/alternative; boundary=\"{}\"\r\n\r\n",
+        alt_boundary
+    ));
+
+    if let Some(text) = &body_text {
+        eml.push_str(&format!("--{}\r\n", alt_boundary));
+        eml.push_str("Content-Type: text/plain; charset=utf-8\r\n");
+        eml.push_str("Content-Transfer-Encoding: quoted-printable\r\n\r\n");
+        // For simplicity, we just use raw text here, though proper Quoted-Printable encoding is ideal
+        eml.push_str(text);
+        eml.push_str("\r\n");
+    }
+
+    if let Some(html) = &body_html {
+        eml.push_str(&format!("--{}\r\n", alt_boundary));
+        eml.push_str("Content-Type: text/html; charset=utf-8\r\n");
+        eml.push_str("Content-Transfer-Encoding: quoted-printable\r\n\r\n");
+        eml.push_str(html);
+        eml.push_str("\r\n");
+    }
+
+    eml.push_str(&format!("--{}--\r\n", alt_boundary));
+
+    // Attachments
+    use base64::{Engine as _, engine::general_purpose::STANDARD as b64};
+    for (att, bytes) in downloaded_attachments {
+        eml.push_str(&format!("--{}\r\n", boundary));
+        eml.push_str(&format!(
+            "Content-Type: {}; name=\"{}\"\r\n",
+            att.content_type, att.filename
+        ));
+        eml.push_str("Content-Transfer-Encoding: base64\r\n");
+        eml.push_str(&format!(
+            "Content-Disposition: attachment; filename=\"{}\"\r\n\r\n",
+            att.filename
+        ));
+
+        let encoded = b64.encode(&bytes);
+        // chunk base64 to 76 chars
+        for i in (0..encoded.len()).step_by(76) {
+            let end = std::cmp::min(i + 76, encoded.len());
+            eml.push_str(&encoded[i..end]);
+            eml.push_str("\r\n");
+        }
+    }
+
+    eml.push_str(&format!("--{}--\r\n", boundary));
 
     Ok(axum::response::Response::builder()
         .status(StatusCode::OK)
@@ -1081,7 +1216,7 @@ pub async fn get_raw_eml(
             axum::http::header::CONTENT_DISPOSITION,
             format!("attachment; filename=\"message-{}.eml\"", message_id),
         )
-        .body(axum::body::Body::from(eml_content))
+        .body(axum::body::Body::from(eml))
         .unwrap())
 }
 

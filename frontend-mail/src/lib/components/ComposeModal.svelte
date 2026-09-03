@@ -15,7 +15,8 @@
     onSend = (draft: { to: string; cc?: string; bcc?: string; subject: string; body: string }) => {},
     initialTo = [],
     initialSubject = '',
-    initialBody = ''
+    initialBody = '',
+    initialAttachments = [] as { filename: string; content_type: string; base64_content: string; size: number }[]
   } = $props<{
     isOpen?: boolean;
     onClose?: () => void;
@@ -23,6 +24,7 @@
     initialTo?: string[];
     initialSubject?: string;
     initialBody?: string;
+    initialAttachments?: { filename: string; content_type: string; base64_content: string; size: number }[];
   }>();
 
   let toRecipients = $state<string[]>(initialTo);
@@ -32,9 +34,8 @@
   let showBcc = $state(false);
   let subject = $state(initialSubject);
   let body = $state(initialBody);
-  let attachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>([]);
+  let attachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>(initialAttachments);
   import { ChevronDown } from 'lucide-svelte';
-
   let fromAccount = $state('');
   let accounts = $state<Account[]>([]);
   let isSending = $state(false);
