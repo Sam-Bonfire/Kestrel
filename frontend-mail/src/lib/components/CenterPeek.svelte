@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Avatar } from '@kestrel/shared';
+  import { Avatar, formatRelativeTime, formatExactDateTime } from '@kestrel/shared';
+  import { relativeTimeTick } from '@kestrel/shared/stores';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import {
@@ -404,7 +405,7 @@
                   <div class="space-y-1 min-w-0 flex-1">
                     <div class="flex items-baseline justify-between">
                       <span class="text-xs font-semibold text-white">{msg.sender}</span>
-                      <span class="text-[9px] font-mono text-[var(--color-text-secondary)]">{msg.timestamp}</span>
+                      <span class="text-[9px] font-mono text-[var(--color-text-secondary)]" title={formatExactDateTime(msg.timestamp)}>{formatRelativeTime(msg.timestamp, new Date($relativeTimeTick))}</span>
                     </div>
                     <p class="text-xs text-[var(--color-text-primary)] leading-relaxed">{@html msg.body}</p>
                   </div>
@@ -432,8 +433,8 @@
             </div>
 
             <div class="flex items-center gap-3 shrink-0">
-              <span class="text-xs font-mono text-[var(--color-text-secondary)] hidden sm:block">
-                {email.timestamp}
+              <span class="text-xs font-mono text-[var(--color-text-secondary)] hidden sm:block" title={formatExactDateTime(email.timestamp)}>
+                {formatRelativeTime(email.timestamp, new Date($relativeTimeTick))}
               </span>
               <button 
                 onclick={(e) => { e.stopPropagation(); onToggleStar(email!.id); }}

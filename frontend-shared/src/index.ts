@@ -95,6 +95,10 @@ export {
   TemplateStore,
 } from './stores/templates.svelte.js';
 
+export {
+  relativeTimeTick,
+} from './stores/index.js';
+
 // ── Offline queue ───────────────────────────────────────────────
 export {
   enqueueMutation,
@@ -150,3 +154,8 @@ export { default as ContactAutocomplete } from './components/ContactAutocomplete
 export { parseIcs } from './utils/icsParser.js';
 export type { IcsEvent } from './utils/icsParser.js';
 export { parseChecklists } from './utils/markdownParser.js';
+
+export {
+  formatRelativeTime,
+  formatExactDateTime,
+} from './utils/relativeTime.js';
