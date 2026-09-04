@@ -7,7 +7,8 @@
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell, ReauthBanner, UndoToast } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction } from '@kestrel/shared/stores';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick } from '@kestrel/shared/stores';
+  import { formatRelativeTime, formatExactDateTime } from '@kestrel/shared';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
@@ -312,7 +313,8 @@
         senderEmail: e.senderEmail,
         subject: e.subject,
         snippet: e.body.replace(/<[^>]*>?/gm, '').substring(0, 110) + '…',
-        date: formatDate(e.timestamp),
+        date: formatRelativeTime(e.timestamp, new Date($relativeTimeTick)),
+        timestamp: e.timestamp,
         isUnread: e.isUnread,
         isStarred: e.isStarred,
       isReplyLater: e.isReplyLater,
@@ -332,7 +334,8 @@
           senderEmail: e.sender_email,
           subject: e.subject || '(no subject)',
           snippet: e.snippet || '',
-          date: formatDate(new Date(e.date_received * 1000).toISOString()),
+          date: formatRelativeTime(new Date(e.date_received * 1000).toISOString(), new Date($relativeTimeTick)),
+          timestamp: new Date(e.date_received * 1000).toISOString(),
           isUnread: !e.is_read,
           isStarred: false,
       isReplyLater: false,
@@ -395,15 +398,6 @@
       }
     }
   });
-
-  function formatDate(iso: string): string {
-    const d = new Date(iso);
-    const now = new Date();
-    const sameDay = d.toDateString() === now.toDateString();
-    return sameDay
-      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  }
 
   // ── Email actions ────────────────────────────────────────────────
   function toggleReplyLater(id: string) {
