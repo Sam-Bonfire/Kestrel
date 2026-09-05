@@ -38,3 +38,7 @@ export {
   templateStore,
   TemplateStore,
 } from './templates.svelte.js';
+
+export {
+  relativeTimeTick,
+} from './ticker.js';
