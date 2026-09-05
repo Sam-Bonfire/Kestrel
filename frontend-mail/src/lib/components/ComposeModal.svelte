@@ -27,14 +27,23 @@
     initialAttachments?: { filename: string; content_type: string; base64_content: string; size: number }[];
   }>();
 
-  let toRecipients = $state<string[]>(initialTo);
+  let toRecipients = $state<string[]>([]);
   let ccRecipients = $state<string[]>([]);
   let bccRecipients = $state<string[]>([]);
   let showCc = $state(false);
   let showBcc = $state(false);
-  let subject = $state(initialSubject);
-  let body = $state(initialBody);
-  let attachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>(initialAttachments);
+  let subject = $state('');
+  let body = $state('');
+  let attachments = $state<{ filename: string; content_type: string; base64_content: string; size: number }[]>([]);
+
+  $effect(() => {
+    if (isOpen) {
+      toRecipients = initialTo;
+      subject = initialSubject;
+      body = initialBody;
+      attachments = initialAttachments;
+    }
+  });
   let fromAccount = $state('');
   let accounts = $state<Account[]>([]);
   let isSending = $state(false);
@@ -160,7 +169,7 @@
     body = body ? `${body}\n${prefix}text${suffix}` : `${prefix}text${suffix}`;
   }
 
-  let fileInput: HTMLInputElement;
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   function handleAttach(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -481,7 +490,7 @@
             <button onclick={() => applyFormat('*', '*')} title="Italic" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><Italic class="w-3.5 h-3.5" /></button>
             <button onclick={() => applyFormat('- ')} title="List" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><List class="w-3.5 h-3.5" /></button>
             <button onclick={() => applyFormat('[', '](https://)')} title="Link" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><Link class="w-3.5 h-3.5" /></button>
-            <button onclick={() => fileInput.click()} title="Attach File" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><Paperclip class="w-3.5 h-3.5" /></button>
+            <button onclick={() => fileInput?.click()} title="Attach File" class="p-1.5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"><Paperclip class="w-3.5 h-3.5" /></button>
 
             {#if templateStore.signatures.length > 0}
               <div class="relative ml-2 flex items-center">

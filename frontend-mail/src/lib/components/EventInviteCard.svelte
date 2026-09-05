@@ -4,7 +4,7 @@
   import { Calendar, Clock, MapPin, User, Check, X, HelpCircle } from 'lucide-svelte';
 
   export let event: IcsEvent;
-  export let emailId: string;
+  export let emailId: string = "";
 
   let rsvpStatus: 'yes' | 'no' | 'maybe' | 'none' = 'none';
   let isUpdating = false;
