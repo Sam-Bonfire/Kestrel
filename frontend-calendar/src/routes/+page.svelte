@@ -1,6 +1,7 @@
 <script lang="ts">
   import CalendarSidebar, { type Account, type Calendar } from '$lib/components/CalendarSidebar.svelte';
   import WeekGrid, { type CalendarEvent } from '$lib/components/WeekGrid.svelte';
+  import YearGrid from '$lib/components/YearGrid.svelte';
   import EventPeekPanel from '$lib/components/EventPeekPanel.svelte';
   import {
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
@@ -103,6 +104,7 @@
     if (key === 'd') viewMode = 'day';
     else if (key === 'w') viewMode = 'week';
     else if (key === 'm') viewMode = 'month';
+    else if (key === 'y') viewMode = 'year';
     else if (key === 'a') viewMode = 'agenda';
     else if (key === 't') handleJumpToToday();
     // N-Day views (1-7)
@@ -422,6 +424,7 @@
   let headerLabel = $derived.by(() => {
     if (viewMode === 'day') return selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
     if (viewMode === 'month') return selectedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    if (viewMode === 'year') return selectedDate.toLocaleDateString(undefined, { year: 'numeric' });
 
     // For week/multi-day views, we show a range
     let daysToAdd = 6;
@@ -463,6 +466,7 @@
     if (viewMode === 'day') return 'Day';
     if (viewMode === 'week') return 'Week';
     if (viewMode === 'month') return 'Month';
+    if (viewMode === 'year') return 'Year';
     if (viewMode === 'agenda') return 'Agenda';
     if (viewMode === 'weekdays') return 'Weekdays';
     const nDayMatch = viewMode.match(/^(\d+)-day$/);
@@ -556,6 +560,11 @@
   // Navigate Date
   function handleNavigateDate(direction: 'prev' | 'next') {
     const d = new Date(selectedDate);
+    if (viewMode === 'year') {
+      d.setFullYear(d.getFullYear() + (direction === 'prev' ? -1 : 1));
+      selectedDate = d;
+      return;
+    }
     const step = viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : viewMode === 'weekdays' ? 7 : 30;
     d.setDate(d.getDate() + (direction === 'prev' ? -step : step));
     selectedDate = d;
@@ -748,6 +757,7 @@
                       { label: 'Day', mode: 'day', shortcut: '1 or D' },
                       { label: 'Week', mode: 'week', shortcut: '0 or W' },
                       { label: 'Month', mode: 'month', shortcut: 'M' },
+                      { label: 'Year', mode: 'year', shortcut: 'Y' },
                     ] as item}
                       <button
                         onclick={() => {
@@ -953,6 +963,14 @@
 
 
     <!-- Unified timeline/month/agenda grid view component -->
+    {#if viewMode === 'year'}
+      <YearGrid
+        events={filteredEvents}
+        {selectedDate}
+        onSelectDate={(d) => { selectedDate = d; }}
+        onChangeViewMode={(m) => { viewMode = m; }}
+      />
+    {:else}
     <WeekGrid
       events={filteredEvents}
       {selectedDate}
@@ -991,6 +1009,7 @@
         });
       }}
     />
+    {/if}
   </div>
 
   <!-- Event Details Sidebar Peek -->

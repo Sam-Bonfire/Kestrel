@@ -161,3 +161,10 @@ export {
   formatRelativeTime,
   formatExactDateTime,
 } from './utils/relativeTime.js';
+export {
+  buildEventDensityMap,
+  daysInMonth,
+  toISODateString,
+  type DatedEvent,
+  type DayDensity,
+} from './utils/eventDensity.js';
