@@ -3,6 +3,7 @@
   import { ContactAutocomplete } from '@kestrel/shared';
   import { detectConferenceLink } from '@kestrel/shared';
   import { openUrl } from '@tauri-apps/plugin-opener';
+  import { detectTimezone, type DetectedTimezoneResult } from '@kestrel/shared';
 
   export interface CalendarEvent {
     id?: string;
@@ -57,6 +58,36 @@
   let attendeeEmails = $state<string[]>([]);
   let attendees = $state<SelectedContact[]>([]);
   let isAllDay = $state(false);
+  let detectedTimezone = $state<DetectedTimezoneResult | null>(null);
+  let appliedTimezone = $state(false);
+
+  $effect(() => {
+    if (!appliedTimezone) {
+      const combinedText = `${title} ${description}`;
+      detectedTimezone = detectTimezone(combinedText);
+    }
+  });
+
+  function applyTimezone() {
+    if (detectedTimezone) {
+      const d = detectedTimezone.localDate;
+      const h = d.getHours().toString().padStart(2, '0');
+      const m = d.getMinutes().toString().padStart(2, '0');
+      startTime = `${h}:${m}`;
+
+      const endDate = new Date(d.getTime() + 60 * 60 * 1000);
+      const eh = endDate.getHours().toString().padStart(2, '0');
+      const em = endDate.getMinutes().toString().padStart(2, '0');
+      endTime = `${eh}:${em}`;
+
+      const y = d.getFullYear();
+      const mo = (d.getMonth() + 1).toString().padStart(2, '0');
+      const da = d.getDate().toString().padStart(2, '0');
+      date = `${y}-${mo}-${da}`;
+
+      appliedTimezone = true;
+    }
+  }
   let calendarId = $state('');
   let organizer = $state('');
 
@@ -269,6 +300,7 @@
           <div class="flex items-center gap-4 group cursor-pointer">
             <Link class="w-4 h-4 text-neutral-500 shrink-0" />
             <span class="text-sm font-semibold text-neutral-400 group-hover:text-white transition-colors">Add links and attachments</span>
+
           </div>
           <div class="pl-8 pt-1">
             <textarea
@@ -278,6 +310,27 @@
               class="w-full bg-transparent border-none outline-none text-sm font-semibold text-white placeholder:text-neutral-500 resize-none"
             ></textarea>
           </div>
+          {#if detectedTimezone && !isAllDay}
+            <div class="pl-8 pt-2">
+              <div class="inline-flex items-center gap-2 bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium">
+                <Globe class="w-3.5 h-3.5" />
+                <span>Detected {detectedTimezone.originalText} ({detectedTimezone.formattedLocalTime} in your timezone)</span>
+                {#if !appliedTimezone}
+                  <button type="button" class="ml-2 hover:text-white transition-colors cursor-pointer text-blue-300 font-semibold" onclick={applyTimezone}>
+                    Apply to Time
+                  </button>
+                {:else}
+                  <span class="ml-2 flex items-center gap-1 text-green-400">
+                    <Check class="w-3 h-3" />
+                    Applied
+                  </span>
+                {/if}
+                <button type="button" class="ml-1 hover:text-white transition-colors cursor-pointer" onclick={() => { detectedTimezone = null; appliedTimezone = true; }}>
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
 
         <!-- RSVP Status Block -->
