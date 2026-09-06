@@ -81,6 +81,9 @@ export {
   labelCustomizations,
   initializeSettings,
   syncInterval,
+  swipeLeftAction,
+  swipeRightAction,
+  type SwipeActionType,
 } from './stores/index.js';
 
 export {
