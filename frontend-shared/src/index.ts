@@ -161,3 +161,8 @@ export {
   formatRelativeTime,
   formatExactDateTime,
 } from './utils/relativeTime.js';
+export {
+  checkForAppUpdate,
+  installAppUpdate,
+  type UpdateStatus,
+} from './utils/updater.js';
