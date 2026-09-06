@@ -4,7 +4,10 @@
   import {
     mailDenseMode,
     mailDefaultLandingView,
-    templateStore
+    swipeLeftAction,
+    swipeRightAction,
+    templateStore,
+    type SwipeActionType,
   } from '@kestrel/shared';
   import { apiClient } from '@kestrel/shared/api';
   import { onMount } from 'svelte';
@@ -16,6 +19,15 @@
 
   let activeTab = $state<'general' | 'snippets' | 'signatures'>('general');
   let accounts = $state<any[]>([]);
+
+  const swipeActionOptions: { value: SwipeActionType; label: string }[] = [
+    { value: 'archive', label: 'Archive' },
+    { value: 'trash', label: 'Delete' },
+    { value: 'toggle_read', label: 'Mark read / unread' },
+    { value: 'toggle_star', label: 'Star / unstar' },
+    { value: 'snooze', label: 'Snooze' },
+    { value: 'none', label: 'None' },
+  ];
 
   onMount(async () => {
     try {
@@ -112,6 +124,24 @@
               <option value="unread">Unread Feed</option>
               <option value="starred">Starred List</option>
               <option value="all-mail">All Mail View</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Swipe Right Action</span>
+            <select bind:value={$swipeRightAction} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
+              {#each swipeActionOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Swipe Left Action</span>
+            <select bind:value={$swipeLeftAction} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
+              {#each swipeActionOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
             </select>
           </div>
         {/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare, Pencil, Trash2 } from 'lucide-svelte';
-  import { detectConferenceLink } from '@kestrel/shared';
+  import { detectConferenceLink, isWorkingDay, parseTimeToMinutes, DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
   import EventHoverPopover from './EventHoverPopover.svelte';
 
@@ -31,6 +31,7 @@
     startHour = 8,
     secondaryTimezones = [] as string[],
     selectedEventId = null as string | null,
+    workingHours = DEFAULT_WORKING_HOURS as WorkingHoursConfig,
     onEventClick = (ev: CalendarEvent) => {},
     onEmptySlotClick = () => {},
     onChangeViewMode = () => {},
@@ -46,6 +47,7 @@
     selectedEventId?: string | null;
     onEventClick?: (ev: CalendarEvent, e?: MouseEvent) => void;
     onEmptySlotClick?: (dateStr: string, timeStr: string, e?: MouseEvent) => void;
+    workingHours?: WorkingHoursConfig;
     onChangeViewMode?: (v: string) => void;
     onEventDelete?: (id: string) => void;
     onEventUpdate?: (id: string, updates: Partial<CalendarEvent>) => void;
@@ -732,6 +734,18 @@
                tabindex="0"
                onkeydown={(e) => { if (e.key === 'Enter') onEmptySlotClick?.(dateStr, '09:00'); }}
           >
+            <!-- Working hours shading overlay (1px per minute, 60px per hour) -->
+            {#if workingHours.enabled && !isWorkingDay(date, workingHours)}
+              <div class="absolute inset-0 bg-slate-500/10 pointer-events-none" aria-hidden="true"></div>
+            {:else if workingHours.enabled}
+              {@const whStart = parseTimeToMinutes(workingHours.startTime)}
+              {@const whEnd = parseTimeToMinutes(workingHours.endTime)}
+              <div class="absolute left-0 right-0 top-0 bg-slate-500/10 pointer-events-none" style="height: {whStart}px;" aria-hidden="true"></div>
+              <div class="absolute left-0 right-0 bottom-0 bg-slate-500/10 pointer-events-none" style="top: {whEnd}px;" aria-hidden="true"></div>
+              <div class="absolute left-0 right-0 border-t border-dashed border-blue-400/40 pointer-events-none" style="top: {whStart}px;" aria-hidden="true"></div>
+              <div class="absolute left-0 right-0 border-t border-dashed border-blue-400/40 pointer-events-none" style="top: {whEnd}px;" aria-hidden="true"></div>
+            {/if}
+
             <!-- Drag-to-create ghost selection overlay -->
             {#if dragCreate?.active && dragCreate.dateStr === dateStr}
               <div

@@ -15,6 +15,9 @@ export {
   labelCustomizations,
   initializeSettings,
   syncInterval,
+  swipeLeftAction,
+  swipeRightAction,
+  type SwipeActionType,
 } from './settings.js';
 
 export {
@@ -42,3 +45,9 @@ export {
 export {
   relativeTimeTick,
 } from './ticker.js';
+
+export {
+  focusMode,
+  toggleFocusMode,
+  exitFocusMode,
+} from './focusMode.js';

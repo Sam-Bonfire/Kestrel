@@ -81,6 +81,9 @@ export {
   labelCustomizations,
   initializeSettings,
   syncInterval,
+  swipeLeftAction,
+  swipeRightAction,
+  type SwipeActionType,
 } from './stores/index.js';
 
 export {
@@ -161,3 +164,10 @@ export {
   formatRelativeTime,
   formatExactDateTime,
 } from './utils/relativeTime.js';
+export {
+  DEFAULT_WORKING_HOURS,
+  isWorkingDay,
+  isWorkingHour,
+  parseTimeToMinutes,
+  type WorkingHoursConfig,
+} from './utils/workingHours.js';
