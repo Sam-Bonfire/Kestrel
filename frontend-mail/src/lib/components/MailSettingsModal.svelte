@@ -9,6 +9,7 @@
     templateStore,
     type SwipeActionType,
   } from '@kestrel/shared';
+  import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
   import { apiClient } from '@kestrel/shared/api';
   import { onMount } from 'svelte';
 
@@ -19,6 +20,30 @@
 
   let activeTab = $state<'general' | 'snippets' | 'signatures'>('general');
   let accounts = $state<any[]>([]);
+  let updateMessage = $state<string | null>(null);
+  let updateAvailable = $state(false);
+  let checkingUpdate = $state(false);
+
+  async function handleCheckForUpdates() {
+    checkingUpdate = true;
+    updateMessage = 'Checking for updates...';
+    const status = await checkForAppUpdate();
+    checkingUpdate = false;
+    if (status.state === 'up-to-date') {
+      updateAvailable = false;
+      updateMessage = 'You are on the latest version.';
+    } else if (status.state === 'available') {
+      updateAvailable = true;
+      updateMessage = `Version ${status.version} is available.`;
+    } else {
+      updateAvailable = false;
+      updateMessage = status.reason;
+    }
+  }
+
+  async function handleInstallUpdate() {
+    updateMessage = await installAppUpdate();
+  }
 
   const swipeActionOptions: { value: SwipeActionType; label: string }[] = [
     { value: 'archive', label: 'Archive' },
@@ -125,6 +150,30 @@
               <option value="starred">Starred List</option>
               <option value="all-mail">All Mail View</option>
             </select>
+          </div>
+
+          <div class="space-y-2">
+            <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">App Updates</span>
+            <div class="flex items-center gap-2">
+              <button
+                onclick={handleCheckForUpdates}
+                disabled={checkingUpdate}
+                class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {checkingUpdate ? 'Checking...' : 'Check for updates'}
+              </button>
+              {#if updateAvailable}
+                <button
+                  onclick={handleInstallUpdate}
+                  class="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-xs text-white transition-colors cursor-pointer"
+                >
+                  Install update
+                </button>
+              {/if}
+            </div>
+            {#if updateMessage}
+              <p class="text-[11px] text-[var(--color-text-secondary)]">{updateMessage}</p>
+            {/if}
           </div>
 
           <div class="space-y-1">

@@ -9,6 +9,7 @@
   } from 'lucide-svelte';
   import { AppShell, UndoToast } from '@kestrel/shared/components';
   import { authState, triggerUndoAction } from '@kestrel/shared/stores';
+  import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
   import { DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
 
   // State management
@@ -43,6 +44,26 @@
   let miniMonth = $state(new Date());
   let isDetailsDocked = $state(false);
   let secondaryTimezones = $state<string[]>([]);
+  let updateMessage = $state<string | null>(null);
+  let updateAvailable = $state(false);
+  let checkingUpdate = $state(false);
+
+  async function handleCheckForUpdates() {
+    checkingUpdate = true;
+    updateMessage = 'Checking for updates...';
+    const status = await checkForAppUpdate();
+    checkingUpdate = false;
+    if (status.state === 'up-to-date') {
+      updateAvailable = false;
+      updateMessage = 'You are on the latest version.';
+    } else if (status.state === 'available') {
+      updateAvailable = true;
+      updateMessage = `Version ${status.version} is available.`;
+    } else {
+      updateAvailable = false;
+      updateMessage = status.reason;
+    }
+  }
 
   // LocalStorage state persistence
   $effect(() => {
@@ -1152,6 +1173,30 @@
               <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
             </div>
+          </div>
+
+          <div class="space-y-2 pt-2">
+            <span class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">App Updates</span>
+            <div class="flex items-center gap-2">
+              <button
+                onclick={handleCheckForUpdates}
+                disabled={checkingUpdate}
+                class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-neutral-700 text-xs text-white transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {checkingUpdate ? 'Checking...' : 'Check for updates'}
+              </button>
+              {#if updateAvailable}
+                <button
+                  onclick={async () => { updateMessage = await installAppUpdate(); }}
+                  class="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-xs text-white transition-colors cursor-pointer"
+                >
+                  Install update
+                </button>
+              {/if}
+            </div>
+            {#if updateMessage}
+              <p class="text-[11px] text-neutral-400">{updateMessage}</p>
+            {/if}
           </div>
 
           <div class="flex items-center justify-between pt-2">
