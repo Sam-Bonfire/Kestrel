@@ -4,7 +4,7 @@
   import EventPeekPanel from '$lib/components/EventPeekPanel.svelte';
   import {
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
-    Search, Settings, Menu, ChevronDown, X, CalendarDays
+    Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer
   } from 'lucide-svelte';
   import { AppShell, UndoToast } from '@kestrel/shared/components';
   import { authState, triggerUndoAction } from '@kestrel/shared/stores';
@@ -564,6 +564,12 @@
   function handleJumpToToday() {
     selectedDate = new Date();
   }
+
+  function sortedForPrint(evs: CalendarEvent[]): CalendarEvent[] {
+    return [...evs].sort((a, b) =>
+      `${a.date} ${a.startTime}` < `${b.date} ${b.startTime}` ? -1 : 1
+    );
+  }
 </script>
 
 <AppShell bind:isMobileSidebarOpen={isSidebarOpenMobile}>
@@ -608,7 +614,7 @@
 
     {#if isMobileOrTablet}
       <!-- Mobile & Tablet Header -->
-      <header class="pl-4 pr-36 py-3 border-b border-[var(--color-border-hairline)] flex items-center justify-between gap-2 bg-[#0a0a0a] relative select-none animate-fadeIn shrink-0">
+      <header class="no-print pl-4 pr-36 py-3 border-b border-[var(--color-border-hairline)] flex items-center justify-between gap-2 bg-[#0a0a0a] relative select-none animate-fadeIn shrink-0">
         <!-- Transparent drag handle that stops before WindowControls -->
         <div class="absolute inset-y-0 left-0 right-36" data-tauri-drag-region></div>
 
@@ -717,7 +723,7 @@
       </header>
     {:else}
       <!-- Desktop Header -->
-      <header class="pl-6 pr-36 py-3 flex items-center justify-between shrink-0 bg-[#0a0a0a] cursor-default select-none relative border-b border-[var(--color-border-hairline)]">
+      <header class="no-print pl-6 pr-36 py-3 flex items-center justify-between shrink-0 bg-[#0a0a0a] cursor-default select-none relative border-b border-[var(--color-border-hairline)]">
         <!-- Transparent drag handle that stops before WindowControls -->
         <div class="absolute inset-y-0 left-0 right-36" data-tauri-drag-region></div>
 
@@ -779,6 +785,16 @@
                     >
                       <span>View settings</span>
                       <ChevronRight class="w-3.5 h-3.5 text-neutral-500" />
+                    </button>
+
+                    <hr class="border-neutral-800/60 my-1" />
+
+                    <button
+                      onclick={() => { isViewDropdownOpen = false; window.print(); }}
+                      class="w-full text-left px-3.5 py-2.5 text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)] transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <Printer class="w-3.5 h-3.5" />
+                      <span>Print schedule</span>
                     </button>
                   </div>
                 {:else if dropdownSubmenu === 'number_of_days'}
@@ -1156,6 +1172,26 @@
 
   <!-- Unified Undo Action Toast System -->
   <UndoToast />
+
+  <!-- Print-only agenda schedule -->
+  <div class="print-only">
+    <h1>Kestrel Calendar Schedule</h1>
+    <table class="print-agenda-table">
+      <thead>
+        <tr><th>Date</th><th>Time</th><th>Title</th><th>Location</th></tr>
+      </thead>
+      <tbody>
+        {#each sortedForPrint(events) as ev (ev.id)}
+          <tr class="print-break-inside-avoid">
+            <td>{ev.date}</td>
+            <td>{ev.isAllDay ? 'All day' : `${ev.startTime} - ${ev.endTime}`}</td>
+            <td>{ev.title || 'Untitled'}</td>
+            <td>{ev.location ?? ''}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
   {/snippet}
 </AppShell>
 
