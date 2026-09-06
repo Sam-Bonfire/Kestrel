@@ -42,3 +42,9 @@ export {
 export {
   relativeTimeTick,
 } from './ticker.js';
+
+export {
+  focusMode,
+  toggleFocusMode,
+  exitFocusMode,
+} from './focusMode.js';
