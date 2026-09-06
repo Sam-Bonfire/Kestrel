@@ -8,6 +8,7 @@
   } from 'lucide-svelte';
   import { AppShell, UndoToast } from '@kestrel/shared/components';
   import { authState, triggerUndoAction } from '@kestrel/shared/stores';
+  import { DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
 
   // State management
   $effect(() => {
@@ -36,6 +37,7 @@
   let defaultCalendarId = $state('cal-personal');
   let startHour = $state(8);
   let showWeekends = $state(true);
+  let workingHours = $state<WorkingHoursConfig>({ ...DEFAULT_WORKING_HOURS });
   let isHeaderMonthDropdownOpen = $state(false);
   let miniMonth = $state(new Date());
   let isDetailsDocked = $state(false);
@@ -48,6 +50,7 @@
       localStorage.setItem('kestrel_events', JSON.stringify(events));
       localStorage.setItem('kestrel_viewMode', viewMode);
       localStorage.setItem('kestrel_showWeekends', JSON.stringify(showWeekends));
+      localStorage.setItem('kestrel_workingHours', JSON.stringify(workingHours));
       localStorage.setItem('kestrel_isDocked', JSON.stringify(isDetailsDocked));
       localStorage.setItem('kestrel_startHour', startHour.toString());
       localStorage.setItem('kestrel_secondaryTimezones', JSON.stringify(secondaryTimezones));
@@ -162,6 +165,8 @@
       if (savedViewMode) viewMode = savedViewMode;
       const savedShowWeekends = localStorage.getItem('kestrel_showWeekends');
       if (savedShowWeekends) showWeekends = JSON.parse(savedShowWeekends);
+      const savedWorkingHours = localStorage.getItem('kestrel_workingHours');
+      if (savedWorkingHours) workingHours = { ...DEFAULT_WORKING_HOURS, ...JSON.parse(savedWorkingHours) };
       const savedDocked = localStorage.getItem('kestrel_isDocked');
       if (savedDocked) isDetailsDocked = JSON.parse(savedDocked);
       const savedStartHour = localStorage.getItem('kestrel_startHour');
@@ -960,6 +965,7 @@
       {showWeekends}
       {startHour}
       {secondaryTimezones}
+      {workingHours}
       selectedEventId={selectedEvent?.id}
       onEventClick={(ev, e) => {
         selectedEvent = ev;
@@ -1107,6 +1113,57 @@
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
             </div>
           </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <label class="text-xs font-semibold text-white">Highlight working hours</label>
+            <div class="relative inline-block w-10 h-5 cursor-pointer">
+              <input type="checkbox" bind:checked={workingHours.enabled} class="peer sr-only" />
+              <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
+              <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+            </div>
+          </div>
+
+          {#if workingHours.enabled}
+            <div class="flex items-center gap-2">
+              <select
+                bind:value={workingHours.startTime}
+                aria-label="Work day start time"
+                class="flex-1 bg-[#1a1a1a] border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+              >
+                {#each Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`) as t}
+                  <option value={t}>{t}</option>
+                {/each}
+              </select>
+              <span class="text-neutral-500 text-xs">to</span>
+              <select
+                bind:value={workingHours.endTime}
+                aria-label="Work day end time"
+                class="flex-1 bg-[#1a1a1a] border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+              >
+                {#each Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`) as t}
+                  <option value={t}>{t}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between gap-1" role="group" aria-label="Work days">
+              {#each ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as label, day}
+                <button
+                  type="button"
+                  onclick={() => {
+                    workingHours.daysOfWeek = workingHours.daysOfWeek.includes(day)
+                      ? workingHours.daysOfWeek.filter((d) => d !== day)
+                      : [...workingHours.daysOfWeek, day].sort();
+                  }}
+                  aria-label="Toggle {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day]} as work day"
+                  aria-pressed={workingHours.daysOfWeek.includes(day)}
+                  class="w-7 h-7 rounded-full text-xs font-semibold transition-colors cursor-pointer {workingHours.daysOfWeek.includes(day) ? 'bg-rose-500 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'}"
+                >
+                  {label}
+                </button>
+              {/each}
+            </div>
+          {/if}
 
           <div class="space-y-2.5">
             <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
