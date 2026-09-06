@@ -54,7 +54,7 @@
   {/if}
 
   <!-- Sidebar Container -->
-  <div class="fixed inset-y-0 left-0 z-50 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 {isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl lg:shadow-none {$focusMode ? 'lg:max-w-0 lg:opacity-0 lg:overflow-hidden' : 'lg:max-w-[620px]'}">
+  <div class="no-print fixed inset-y-0 left-0 z-50 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 {isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl lg:shadow-none {$focusMode ? 'lg:max-w-0 lg:opacity-0 lg:overflow-hidden' : 'lg:max-w-[620px]'}">
     {@render sidebar?.()}
   </div>
 
