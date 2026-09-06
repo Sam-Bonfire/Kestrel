@@ -1,11 +1,13 @@
 <script lang="ts">
   import { X, Reply, Archive, Trash2, ShieldAlert, ShieldCheck, ListPlus } from 'lucide-svelte';
+  import { formatExactDateTime } from '@kestrel/shared';
 
   export let thread: {
     id: string;
     sender: string;
     subject: string;
     date: string;
+    timestamp?: string;
     htmlBody: string;
     isReplyLater?: boolean;
   } | null = null;
@@ -86,7 +88,7 @@
       <h1 class="text-lg font-bold text-white mb-2">{thread.subject}</h1>
       <div class="flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
         <span class="font-semibold text-[var(--color-text-primary)]">{thread.sender}</span>
-        <span class="font-mono">{thread.date}</span>
+        <span class="font-mono" title={thread.timestamp ? formatExactDateTime(thread.timestamp) : undefined} aria-label={thread.timestamp ? formatExactDateTime(thread.timestamp) : undefined}>{thread.date}</span>
       </div>
     </div>
 

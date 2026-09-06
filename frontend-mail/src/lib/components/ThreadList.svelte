@@ -14,7 +14,8 @@
     mailDenseMode, 
     labelCustomizations, 
     getLabelStyle,
-    Dropdown
+    Dropdown,
+    formatExactDateTime
   } from '@kestrel/shared';
   import { mailStore } from '../stores/mailStore.svelte.js';
 
@@ -25,6 +26,7 @@
     subject: string;
     snippet: string;
     date: string;
+    timestamp?: string;
     isUnread: boolean;
     isStarred: boolean;
     isReplyLater?: boolean;
@@ -619,7 +621,7 @@
                 {/if}
                 <span class="{thread.isUnread ? 'font-bold text-white' : 'font-medium text-neutral-200'} truncate">{thread.sender}</span>
               </div>
-              <span class="font-mono text-[10px] tracking-tight text-[var(--color-text-secondary)] sm:hidden shrink-0">{thread.date}</span>
+              <span class="font-mono text-[10px] tracking-tight text-[var(--color-text-secondary)] sm:hidden shrink-0" title={thread.timestamp ? formatExactDateTime(thread.timestamp) : undefined} aria-label={thread.timestamp ? formatExactDateTime(thread.timestamp) : undefined}>{thread.date}</span>
             </div>
           </div>
 
@@ -655,7 +657,7 @@
                 <Paperclip class="w-3.5 h-3.5 text-[var(--color-text-secondary)]/50 shrink-0" strokeWidth={1.5} />
               {/if}
               
-              <span class="font-mono text-[11px] tracking-tight shrink-0 whitespace-nowrap text-right hidden sm:block">{thread.date}</span>
+              <span class="font-mono text-[11px] tracking-tight shrink-0 whitespace-nowrap text-right hidden sm:block" title={thread.timestamp ? formatExactDateTime(thread.timestamp) : undefined} aria-label={thread.timestamp ? formatExactDateTime(thread.timestamp) : undefined}>{thread.date}</span>
             </div>
 
             <!-- Floating action menu on hover (Matches screenshot: Star, Archive, Delete, CheckSquare, Clock, Tag) -->

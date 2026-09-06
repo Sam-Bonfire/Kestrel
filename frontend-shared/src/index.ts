@@ -95,6 +95,10 @@ export {
   TemplateStore,
 } from './stores/templates.svelte.js';
 
+export {
+  relativeTimeTick,
+} from './stores/index.js';
+
 // ── Offline queue ───────────────────────────────────────────────
 export {
   enqueueMutation,
@@ -153,3 +157,7 @@ export { parseChecklists } from './utils/markdownParser.js';
 
 export { detectTimezone } from './utils/timezoneDetector.js';
 export type { DetectedTimezoneResult } from './utils/timezoneDetector.js';
+export {
+  formatRelativeTime,
+  formatExactDateTime,
+} from './utils/relativeTime.js';
