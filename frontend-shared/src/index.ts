@@ -155,6 +155,8 @@ export { parseIcs } from './utils/icsParser.js';
 export type { IcsEvent } from './utils/icsParser.js';
 export { parseChecklists } from './utils/markdownParser.js';
 
+export { detectTimezone } from './utils/timezoneDetector.js';
+export type { DetectedTimezoneResult } from './utils/timezoneDetector.js';
 export {
   formatRelativeTime,
   formatExactDateTime,

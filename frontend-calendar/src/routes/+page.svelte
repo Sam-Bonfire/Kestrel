@@ -980,7 +980,7 @@
         events = events.map(ev => ev.id === id ? { ...ev, ...updates } : ev);
 
         import('@kestrel/shared/api').then(({ updateEvent }) => {
-          updateEvent(id, updates).then(() => {
+          updateEvent(id, updates as any).then(() => {
             showToast('Event updated successfully', 'success');
           }).catch(err => {
             console.error('Failed to update event:', err);
