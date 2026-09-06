@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare } from 'lucide-svelte';
+  import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare, Pencil, Trash2 } from 'lucide-svelte';
   import { detectConferenceLink, isWorkingDay, parseTimeToMinutes, DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
   import EventHoverPopover from './EventHoverPopover.svelte';
@@ -35,6 +35,7 @@
     onEventClick = (ev: CalendarEvent) => {},
     onEmptySlotClick = () => {},
     onChangeViewMode = () => {},
+    onEventDelete = (_id: string) => {},
     onEventUpdate = (id: string, updates: Partial<CalendarEvent>) => {}
   } = $props<{
     events?: CalendarEvent[];
@@ -48,8 +49,24 @@
     onEmptySlotClick?: (dateStr: string, timeStr: string, e?: MouseEvent) => void;
     workingHours?: WorkingHoursConfig;
     onChangeViewMode?: (v: string) => void;
+    onEventDelete?: (id: string) => void;
     onEventUpdate?: (id: string, updates: Partial<CalendarEvent>) => void;
   }>();
+
+  // Right-click context menu state
+  let eventMenu = $state<{ x: number; y: number; event: CalendarEvent } | null>(null);
+
+  function openEventMenu(ev: CalendarEvent, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    hoveredEvent = null;
+    hoverAnchorElement = null;
+    eventMenu = {
+      x: Math.min(e.clientX, window.innerWidth - 190),
+      y: Math.min(e.clientY, window.innerHeight - 120),
+      event: ev,
+    };
+  }
 
   // Full 24-hour timeline
   const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -524,6 +541,7 @@
                   hoverAnchorElement = null;
                   onEventClick(ev, e);
                 }}
+                oncontextmenu={(e) => openEventMenu(ev, e)}
                 onpointerenter={(e) => handlePointerEnter(e, ev)}
                 onpointerleave={handlePointerLeave}
                 class="w-full px-2 py-0.5 rounded text-[10px] text-left font-medium truncate shadow-sm cursor-pointer transition-all hover:scale-[1.03] hover:shadow-lg hover:z-20 {(COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue).bg} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-10' : 'border-transparent'}"
@@ -800,6 +818,7 @@
                   hoverAnchorElement = null;
                   onEventClick(ev, e);
                 }}
+                oncontextmenu={(e) => openEventMenu(ev, e)}
                 onpointerenter={(e) => handlePointerEnter(e, ev)}
                 onpointerleave={handlePointerLeave}
                 data-event-card
@@ -867,3 +886,33 @@
     hoverAnchorElement = null;
   }}
 />
+
+{#if eventMenu}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 z-[70]" onclick={() => eventMenu = null} oncontextmenu={(e) => e.preventDefault()} role="presentation"></div>
+  <div
+    class="fixed z-[71] w-44 rounded-xl border border-neutral-800 bg-[#161616] shadow-2xl py-1 text-xs font-sans"
+    style="left: {eventMenu.x}px; top: {eventMenu.y}px;"
+    role="menu"
+    aria-label="Event actions"
+  >
+    <button
+      onclick={() => { const ev = eventMenu!.event; eventMenu = null; onEventClick(ev); }}
+      class="w-full text-left px-3.5 py-2.5 text-neutral-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
+      role="menuitem"
+    >
+      <Pencil class="w-3.5 h-3.5" />
+      <span>Edit event</span>
+    </button>
+    <button
+      onclick={() => { const id = eventMenu!.event.id; eventMenu = null; onEventDelete(id); }}
+      class="w-full text-left px-3.5 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-2 cursor-pointer"
+      role="menuitem"
+    >
+      <Trash2 class="w-3.5 h-3.5" />
+      <span>Delete event</span>
+    </button>
+  </div>
+{/if}
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') eventMenu = null; }} />

@@ -570,6 +570,27 @@
     selectedDate = new Date();
   }
 
+  function handleDeleteEvent(id: string) {
+    const deletedEv = events.find(ev => ev.id === id);
+    if (!deletedEv) return;
+    events = events.filter(e => e.id !== id);
+    if (selectedEvent?.id === id) selectedEvent = null;
+
+    triggerUndoAction({
+      title: `Event "${deletedEv.title || 'Untitled'}" deleted`,
+      onCommit: async () => {
+        if (!id.startsWith('temp-')) {
+          const { deleteEvent } = await import('@kestrel/shared/api');
+          await deleteEvent(id).catch(err => console.error('Failed to delete event:', err));
+        }
+      },
+      onUndo: () => {
+        events = [...events, deletedEv];
+      },
+      type: 'warning',
+    });
+  }
+
   function sortedForPrint(evs: CalendarEvent[]): CalendarEvent[] {
     return [...evs].sort((a, b) =>
       `${a.date} ${a.startTime}` < `${b.date} ${b.startTime}` ? -1 : 1
@@ -993,6 +1014,7 @@
       }}
       onEmptySlotClick={openNewEventPanel}
       onChangeViewMode={(m) => viewMode = m}
+      onEventDelete={handleDeleteEvent}
       onEventUpdate={(id, updates) => {
         const oldEvent = events.find(ev => ev.id === id);
         if (!oldEvent) return;
@@ -1029,24 +1051,7 @@
         selectedEvent = null;
       }}
       onDelete={() => {
-        const deletedEv = selectedEvent;
-        const deletedId = selectedEvent.id;
-        events = events.filter(e => e.id !== deletedId);
-        selectedEvent = null;
-
-        triggerUndoAction({
-          title: `Event "${deletedEv.title || 'Untitled'}" deleted`,
-          onCommit: async () => {
-            if (deletedId && !deletedId.startsWith('temp-')) {
-              const { deleteEvent } = await import('@kestrel/shared/api');
-              await deleteEvent(deletedId).catch(err => console.error('Failed to delete event:', err));
-            }
-          },
-          onUndo: () => {
-            events = [...events, deletedEv];
-          },
-          type: 'warning',
-        });
+        if (selectedEvent) handleDeleteEvent(selectedEvent.id);
       }}
     />
   {:else if isDetailsDocked && !isMobileOrTablet}
