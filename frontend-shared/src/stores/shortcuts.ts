@@ -14,6 +14,7 @@ export const defaultShortcuts = [
   { id: 'reply', label: 'Reply', defaultKey: 'R' },
   { id: 'today', label: 'Go to Today', defaultKey: 'T' },
   { id: 'escape', label: 'Escape', defaultKey: 'Escape' },
+  { id: 'focus_mode', label: 'Toggle Focus Mode', defaultKey: '$mod+Shift+F' },
 ];
 
 export type ShortcutOverride = Record<string, string>;

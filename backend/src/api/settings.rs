@@ -69,6 +69,12 @@ pub async fn update_settings(
     if payload.mail_signature.is_some() {
         current_prefs.mail_signature = payload.mail_signature;
     }
+    if payload.swipe_left_action.is_some() {
+        current_prefs.swipe_left_action = payload.swipe_left_action;
+    }
+    if payload.swipe_right_action.is_some() {
+        current_prefs.swipe_right_action = payload.swipe_right_action;
+    }
     if payload.label_customizations.is_some() {
         current_prefs.label_customizations = payload.label_customizations;
     }
