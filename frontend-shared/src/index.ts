@@ -165,6 +165,13 @@ export {
   formatExactDateTime,
 } from './utils/relativeTime.js';
 export {
+  buildEventDensityMap,
+  daysInMonth,
+  toISODateString,
+  type DatedEvent,
+  type DayDensity,
+} from './utils/eventDensity.js';
+export {
   DEFAULT_WORKING_HOURS,
   isWorkingDay,
   isWorkingHour,

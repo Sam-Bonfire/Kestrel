@@ -197,6 +197,9 @@ importers:
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
+      jsdom:
+        specifier: 22.1.0
+        version: 22.1.0
       lucide-svelte:
         specifier: ^0.469.0
         version: 0.469.0(svelte@5.56.7)
