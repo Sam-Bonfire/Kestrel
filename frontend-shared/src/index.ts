@@ -81,6 +81,9 @@ export {
   labelCustomizations,
   initializeSettings,
   syncInterval,
+  swipeLeftAction,
+  swipeRightAction,
+  type SwipeActionType,
 } from './stores/index.js';
 
 export {
@@ -166,3 +169,17 @@ export {
   installAppUpdate,
   type UpdateStatus,
 } from './utils/updater.js';
+export {
+  buildEventDensityMap,
+  daysInMonth,
+  toISODateString,
+  type DatedEvent,
+  type DayDensity,
+} from './utils/eventDensity.js';
+export {
+  DEFAULT_WORKING_HOURS,
+  isWorkingDay,
+  isWorkingHour,
+  parseTimeToMinutes,
+  type WorkingHoursConfig,
+} from './utils/workingHours.js';

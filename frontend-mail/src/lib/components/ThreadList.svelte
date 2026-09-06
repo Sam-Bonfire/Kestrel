@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { fade, slide, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { isTyping } from '$lib/utils/keyboard';
@@ -10,12 +11,15 @@
     Reply, ReplyAll, Forward, BellOff, AlertOctagon
   } from 'lucide-svelte';
   import { WindowControls } from '@kestrel/shared/components';
-  import { 
-    mailDenseMode, 
-    labelCustomizations, 
+  import {
+    mailDenseMode,
+    labelCustomizations,
     getLabelStyle,
     Dropdown,
-    formatExactDateTime
+    formatExactDateTime,
+    swipeLeftAction,
+    swipeRightAction,
+    type SwipeActionType,
   } from '@kestrel/shared';
   import { mailStore } from '../stores/mailStore.svelte.js';
 
@@ -107,6 +111,54 @@
   let showLabelDropdown = $state(false);
   let showMoveToDropdown = $state(false);
   let showBulkLabelDropdown = $state(false);
+
+  // Swipe gesture state (touch/pen only; mouse keeps click + hover actions)
+  const SWIPE_THRESHOLD = 80;
+  const SWIPE_MAX = 120;
+  let swipeStart = $state<{ id: string; x: number } | null>(null);
+  let swipeOffset = $state(0);
+  let suppressClickId = $state<string | null>(null);
+
+  const SWIPE_LABELS: Record<SwipeActionType, string> = {
+    archive: 'Archive',
+    trash: 'Delete',
+    toggle_read: 'Mark read',
+    toggle_star: 'Star',
+    snooze: 'Snooze',
+    none: '',
+  };
+
+  function runSwipeAction(id: string, action: SwipeActionType) {
+    if (action === 'archive') onArchive(id);
+    else if (action === 'trash') onDelete(id);
+    else if (action === 'toggle_read') onToggleUnread(id);
+    else if (action === 'toggle_star') onToggleStar(id);
+    else if (action === 'snooze') onSnooze(id);
+  }
+
+  function handleSwipeStart(id: string, e: PointerEvent) {
+    if (e.pointerType === 'mouse' || !e.isPrimary) return;
+    swipeStart = { id, x: e.clientX };
+    swipeOffset = 0;
+  }
+
+  function handleSwipeMove(id: string, e: PointerEvent) {
+    if (!swipeStart || swipeStart.id !== id || !e.isPrimary) return;
+    const dx = e.clientX - swipeStart.x;
+    swipeOffset = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx));
+  }
+
+  function handleSwipeEnd(id: string) {
+    if (!swipeStart || swipeStart.id !== id) return;
+    const dx = swipeOffset;
+    swipeStart = null;
+    swipeOffset = 0;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    const action = dx > 0 ? get(swipeRightAction) : get(swipeLeftAction);
+    if (action === 'none') return;
+    suppressClickId = id;
+    runSwipeAction(id, action);
+  }
 
   // Filter Toolbar Toggle
   let showFiltersBar = $state(false);
@@ -582,16 +634,35 @@
         <div
           in:fly={{ y: 20, duration: 300, delay: Math.min(i * 30, 300), easing: (t) => t * (2 - t) }}
           animate:flip={{ duration: 300 }}
-          class="group relative flex flex-col sm:flex-row sm:items-center bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 hover:-translate-y-px hover:shadow-md hover:z-10 rounded-lg cursor-pointer transition-all duration-200 border border-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas-base)] focus:outline-none
+          class="group relative flex flex-col sm:flex-row sm:items-center bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 hover:-translate-y-px hover:shadow-md hover:z-10 rounded-lg cursor-pointer transition-all duration-200 border border-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas-base)] focus:outline-none touch-pan-y
             {selectedThreadId === thread.id ? 'bg-[var(--color-canvas-hover)]/60 border-white/5 shadow-sm -translate-y-px z-10' : ''}
             {$mailDenseMode ? 'py-2 sm:py-1 px-3 sm:px-3 min-h-[50px] sm:min-h-[32px]' : 'py-3 sm:py-2.5 px-4 min-h-[64px] sm:min-h-[44px]'}"
-          onclick={() => { selectedIndex = i; onSelectThread(thread.id); }}
+          style={swipeStart?.id === thread.id && swipeOffset !== 0 ? `transform: translateX(${swipeOffset}px);` : undefined}
+          onclick={() => {
+            if (suppressClickId === thread.id) { suppressClickId = null; return; }
+            selectedIndex = i; onSelectThread(thread.id);
+          }}
           oncontextmenu={(e) => handleThreadContextMenu(thread.id, e)}
+          onpointerdown={(e) => handleSwipeStart(thread.id, e)}
+          onpointermove={(e) => handleSwipeMove(thread.id, e)}
+          onpointerup={() => handleSwipeEnd(thread.id)}
+          onpointercancel={() => { swipeStart = null; swipeOffset = 0; }}
           onmouseenter={() => hoveredId = thread.id}
           onmouseleave={() => hoveredId = null}
           role="button"
           tabindex="0"
         >
+          {#if swipeStart?.id === thread.id && swipeOffset !== 0}
+            {@const swipeAction = swipeOffset > 0 ? get(swipeRightAction) : get(swipeLeftAction)}
+            {#if swipeAction !== 'none'}
+              <div
+                class="absolute inset-0 rounded-lg flex items-center px-5 text-xs font-semibold pointer-events-none {swipeOffset > 0 ? 'justify-start bg-emerald-500/25 text-emerald-200' : 'justify-end bg-amber-500/25 text-amber-200'}"
+                style="opacity: {Math.min(1, Math.abs(swipeOffset) / SWIPE_THRESHOLD)};"
+              >
+                {SWIPE_LABELS[swipeAction]}
+              </div>
+            {/if}
+          {/if}
           <div class="flex items-center w-full sm:w-auto min-w-0">
             <!-- Left Checkbox (Hidden on mobile) -->
             <div class="mr-3 shrink-0 hidden sm:flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity {checkedThreads[thread.id] ? '!opacity-100' : ''}">

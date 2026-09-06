@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Reply, Archive, Trash2, ShieldAlert, ShieldCheck, ListPlus } from 'lucide-svelte';
+  import { X, Reply, Archive, Trash2, ShieldAlert, ShieldCheck, ListPlus, Printer } from 'lucide-svelte';
   import { formatExactDateTime } from '@kestrel/shared';
 
   export let thread: {
@@ -48,7 +48,7 @@
 {#if thread}
   <div class="flex-1 h-screen bg-[var(--color-canvas-card)] flex flex-col font-sans border-l border-[var(--color-border-hairline)] transition-all">
     <!-- Header Controls -->
-    <div class="p-4 border-b border-[var(--color-border-hairline)] flex items-center justify-between">
+    <div class="no-print p-4 border-b border-[var(--color-border-hairline)] flex items-center justify-between">
       <div class="flex items-center gap-2">
         <button class="p-1.5 rounded hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-white transition-colors">
           <Reply class="w-4 h-4" />
@@ -61,6 +61,9 @@
         </button>
         <button onclick={() => thread && onToggleReplyLater(thread.id)} class="p-1.5 rounded hover:bg-[var(--color-canvas-hover)] transition-colors {thread && thread.isReplyLater ? 'text-orange-400' : 'text-[var(--color-text-secondary)] hover:text-white'}">
           <ListPlus class="w-4 h-4" />
+        </button>
+        <button onclick={() => window.print()} title="Print thread" aria-label="Print thread" class="p-1.5 rounded hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-white transition-colors">
+          <Printer class="w-4 h-4" />
         </button>
 
         <div class="w-px h-4 bg-[var(--color-border-hairline)] mx-1"></div>
