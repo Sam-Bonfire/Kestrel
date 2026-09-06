@@ -17,6 +17,12 @@ export const labelCustomizations = writable<Record<string, { iconName: string; c
 const SYNC_INTERVAL_KEY = 'kestrel:settings:sync_interval';
 export const syncInterval = writable<number>(loadNumber(SYNC_INTERVAL_KEY, 300)); // Default 5 mins
 
+export type SwipeActionType = 'archive' | 'trash' | 'toggle_read' | 'toggle_star' | 'snooze' | 'none';
+const SWIPE_LEFT_KEY = 'kestrel:settings:swipe_left';
+const SWIPE_RIGHT_KEY = 'kestrel:settings:swipe_right';
+export const swipeLeftAction = writable<SwipeActionType>(loadStr(SWIPE_LEFT_KEY, 'archive') as SwipeActionType);
+export const swipeRightAction = writable<SwipeActionType>(loadStr(SWIPE_RIGHT_KEY, 'toggle_read') as SwipeActionType);
+
 let isInitializing = false;
 let isUpdating = false;
 
@@ -31,6 +37,8 @@ export async function initializeSettings() {
     if (settings.mailSignature != null) mailSignature.set(settings.mailSignature);
     if (settings.labelCustomizations != null) labelCustomizations.set(settings.labelCustomizations);
     if (settings.syncInterval != null) syncInterval.set(settings.syncInterval);
+    if (settings.swipeLeftAction != null) swipeLeftAction.set(settings.swipeLeftAction as SwipeActionType);
+    if (settings.swipeRightAction != null) swipeRightAction.set(settings.swipeRightAction as SwipeActionType);
 
     // Also trigger snippet & signature template sync since we load settings together
     import('./templates.svelte.js').then((m) => {
@@ -66,6 +74,8 @@ async function syncToBackend() {
       mailSignature: get(mailSignature),
       labelCustomizations: get(labelCustomizations),
       syncInterval: get(syncInterval),
+      swipeLeftAction: get(swipeLeftAction),
+      swipeRightAction: get(swipeRightAction),
       // we'll update theme too if available
       theme: (typeof localStorage !== 'undefined' ? localStorage.getItem('kestrel:settings:theme') : null) || 'system',
     });
@@ -99,6 +109,14 @@ labelCustomizations.subscribe((val) => {
 });
 syncInterval.subscribe((val) => {
   saveItem(SYNC_INTERVAL_KEY, String(val));
+  syncToBackend();
+});
+swipeLeftAction.subscribe((val) => {
+  saveItem(SWIPE_LEFT_KEY, val);
+  syncToBackend();
+});
+swipeRightAction.subscribe((val) => {
+  saveItem(SWIPE_RIGHT_KEY, val);
   syncToBackend();
 });
 

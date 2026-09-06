@@ -268,6 +268,8 @@ export type SettingsPayload = {
 	mailDefaultLandingView: string | null,
 	mailDefaultSendAction: string | null,
 	mailSignature: string | null,
+	swipeLeftAction: string | null,
+	swipeRightAction: string | null,
 	labelCustomizations: { [key in string]: LabelCustomization } | null,
 	syncInterval: number | null,
 	theme: string | null,

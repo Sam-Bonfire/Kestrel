@@ -15,6 +15,9 @@ export {
   labelCustomizations,
   initializeSettings,
   syncInterval,
+  swipeLeftAction,
+  swipeRightAction,
+  type SwipeActionType,
 } from './settings.js';
 
 export {
