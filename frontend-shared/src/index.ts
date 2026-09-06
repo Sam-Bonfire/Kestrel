@@ -161,3 +161,10 @@ export {
   formatRelativeTime,
   formatExactDateTime,
 } from './utils/relativeTime.js';
+export {
+  DEFAULT_WORKING_HOURS,
+  isWorkingDay,
+  isWorkingHour,
+  parseTimeToMinutes,
+  type WorkingHoursConfig,
+} from './utils/workingHours.js';
