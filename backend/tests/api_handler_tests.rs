@@ -697,7 +697,357 @@ async fn test_webhooks_ingestion() {
     assert_eq!(res.status(), StatusCode::OK);
 }
 
-/// Stub provider with scripted send outcome for outbox replay tests.
+#[tokio::test]
+async fn test_revision_restore_message() {
+    use backend::core::models::HistoricalRevision;
+    use backend::core::repository::HistoricalRevisionRepository;
+    use backend::core::types::DbUuid;
+    use backend::db::pool::DbPool;
+    use backend::db::sqlite::revision_repository::SqliteRevisionRepository;
+
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "revision_user@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+    let account = seed_account(&state.db, user_uuid, "gmail", "Work Gmail").await;
+    let msg = seed_message(
+        &state.db,
+        account.id.0,
+        "Original Subject",
+        "lead@company.com",
+        "Body here.",
+        Some("inbox"),
+        false,
+    )
+    .await;
+
+    let pool = match &state.db {
+        DbPool::Sqlite(p) => p.clone(),
+        _ => panic!("Expected SQLite pool in test suite"),
+    };
+    let revision_id = uuid::Uuid::new_v4();
+    SqliteRevisionRepository::new(pool)
+        .create(&HistoricalRevision {
+            id: DbUuid::from(revision_id),
+            resource_type: "message".to_string(),
+            resource_id: msg.id,
+            serialized_payload: serde_json::json!({
+                "subject": "Restored Subject",
+                "is_read": true,
+            })
+            .to_string(),
+            revision_number: 1,
+            created_at: chrono::Utc::now().timestamp(),
+        })
+        .await
+        .unwrap();
+
+    // 1. Restore applies payload fields to the message
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/revisions/{}/restore", revision_id))
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let restore_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let fields = restore_json["restored_fields"].as_array().unwrap();
+    assert!(fields.iter().any(|f| f == "subject"));
+    assert!(fields.iter().any(|f| f == "is_read"));
+
+    // 2. Message reflects restored values
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/messages/{}", msg.id.0))
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let msg_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(msg_json["subject"], "Restored Subject");
+    assert_eq!(msg_json["is_read"], true);
+
+    // 3. Unknown revision id returns 404
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/v1/revisions/{}/restore",
+                    uuid::Uuid::new_v4()
+                ))
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    // 4. Malformed revision id returns 400
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/revisions/not-a-uuid/restore")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+/// Stub provider whose sends always fail with a transport error.
+struct NetworkFailProvider;
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::ProviderBranding for NetworkFailProvider {
+    fn get_branding(&self) -> backend::plugins::traits::BrandingPayload {
+        backend::plugins::traits::BrandingPayload {
+            name: "Stub".to_string(),
+            button_text: "Stub".to_string(),
+            button_color: "#000".to_string(),
+            icon_svg: String::new(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::MailProvider for NetworkFailProvider {
+    async fn sync_mail(
+        &self,
+        _auth_token: &str,
+        _cursor: Option<&str>,
+    ) -> Result<backend::plugins::traits::SyncResult, backend::plugins::traits::PluginError> {
+        Ok(backend::plugins::traits::SyncResult {
+            messages: vec![],
+            next_cursor: String::new(),
+        })
+    }
+
+    async fn fetch_message_body(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+    ) -> Result<backend::plugins::traits::MessageBody, backend::plugins::traits::PluginError> {
+        Err(backend::plugins::traits::PluginError::from(
+            "not implemented",
+        ))
+    }
+
+    async fn download_attachment(
+        &self,
+        _auth_token: &str,
+        _external_message_id: &str,
+        _external_attachment_id: &str,
+    ) -> Result<Vec<u8>, backend::plugins::traits::PluginError> {
+        Err(backend::plugins::traits::PluginError::from(
+            "not implemented",
+        ))
+    }
+
+    async fn send_message(
+        &self,
+        _auth_token: &str,
+        _payload: backend::plugins::traits::SendMessagePayload,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Err(backend::plugins::traits::PluginError::from(
+            "connection timed out after 30s",
+        ))
+    }
+}
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::CalendarProvider for NetworkFailProvider {
+    async fn fetch_calendars(
+        &self,
+        _auth_token: &str,
+    ) -> Result<Vec<backend::plugins::traits::CalendarPayload>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
+    }
+
+    async fn fetch_events(
+        &self,
+        _auth_token: &str,
+        _start_time: i64,
+        _end_time: i64,
+    ) -> Result<Vec<backend::plugins::traits::EventPayload>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
+    }
+
+    async fn mutate_event(
+        &self,
+        _auth_token: &str,
+        _action: &str,
+        _payload: &backend::plugins::traits::EventPayload,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Ok(())
+    }
+
+    async fn delete_event(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::WebhookHandler for NetworkFailProvider {
+    async fn handle_webhook(
+        &self,
+        _webhook_secret: &str,
+        _query_params: Vec<(String, String)>,
+        _body: Vec<u8>,
+    ) -> Result<backend::plugins::traits::WebhookResult, backend::plugins::traits::PluginError>
+    {
+        Err(backend::plugins::traits::PluginError::from(
+            "not implemented",
+        ))
+    }
+}
+
+impl backend::plugins::traits::ProviderPlugin for NetworkFailProvider {
+    fn id(&self) -> &str {
+        "gmail"
+    }
+}
+
+async fn create_test_state_with_stub() -> AppState {
+    use backend::plugins::manager::PluginManager;
+
+    let db = setup_test_db().await;
+    let jwt_secret = TEST_SECRET.to_string();
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(NetworkFailProvider));
+    let plugin_manager = Arc::new(RwLock::new(manager));
+    let (sync_tx, _) = broadcast::channel(100);
+    let (sync_job_tx, _) = tokio::sync::mpsc::channel(100);
+
+    AppState {
+        db,
+        jwt_secret,
+        plugin_manager,
+        sync_tx,
+        sync_job_tx,
+        auth_rate_limiter: RateLimiter::new(1000, Duration::from_secs(60)),
+        general_rate_limiter: RateLimiter::new(1000, Duration::from_secs(60)),
+    }
+}
+
+#[tokio::test]
+async fn test_send_interceptor_queues_on_network_failure() {
+    let state = create_test_state_with_stub().await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "outbox_user@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+    let account = seed_account(&state.db, user_uuid, "gmail", "Work Gmail").await;
+
+    let send_payload = serde_json::json!({
+        "account_id": account.id.0,
+        "to": ["friend@example.com"],
+        "subject": "Queued hello",
+        "body_text": "Will send later.",
+    });
+
+    // 1. Transport failure queues instead of 502
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/messages/send")
+                .header("Authorization", format!("Bearer {}", token))
+                .header("content-type", "application/json")
+                .body(Body::from(send_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let send_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(send_json["queued"], true);
+
+    // 2. Queue row persisted with the request payload
+    let pool = match &state.db {
+        backend::db::pool::DbPool::Sqlite(p) => p.clone(),
+        _ => panic!("Expected SQLite pool in test suite"),
+    };
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM offline_queue WHERE action = 'send-message'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn test_send_non_network_failure_still_fails() {
+    // Empty plugin manager: "Plugin not loaded" is not a network error.
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "outbox_fail_user@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+    let account = seed_account(&state.db, user_uuid, "gmail", "Work Gmail").await;
+
+    let send_payload = serde_json::json!({
+        "account_id": account.id.0,
+        "to": ["friend@example.com"],
+        "subject": "Doomed hello",
+        "body_text": "Will fail.",
+    });
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/messages/send")
+                .header("Authorization", format!("Bearer {}", token))
+                .header("content-type", "application/json")
+                .body(Body::from(send_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    // Missing plugin surfaces as Internal (500), never queued.
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    let pool = match &state.db {
+        backend::db::pool::DbPool::Sqlite(p) => p.clone(),
+        _ => panic!("Expected SQLite pool in test suite"),
+    };
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM offline_queue WHERE action = 'send-message'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 0);
+}
 struct ScriptedProvider {
     fail_send: bool,
 }

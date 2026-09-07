@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { getSettings, updateSettings } from '../api/client.js';
+import { DEFAULT_SNOOZE_PRESET, type SnoozePreset } from '../utils/snooze.js';
 
 const DENSE_KEY = 'kestrel:settings:dense_mode';
 const LANDING_KEY = 'kestrel:settings:landing_view';
@@ -22,6 +23,10 @@ const SWIPE_LEFT_KEY = 'kestrel:settings:swipe_left';
 const SWIPE_RIGHT_KEY = 'kestrel:settings:swipe_right';
 export const swipeLeftAction = writable<SwipeActionType>(loadStr(SWIPE_LEFT_KEY, 'archive') as SwipeActionType);
 export const swipeRightAction = writable<SwipeActionType>(loadStr(SWIPE_RIGHT_KEY, 'toggle_read') as SwipeActionType);
+const SNOOZE_DEFAULT_KEY = 'kestrel:settings:snooze_default';
+export const mailSnoozeDefault = writable<SnoozePreset>(
+  loadStr(SNOOZE_DEFAULT_KEY, DEFAULT_SNOOZE_PRESET) as SnoozePreset
+);
 
 let isInitializing = false;
 let isUpdating = false;
@@ -39,6 +44,7 @@ export async function initializeSettings() {
     if (settings.syncInterval != null) syncInterval.set(settings.syncInterval);
     if (settings.swipeLeftAction != null) swipeLeftAction.set(settings.swipeLeftAction as SwipeActionType);
     if (settings.swipeRightAction != null) swipeRightAction.set(settings.swipeRightAction as SwipeActionType);
+    if (settings.mailSnoozeDefault != null) mailSnoozeDefault.set(settings.mailSnoozeDefault as SnoozePreset);
 
     // Also trigger snippet & signature template sync since we load settings together
     import('./templates.svelte.js').then((m) => {
@@ -76,6 +82,7 @@ async function syncToBackend() {
       syncInterval: get(syncInterval),
       swipeLeftAction: get(swipeLeftAction),
       swipeRightAction: get(swipeRightAction),
+      mailSnoozeDefault: get(mailSnoozeDefault),
       // we'll update theme too if available
       theme: (typeof localStorage !== 'undefined' ? localStorage.getItem('kestrel:settings:theme') : null) || 'system',
     });
@@ -109,6 +116,10 @@ labelCustomizations.subscribe((val) => {
 });
 syncInterval.subscribe((val) => {
   saveItem(SYNC_INTERVAL_KEY, String(val));
+  syncToBackend();
+});
+mailSnoozeDefault.subscribe((val) => {
+  saveItem(SNOOZE_DEFAULT_KEY, val);
   syncToBackend();
 });
 swipeLeftAction.subscribe((val) => {

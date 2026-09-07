@@ -7,8 +7,9 @@
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell, ReauthBanner, UndoToast } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick } from '@kestrel/shared/stores';
-  import { formatRelativeTime, formatExactDateTime } from '@kestrel/shared';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault } from '@kestrel/shared/stores';
+  import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
+  import { get } from 'svelte/store';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
@@ -475,16 +476,17 @@
     });
   }
 
-  function snooze(id: string) {
+  function snooze(id: string, preset: SnoozePreset = get(mailSnoozeDefault)) {
     const email = allEmails.find(e => e.id === id);
     if (!email) return;
     const oldState = { isArchived: email.isArchived, snoozed_until: email.snoozed_until };
-    const ts = Math.floor(Date.now() / 1000) + 3600; // Snooze for 1 hour
+    const ts = resolveSnoozeTimestamp(preset);
+    const label = snoozePresetLabel(preset);
 
     advanceSelectionAndModify(id, { isArchived: false, snoozed_until: ts });
 
     triggerUndoAction({
-      title: 'Conversation snoozed for 1 hour',
+      title: `Conversation snoozed (${label.toLowerCase()})`,
       onCommit: async () => {
         const api = await import('@kestrel/shared/api');
         await api.apiClient.post(`/messages/${id}/snooze`, { snoozed_until: ts }).catch(console.error);

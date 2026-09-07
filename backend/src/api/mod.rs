@@ -9,6 +9,7 @@ pub mod messages;
 pub mod outbox_worker;
 pub mod providers;
 pub mod rate_limit;
+pub mod revisions;
 pub mod router;
 pub mod search;
 pub mod settings;
