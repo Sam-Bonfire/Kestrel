@@ -69,6 +69,9 @@ pub async fn update_settings(
     if payload.mail_signature.is_some() {
         current_prefs.mail_signature = payload.mail_signature;
     }
+    if payload.mail_snooze_default.is_some() {
+        current_prefs.mail_snooze_default = payload.mail_snooze_default;
+    }
     if payload.swipe_left_action.is_some() {
         current_prefs.swipe_left_action = payload.swipe_left_action;
     }

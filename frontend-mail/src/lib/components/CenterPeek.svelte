@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Avatar, formatRelativeTime, formatExactDateTime } from '@kestrel/shared';
+  import { Avatar, formatRelativeTime, formatExactDateTime, type SnoozePreset } from '@kestrel/shared';
   import { relativeTimeTick } from '@kestrel/shared/stores';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -81,7 +81,7 @@
     onRemoveLabel = (id: string, label: string) => {},
     onSendReply = (emailId: string, replyBody: string, recipients: string[], type: string) => {},
     onPopOut = (type: string, recipients: string[], body: string) => {},
-    onSnooze = (id: string, until: string) => {},
+    onSnooze = (id: string, until: SnoozePreset) => {},
     onMoveTo = (id: string, folder: string) => {},
     onReportSpam = (id: string) => {},
     onMute = (id: string) => {},
@@ -114,7 +114,7 @@
     onRemoveLabel?: (id: string, label: string) => void;
     onSendReply?: (emailId: string, replyBody: string, recipients: string[], type: string) => void;
     onPopOut?: (type: string, recipients: string[], body: string) => void;
-    onSnooze?: (id: string, until: string) => void;
+    onSnooze?: (id: string, until: SnoozePreset) => void;
     onMoveTo?: (id: string, folder: string) => void;
     onReportSpam?: (id: string) => void;
     onMute?: (id: string) => void;

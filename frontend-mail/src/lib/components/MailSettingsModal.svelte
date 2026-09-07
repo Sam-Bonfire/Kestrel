@@ -4,9 +4,11 @@
   import {
     mailDenseMode,
     mailDefaultLandingView,
+    mailSnoozeDefault,
     swipeLeftAction,
     swipeRightAction,
     templateStore,
+    SNOOZE_PRESETS,
     type SwipeActionType,
   } from '@kestrel/shared';
   import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
@@ -189,6 +191,15 @@
             <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Swipe Left Action</span>
             <select bind:value={$swipeLeftAction} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
               {#each swipeActionOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Default Snooze Duration</span>
+            <select bind:value={$mailSnoozeDefault} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
+              {#each SNOOZE_PRESETS as opt}
                 <option value={opt.value}>{opt.label}</option>
               {/each}
             </select>

@@ -84,6 +84,7 @@ export {
   swipeLeftAction,
   swipeRightAction,
   type SwipeActionType,
+  mailSnoozeDefault,
 } from './stores/index.js';
 
 export {
@@ -157,6 +158,13 @@ export { default as ContactAutocomplete } from './components/ContactAutocomplete
 export { parseIcs } from './utils/icsParser.js';
 export type { IcsEvent } from './utils/icsParser.js';
 export { parseChecklists } from './utils/markdownParser.js';
+export {
+  DEFAULT_SNOOZE_PRESET,
+  SNOOZE_PRESETS,
+  resolveSnoozeTimestamp,
+  snoozePresetLabel,
+  type SnoozePreset,
+} from './utils/snooze.js';
 
 export { detectTimezone } from './utils/timezoneDetector.js';
 export type { DetectedTimezoneResult } from './utils/timezoneDetector.js';
