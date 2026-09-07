@@ -112,6 +112,7 @@ pub struct OfflineQueueItem {
     pub payload: Option<String>,
     pub queued_at: i64,
     pub retry_count: i32,
+    pub next_attempt_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

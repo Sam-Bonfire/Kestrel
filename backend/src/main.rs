@@ -4,11 +4,11 @@ mod core;
 mod db;
 mod plugins;
 
+use api::outbox_worker::start_outbox_worker;
 use api::rate_limit::RateLimiter;
 use api::router::{AppState, create_router};
 use api::sync::{SyncEvent, start_sync_daemon};
 use config::Config;
-use core::offline_worker::start_offline_worker;
 use db::pool::{init_pool, run_migrations};
 use plugins::manager::PluginManager;
 use std::sync::Arc;
@@ -82,7 +82,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start background sync daemon
     start_sync_daemon(state.clone(), sync_tx, sync_job_rx);
-    start_offline_worker(db.clone());
+    start_outbox_worker(
+        db.clone(),
+        state.plugin_manager.clone(),
+        state.jwt_secret.clone(),
+    );
     crate::api::token_worker::start_token_worker(state.clone());
 
     let router = create_router(state);
