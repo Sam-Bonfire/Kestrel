@@ -1,9 +1,9 @@
 mod common;
 
-use backend::core::models::{Account, CalendarEvent, Contact, User};
+use backend::core::models::{Account, CalendarEvent, Contact, HistoricalRevision, User};
 use backend::core::repository::{
-    AccountRepository, CalendarRepository, ContactRepository, EventRepository, MessageRepository,
-    UserPreferencesRepository, UserRepository,
+    AccountRepository, CalendarRepository, ContactRepository, EventRepository,
+    HistoricalRevisionRepository, MessageRepository, UserPreferencesRepository, UserRepository,
 };
 use backend::core::types::DbUuid;
 use backend::db::sqlite::account_repository::SqliteAccountRepository;
@@ -11,6 +11,7 @@ use backend::db::sqlite::calendar_repository::SqliteCalendarRepository;
 use backend::db::sqlite::contact_repository::SqliteContactRepository;
 use backend::db::sqlite::event_repository::SqliteEventRepository;
 use backend::db::sqlite::message_repository::SqliteMessageRepository;
+use backend::db::sqlite::revision_repository::SqliteRevisionRepository;
 use backend::db::sqlite::user_preferences_repository::SqliteUserPreferencesRepository;
 use backend::db::sqlite::user_repository::SqliteUserRepository;
 use common::{
@@ -419,4 +420,78 @@ async fn test_user_preferences_repository() {
     assert!(fetched.is_some());
     let prefs = fetched.unwrap();
     assert_eq!(prefs.preferences_json, prefs_json);
+}
+
+#[tokio::test]
+async fn test_revision_create_and_find_by_id() {
+    let pool = setup_test_db().await;
+    let repo = SqliteRevisionRepository::new(get_sqlite_pool(&pool));
+    let now = chrono::Utc::now().timestamp();
+    let resource_id = Uuid::new_v4();
+    let revision = HistoricalRevision {
+        id: DbUuid::from(Uuid::new_v4()),
+        resource_type: "message".to_string(),
+        resource_id: DbUuid::from(resource_id),
+        serialized_payload: r#"{"subject":"hello"}"#.to_string(),
+        revision_number: 1,
+        created_at: now,
+    };
+    repo.create(&revision)
+        .await
+        .expect("revision create failed");
+    let fetched = repo
+        .find_by_id(revision.id.0)
+        .await
+        .expect("revision find failed")
+        .expect("revision missing");
+    assert_eq!(fetched.id.0, revision.id.0);
+    assert_eq!(fetched.resource_type, "message");
+    assert_eq!(fetched.resource_id.0, resource_id);
+    assert_eq!(fetched.serialized_payload, revision.serialized_payload);
+    assert_eq!(fetched.revision_number, 1);
+    assert!(repo.find_by_id(Uuid::new_v4()).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_revision_latest_number_increments_per_resource() {
+    let pool = setup_test_db().await;
+    let repo = SqliteRevisionRepository::new(get_sqlite_pool(&pool));
+    let now = chrono::Utc::now().timestamp();
+    let resource_id = Uuid::new_v4();
+    assert_eq!(
+        repo.get_latest_revision_number("message", resource_id)
+            .await
+            .unwrap(),
+        0
+    );
+    for n in 1..=2 {
+        repo.create(&HistoricalRevision {
+            id: DbUuid::from(Uuid::new_v4()),
+            resource_type: "message".to_string(),
+            resource_id: DbUuid::from(resource_id),
+            serialized_payload: format!(r#"{{"v":{n}}}"#),
+            revision_number: n,
+            created_at: now,
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            repo.get_latest_revision_number("message", resource_id)
+                .await
+                .unwrap(),
+            n
+        );
+    }
+    assert_eq!(
+        repo.get_latest_revision_number("message", Uuid::new_v4())
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        repo.get_latest_revision_number("calendar_event", resource_id)
+            .await
+            .unwrap(),
+        0
+    );
 }
