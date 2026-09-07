@@ -846,14 +846,14 @@ pub async fn redirect_attachment(
 
 // --- Outbound Send Logic (Task 37) ---
 
-#[derive(serde::Deserialize, specta::Type)]
+#[derive(serde::Deserialize, serde::Serialize, specta::Type)]
 pub struct SendAttachmentPayload {
     pub filename: String,
     pub content_type: String,
     pub base64_content: String,
 }
 
-#[derive(serde::Deserialize, specta::Type)]
+#[derive(serde::Deserialize, serde::Serialize, specta::Type)]
 pub struct SendMessageRequest {
     pub account_id: Uuid,
     pub to: Vec<String>,
@@ -868,6 +868,69 @@ pub struct SendMessageRequest {
 #[derive(Serialize, specta::Type)]
 pub struct SendMessageResponse {
     pub id: String,
+    pub queued: bool,
+}
+
+/// Heuristic transport-failure detector for opaque plugin errors (K-880).
+/// Auth and validation failures must keep failing loudly; only network-like
+/// errors are intercepted into the offline queue.
+fn is_network_error(message: &str) -> bool {
+    const NETWORK_MARKERS: &[&str] = &[
+        "timeout",
+        "timed out",
+        "connection",
+        "network",
+        "dns",
+        "unreachable",
+        "reset by peer",
+        "broken pipe",
+        "econn",
+        "etimedout",
+        "enotfound",
+        "eai_again",
+        "econnrefused",
+        "econnreset",
+        "offline",
+        "failed to connect",
+        "tls",
+        "certificate",
+        "socket",
+    ];
+    let lower = message.to_lowercase();
+    NETWORK_MARKERS.iter().any(|m| lower.contains(m))
+}
+
+/// Persist a failed send into the offline queue for replay (K-880).
+/// Returns the queue resource id used as the queued response id.
+async fn enqueue_offline_send(
+    db: &DbPool,
+    payload: &SendMessageRequest,
+) -> Result<String, sqlx::Error> {
+    let resource_id = uuid::Uuid::new_v4().to_string();
+    let payload_json = serde_json::to_string(payload).unwrap_or_default();
+    match db {
+        DbPool::Sqlite(pool) => {
+            sqlx::query(
+                "INSERT INTO offline_queue (action, resource_type, resource_id, payload, retry_count) \
+                 VALUES ('send-message', 'message', ?, ?, 0)",
+            )
+            .bind(&resource_id)
+            .bind(&payload_json)
+            .execute(pool)
+            .await?;
+        }
+        DbPool::Postgres(pool) => {
+            sqlx::query(
+                "INSERT INTO offline_queue (action, resource_type, resource_id, payload, retry_count) \
+                 VALUES ('send-message', 'message', $1, $2, 0)",
+            )
+            .bind(&resource_id)
+            .bind(&payload_json)
+            .execute(pool)
+            .await?;
+        }
+    }
+    Ok(resource_id)
 }
 
 pub async fn send_message(
@@ -953,11 +1016,32 @@ pub async fn send_message(
             ))))
         })?;
 
-    plugin
+    if let Err(e) = plugin
         .as_mail_provider()
         .send_message(&auth_token, wit_payload)
         .await
-        .map_err(|e| KestrelError::BadGateway(format!("Dispatch failed: {:?}", e)))?;
+    {
+        // Network-aware interceptor (K-880): transport failures are queued
+        // for replay instead of surfacing a 502 to the client.
+        if is_network_error(&e.to_string()) {
+            let queue_id =
+                enqueue_offline_send(&state.db, &payload)
+                    .await
+                    .map_err(|enqueue_err| {
+                        KestrelError::BadGateway(format!(
+                            "Dispatch failed ({e}) and queueing failed: {enqueue_err}"
+                        ))
+                    })?;
+            return Ok(Json(SendMessageResponse {
+                id: queue_id,
+                queued: true,
+            }));
+        }
+        return Err(KestrelError::BadGateway(format!(
+            "Dispatch failed: {:?}",
+            e
+        )));
+    }
 
     // 4. Insert message immediately into local DB
     let id = uuid::Uuid::new_v4();
@@ -1003,6 +1087,7 @@ pub async fn send_message(
     // 5. Return success response (UI expects SendMessageResponse)
     Ok(Json(SendMessageResponse {
         id: format!("local-sent-{}", id),
+        queued: false,
     }))
 }
 
