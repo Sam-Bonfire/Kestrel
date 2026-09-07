@@ -133,13 +133,9 @@ async fn replay_item(
         }
     };
 
-    let plugin = plugins.read().await;
-    let plugin = match plugin.find_by_id(&account.provider) {
-        Some(p) => p,
-        None => {
-            drop(plugin);
-            return bump_retry(db, item, now).await.map(|_| false);
-        }
+    let guard = plugins.read().await;
+    let Some(plugin) = guard.find_by_id(&account.provider) else {
+        return bump_retry(db, item, now).await.map(|_| false);
     };
 
     let auth_token = match &account.access_token {
@@ -174,7 +170,6 @@ async fn replay_item(
             },
         )
         .await;
-    drop(plugin);
 
     match send_result {
         Ok(()) => {
