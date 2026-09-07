@@ -261,6 +261,7 @@ export type SendMessageRequest = {
 
 export type SendMessageResponse = {
 	id: string,
+	queued: boolean,
 };
 
 export type SettingsPayload = {
