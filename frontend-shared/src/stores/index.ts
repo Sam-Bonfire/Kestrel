@@ -18,6 +18,7 @@ export {
   swipeLeftAction,
   swipeRightAction,
   type SwipeActionType,
+  mailSnoozeDefault,
 } from './settings.js';
 
 export {

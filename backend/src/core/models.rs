@@ -152,6 +152,7 @@ pub struct SettingsPayload {
     pub mail_default_landing_view: Option<String>,
     pub mail_default_send_action: Option<String>,
     pub mail_signature: Option<String>,
+    pub mail_snooze_default: Option<String>,
     pub swipe_left_action: Option<String>,
     pub swipe_right_action: Option<String>,
     pub label_customizations: Option<std::collections::HashMap<String, LabelCustomization>>,

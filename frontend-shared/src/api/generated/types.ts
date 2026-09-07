@@ -268,6 +268,7 @@ export type SettingsPayload = {
 	mailDefaultLandingView: string | null,
 	mailDefaultSendAction: string | null,
 	mailSignature: string | null,
+	mailSnoozeDefault: string | null,
 	swipeLeftAction: string | null,
 	swipeRightAction: string | null,
 	labelCustomizations: { [key in string]: LabelCustomization } | null,
