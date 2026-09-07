@@ -47,8 +47,7 @@
       "endpoints": [
         "https://github.com/Sam-Bonfire/Kestrel/releases/latest/download/kestrel-calendar-latest.json"
       ],
-      "dialog": false,
-      "pubkey": "PUT_RELEASE_SIGNING_PUBLIC_KEY_HERE"
+      "dialog": false
     }
   }
 }
