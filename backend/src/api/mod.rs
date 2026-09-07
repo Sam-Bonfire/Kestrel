@@ -6,6 +6,7 @@ pub mod health;
 pub mod labels;
 pub mod logging;
 pub mod messages;
+pub mod outbox_worker;
 pub mod providers;
 pub mod rate_limit;
 pub mod revisions;

@@ -1048,3 +1048,232 @@ async fn test_send_non_network_failure_still_fails() {
             .unwrap();
     assert_eq!(count, 0);
 }
+struct ScriptedProvider {
+    fail_send: bool,
+}
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::ProviderBranding for ScriptedProvider {
+    fn get_branding(&self) -> backend::plugins::traits::BrandingPayload {
+        backend::plugins::traits::BrandingPayload {
+            name: "Stub".to_string(),
+            button_text: "Stub".to_string(),
+            button_color: "#000".to_string(),
+            icon_svg: String::new(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::MailProvider for ScriptedProvider {
+    async fn sync_mail(
+        &self,
+        _auth_token: &str,
+        _cursor: Option<&str>,
+    ) -> Result<backend::plugins::traits::SyncResult, backend::plugins::traits::PluginError> {
+        Ok(backend::plugins::traits::SyncResult {
+            messages: vec![],
+            next_cursor: String::new(),
+        })
+    }
+
+    async fn fetch_message_body(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+    ) -> Result<backend::plugins::traits::MessageBody, backend::plugins::traits::PluginError> {
+        Err(backend::plugins::traits::PluginError::from(
+            "not implemented",
+        ))
+    }
+
+    async fn download_attachment(
+        &self,
+        _auth_token: &str,
+        _external_message_id: &str,
+        _external_attachment_id: &str,
+    ) -> Result<Vec<u8>, backend::plugins::traits::PluginError> {
+        Err(backend::plugins::traits::PluginError::from(
+            "not implemented",
+        ))
+    }
+
+    async fn send_message(
+        &self,
+        _auth_token: &str,
+        _payload: backend::plugins::traits::SendMessagePayload,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        if self.fail_send {
+            return Err(backend::plugins::traits::PluginError::from(
+                "connection timed out",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::CalendarProvider for ScriptedProvider {
+    async fn fetch_calendars(
+        &self,
+        _auth_token: &str,
+    ) -> Result<Vec<backend::plugins::traits::CalendarPayload>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
+    }
+
+    async fn fetch_events(
+        &self,
+        _auth_token: &str,
+        _start_time: i64,
+        _end_time: i64,
+    ) -> Result<Vec<backend::plugins::traits::EventPayload>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
+    }
+
+    async fn mutate_event(
+        &self,
+        _auth_token: &str,
+        _action: &str,
+        _payload: &backend::plugins::traits::EventPayload,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Ok(())
+    }
+
+    async fn delete_event(
+        &self,
+        _auth_token: &str,
+        _external_id: &str,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl backend::plugins::traits::WebhookHandler for ScriptedProvider {
+    async fn handle_webhook(
+        &self,
+        _webhook_secret: &str,
+        _query_params: Vec<(String, String)>,
+        _body: Vec<u8>,
+    ) -> Result<backend::plugins::traits::WebhookResult, backend::plugins::traits::PluginError>
+    {
+        Err(backend::plugins::traits::PluginError::from(
+            "not implemented",
+        ))
+    }
+}
+
+impl backend::plugins::traits::ProviderPlugin for ScriptedProvider {
+    fn id(&self) -> &str {
+        "gmail"
+    }
+}
+
+async fn seed_queued_send(state: &AppState, account_id: uuid::Uuid, subject: &str) {
+    let pool = match &state.db {
+        backend::db::pool::DbPool::Sqlite(p) => p.clone(),
+        _ => panic!("Expected SQLite pool in test suite"),
+    };
+    let payload = serde_json::json!({
+        "account_id": account_id,
+        "to": ["friend@example.com"],
+        "subject": subject,
+        "body_text": "Queued body.",
+    })
+    .to_string();
+    sqlx::query(
+        "INSERT INTO offline_queue (action, resource_type, resource_id, payload, retry_count, next_attempt_at) \
+         VALUES ('send-message', 'message', ?, ?, 0, 0)",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(payload)
+    .execute(&pool)
+    .await
+    .unwrap();
+}
+
+async fn state_with_scripted_provider(fail_send: bool) -> AppState {
+    use backend::plugins::manager::PluginManager;
+
+    let db = setup_test_db().await;
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(ScriptedProvider { fail_send }));
+    AppState {
+        db,
+        jwt_secret: TEST_SECRET.to_string(),
+        plugin_manager: Arc::new(RwLock::new(manager)),
+        sync_tx: broadcast::channel(100).0,
+        sync_job_tx: tokio::sync::mpsc::channel(100).0,
+        auth_rate_limiter: RateLimiter::new(1000, Duration::from_secs(60)),
+        general_rate_limiter: RateLimiter::new(1000, Duration::from_secs(60)),
+    }
+}
+
+#[tokio::test]
+async fn test_outbox_replay_delivers_and_clears() {
+    let state = state_with_scripted_provider(false).await;
+    let app = create_router(state.clone());
+    let (user_id, _) = register_and_get_token(&app, "replay_ok@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+    let account = seed_account(&state.db, user_uuid, "gmail", "Work Gmail").await;
+    seed_queued_send(&state, account.id.0, "Replay me").await;
+
+    let replayed = backend::api::outbox_worker::process_outbox_once(
+        &state.db,
+        &state.plugin_manager,
+        TEST_SECRET,
+    )
+    .await
+    .unwrap();
+    assert_eq!(replayed, 1);
+
+    let pool = match &state.db {
+        backend::db::pool::DbPool::Sqlite(p) => p.clone(),
+        _ => panic!("Expected SQLite pool in test suite"),
+    };
+    let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM offline_queue")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(remaining, 0);
+
+    let sent: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE subject = 'Replay me'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(sent, 1);
+}
+
+#[tokio::test]
+async fn test_outbox_replay_backs_off_on_failure() {
+    let state = state_with_scripted_provider(true).await;
+    let app = create_router(state.clone());
+    let (user_id, _) = register_and_get_token(&app, "replay_fail@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+    let account = seed_account(&state.db, user_uuid, "gmail", "Work Gmail").await;
+    seed_queued_send(&state, account.id.0, "Fail me").await;
+
+    let replayed = backend::api::outbox_worker::process_outbox_once(
+        &state.db,
+        &state.plugin_manager,
+        TEST_SECRET,
+    )
+    .await
+    .unwrap();
+    assert_eq!(replayed, 0);
+
+    let pool = match &state.db {
+        backend::db::pool::DbPool::Sqlite(p) => p.clone(),
+        _ => panic!("Expected SQLite pool in test suite"),
+    };
+    let row: (i32, i64) = sqlx::query_as(
+        "SELECT retry_count, next_attempt_at FROM offline_queue WHERE action = 'send-message'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.0, 1);
+    assert!(row.1 > chrono::Utc::now().timestamp());
+}
