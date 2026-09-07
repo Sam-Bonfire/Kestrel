@@ -696,3 +696,123 @@ async fn test_webhooks_ingestion() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn test_revision_restore_message() {
+    use backend::core::models::HistoricalRevision;
+    use backend::core::repository::HistoricalRevisionRepository;
+    use backend::core::types::DbUuid;
+    use backend::db::pool::DbPool;
+    use backend::db::sqlite::revision_repository::SqliteRevisionRepository;
+
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "revision_user@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+    let account = seed_account(&state.db, user_uuid, "gmail", "Work Gmail").await;
+    let msg = seed_message(
+        &state.db,
+        account.id.0,
+        "Original Subject",
+        "lead@company.com",
+        "Body here.",
+        Some("inbox"),
+        false,
+    )
+    .await;
+
+    let pool = match &state.db {
+        DbPool::Sqlite(p) => p.clone(),
+        _ => panic!("Expected SQLite pool in test suite"),
+    };
+    let revision_id = uuid::Uuid::new_v4();
+    SqliteRevisionRepository::new(pool)
+        .create(&HistoricalRevision {
+            id: DbUuid::from(revision_id),
+            resource_type: "message".to_string(),
+            resource_id: msg.id,
+            serialized_payload: serde_json::json!({
+                "subject": "Restored Subject",
+                "is_read": true,
+            })
+            .to_string(),
+            revision_number: 1,
+            created_at: chrono::Utc::now().timestamp(),
+        })
+        .await
+        .unwrap();
+
+    // 1. Restore applies payload fields to the message
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/revisions/{}/restore", revision_id))
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let restore_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let fields = restore_json["restored_fields"].as_array().unwrap();
+    assert!(fields.iter().any(|f| f == "subject"));
+    assert!(fields.iter().any(|f| f == "is_read"));
+
+    // 2. Message reflects restored values
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/messages/{}", msg.id.0))
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let msg_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(msg_json["subject"], "Restored Subject");
+    assert_eq!(msg_json["is_read"], true);
+
+    // 3. Unknown revision id returns 404
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/v1/revisions/{}/restore",
+                    uuid::Uuid::new_v4()
+                ))
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    // 4. Malformed revision id returns 400
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/revisions/not-a-uuid/restore")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}

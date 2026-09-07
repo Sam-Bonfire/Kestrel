@@ -13,6 +13,7 @@ use super::health::health_check;
 use super::messages;
 use super::providers;
 use super::rate_limit::RateLimiter;
+use super::revisions;
 use super::search;
 use super::settings;
 use super::sync;
@@ -151,6 +152,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/settings",
             get(settings::get_settings).put(settings::update_settings),
+        )
+        .route(
+            "/api/v1/revisions/:id/restore",
+            post(revisions::restore_revision),
         )
         .route("/api/v1/sync/stream", get(sync::sync_stream))
         .route("/api/v1/sync/trigger", post(sync::trigger_sync))
