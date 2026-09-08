@@ -226,3 +226,4 @@ export {
   openComposePopout,
   type PopoutDraft,
 } from './utils/popout.js';
+export { categorizeEmail, type EmailCategory } from './utils/categorize.js';
