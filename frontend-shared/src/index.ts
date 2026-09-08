@@ -191,3 +191,9 @@ export {
   parseTimeToMinutes,
   type WorkingHoursConfig,
 } from './utils/workingHours.js';
+export {
+  senderDomain,
+  isDomainAllowed,
+  allowSenderDomain,
+  blockRemoteImages,
+} from './utils/trackingProtection.js';
