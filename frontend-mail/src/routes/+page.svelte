@@ -13,6 +13,7 @@
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
   import { get } from 'svelte/store';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
+  import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
   import { onMount, untrack, onDestroy } from 'svelte';
@@ -815,7 +816,22 @@
 
   onMount(() => {
     initAuth();
-    
+
+    // Pop-out compose window: hydrate from the staged draft.
+    const nonce = popoutDraftNonce();
+    if (nonce) {
+      const draft = takePopoutDraft(nonce);
+      if (draft) {
+        composeInitialTo = draft.to;
+        composeInitialSubject = draft.subject;
+        composeInitialBody = draft.body;
+        isComposeOpen = true;
+      } else {
+        // Storage partitions can isolate pop-out windows; never open silently empty.
+        console.error('[popout] staged draft missing for nonce', nonce);
+      }
+    }
+        
     // Deep Link Listener for OAuth Callbacks
     if ((window as any).__TAURI_INTERNALS__) {
       import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
@@ -1044,13 +1060,18 @@
       onMoveTo={moveTo}
       onSendReply={handleSendReply}
           onPopOut={(type: string, recipients: string[], body: string) => {
-            composeInitialTo = recipients;
-            let baseSubject = activeEmail?.subject || '';
-            composeInitialSubject = baseSubject.toLowerCase().startsWith('re:') || baseSubject.toLowerCase().startsWith('fwd:')
+            const baseSubject = activeEmail?.subject || '';
+            const subject = baseSubject.toLowerCase().startsWith('re:') || baseSubject.toLowerCase().startsWith('fwd:')
               ? baseSubject
               : (type === 'forward' ? `Fwd: ${baseSubject}` : `Re: ${baseSubject}`);
-            composeInitialBody = body;
-            isComposeOpen = true;
+            openComposePopout({ to: recipients, subject, body }).catch((e) => {
+              // Fall back to the in-app composer when the pop-out fails.
+              console.error('Pop-out failed, using in-app composer', e);
+              composeInitialTo = recipients;
+              composeInitialSubject = subject;
+              composeInitialBody = body;
+              isComposeOpen = true;
+            });
           }}
       allLabels={allLabels}
       onReportSpam={reportSpam}
@@ -1109,6 +1130,7 @@
         };
         allEmails = [newMsg, ...allEmails];
         isComposeOpen = false;
+        if (popoutDraftNonce()) window.close();
         return;
       }
 
@@ -1116,6 +1138,7 @@
         const api = await import('@kestrel/shared/api');
         await api.sendMessage(draftData as any);
         isComposeOpen = false;
+        if (popoutDraftNonce()) window.close();
       } catch (err) {
         console.error('Failed to send message:', err);
         // If network error, fallback to outbox
@@ -1151,6 +1174,7 @@
         };
         allEmails = [newMsg, ...allEmails];
         isComposeOpen = false;
+        if (popoutDraftNonce()) window.close();
       }
     }}
   />
