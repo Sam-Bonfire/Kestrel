@@ -227,3 +227,8 @@ export {
   type PopoutDraft,
 } from './utils/popout.js';
 export { categorizeEmail, type EmailCategory } from './utils/categorize.js';
+export {
+  parseNaturalEvent,
+  shiftTime,
+  type ParsedEvent,
+} from './utils/nlpEvent.js';

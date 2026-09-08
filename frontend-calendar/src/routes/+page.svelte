@@ -5,7 +5,7 @@
   import EventPeekPanel from '$lib/components/EventPeekPanel.svelte';
   import {
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
-    Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer
+    Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer, Sparkles
   } from 'lucide-svelte';
   import { AppShell, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
   import { authState, triggerUndoAction, pushBreadcrumb, theme } from '@kestrel/shared/stores';
@@ -167,6 +167,27 @@
   import { initAuth } from '@kestrel/shared/stores';
   import { parseKestrelDeepLink } from '@kestrel/shared';
   import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
+  import { parseNaturalEvent, shiftTime } from '@kestrel/shared';
+
+  // Quick-add bar: deterministic natural-language event creation.
+  let nlpInput = $state('');
+  let nlpParsed = $derived(nlpInput.trim() ? parseNaturalEvent(nlpInput) : null);
+  function submitNlpEvent() {
+    const parsed = nlpParsed;
+    if (!parsed) return;
+    openNewEventPanel(parsed.date, parsed.startTime);
+    if (selectedEvent) {
+      selectedEvent.title = parsed.title;
+      const { endTime, daysAfter } = shiftTime(parsed.startTime, parsed.durationMins);
+      selectedEvent.endTime = endTime;
+      if (daysAfter > 0) {
+        const d = new Date(parsed.date + 'T12:00:00');
+        d.setDate(d.getDate() + daysAfter);
+        selectedEvent.date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+    }
+    nlpInput = '';
+  }
 
   onMount(() => {
     initAuth();
@@ -1040,6 +1061,28 @@
         </div>
       </header>
     {/if}
+
+    <!-- Quick-add bar -->
+    <div class="shrink-0 px-4 py-1.5 border-b border-[var(--color-border-hairline)] bg-[#0a0a0a] flex items-center gap-2">
+      <Sparkles class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0" />
+      <input
+        type="text"
+        placeholder='Quick add: "lunch tomorrow 12:30 1h"'
+        bind:value={nlpInput}
+        onkeydown={(e) => { if (e.key === 'Enter') submitNlpEvent(); }}
+        aria-label="Quick add event"
+        class="bg-transparent text-white text-xs flex-1 outline-none placeholder:text-neutral-600 font-mono min-w-0"
+      />
+      {#if nlpParsed}
+        <button
+          type="button"
+          onclick={submitNlpEvent}
+          class="shrink-0 px-2.5 py-1 rounded-md bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-[11px] font-medium transition-colors cursor-pointer truncate max-w-[50%]"
+        >
+          Add: {nlpParsed.title} · {nlpParsed.date} {nlpParsed.startTime}
+        </button>
+      {/if}
+    </div>
 
     <!-- Mobile Search Overlay (Task 28) -->
     {#if isMobileSearchOpen && isMobileOrTablet}
