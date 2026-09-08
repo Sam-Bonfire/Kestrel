@@ -800,6 +800,7 @@ pub async fn sync_account_messages(
                 name: payload.sender_name.clone(),
                 email: payload.sender_email.clone(),
                 avatar_url: None,
+                notes: None,
                 last_contacted_at: payload.date_received,
                 created_at: chrono::Utc::now().timestamp(),
             };
@@ -824,6 +825,7 @@ pub async fn sync_account_messages(
                     name: None,
                     email: rec,
                     avatar_url: None,
+                    notes: None,
                     last_contacted_at: payload.date_sent, // fallback to date_sent
                     created_at: chrono::Utc::now().timestamp(),
                 };
@@ -1005,6 +1007,7 @@ pub async fn sync_account_calendars(
                 name: payload.organizer_name.clone(),
                 email: email.clone(),
                 avatar_url: None,
+                notes: None,
                 last_contacted_at: payload.start_time,
                 created_at: chrono::Utc::now().timestamp(),
             };
@@ -1028,6 +1031,7 @@ pub async fn sync_account_calendars(
                     name: None,
                     email,
                     avatar_url: None,
+                    notes: None,
                     last_contacted_at: payload.start_time,
                     created_at: chrono::Utc::now().timestamp(),
                 };

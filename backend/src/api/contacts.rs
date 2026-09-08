@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{
     api::auth::AuthUser,
     api::router::AppState,
+    core::error::KestrelError,
     core::repository::{AccountRepository, ContactRepository},
 };
 
@@ -72,4 +73,65 @@ pub async fn search_contacts(
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(contacts))
+}
+
+#[derive(Debug, Deserialize, specta::Type)]
+pub struct UpdateNotesRequest {
+    pub account_id: String,
+    pub email: String,
+    pub notes: String,
+}
+
+pub async fn update_contact_notes(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<UpdateNotesRequest>,
+) -> Result<Json<serde_json::Value>, KestrelError> {
+    use std::str::FromStr;
+    let account_id = Uuid::from_str(&body.account_id)
+        .map_err(|_| KestrelError::BadRequest("Invalid account id".to_string()))?;
+    if body.notes.chars().count() > 2000 {
+        return Err(KestrelError::BadRequest(
+            "Notes exceeds 2000 characters".to_string(),
+        ));
+    }
+
+    let contact_repo: Box<dyn ContactRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::contact_repository::SqliteContactRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::contact_repository::PostgresContactRepository::new(pool.clone()),
+        ),
+    };
+
+    // Ownership check: the account must belong to the caller.
+    let account_repo: Box<dyn AccountRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            ),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            ),
+        ),
+    };
+    let owned = account_repo
+        .find_by_user_id(user.user_id)
+        .await?
+        .into_iter()
+        .any(|a| a.id.0 == account_id);
+    if !owned {
+        return Err(KestrelError::NotFound("Account not found".to_string()));
+    }
+
+    contact_repo
+        .set_notes(account_id, &body.email, &body.notes)
+        .await?;
+
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
