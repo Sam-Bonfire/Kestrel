@@ -703,8 +703,14 @@ async fn get_all_accounts_with_tokens(
     }
 }
 
+/// K-295: LWW rule extracted for unit testing (locks K-038 behavior).
+/// Equal timestamps apply: provider payloads carry no updated_at, so a
+/// re-yielded payload is treated as newer to avoid missing body/label edits.
+fn should_apply_remote_message(local_date_received: i64, remote_date_received: i64) -> bool {
+    remote_date_received >= local_date_received
+}
+
 /// K-038: LWW conflict resolution — sync messages from a provider account.
-/// Compares timestamps to decide whether to upsert or skip.
 pub async fn sync_account_messages(
     state: &AppState,
     account: &crate::core::models::Account,
@@ -781,7 +787,7 @@ pub async fn sync_account_messages(
                 // Since payload doesn't have updated_at, we assume sync_mail only returns NEW or UPDATED emails
                 // We use date_received as a proxy for now, or just assume it's newer if it was yielded.
                 // Ideally we'd use an updated_at from the provider payload.
-                payload.date_received >= msg.date_received
+                should_apply_remote_message(msg.date_received, payload.date_received)
             }
             None => true,
         };
@@ -1311,7 +1317,6 @@ mod tests {
         // Ensure access token is left as is or updated (it doesn't clear access token, just sets sync_error)
         assert_eq!(account.access_token.unwrap(), "old_token");
     }
-
     #[tokio::test]
     async fn test_daemon_deduplication_and_rate_limiting() {
         let state = create_test_app_state().await;
@@ -1373,5 +1378,20 @@ mod tests {
             msg_count += 1;
         }
         assert_eq!(msg_count, 4);
+    }
+
+    #[test]
+    fn test_lww_applies_newer_remote_message() {
+        assert!(super::should_apply_remote_message(100, 200));
+    }
+
+    #[test]
+    fn test_lww_ignores_stale_remote_message() {
+        assert!(!super::should_apply_remote_message(200, 100));
+    }
+
+    #[test]
+    fn test_lww_applies_equal_timestamp_remote_message() {
+        assert!(super::should_apply_remote_message(100, 100));
     }
 }
