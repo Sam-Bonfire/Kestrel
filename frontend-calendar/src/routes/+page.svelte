@@ -166,9 +166,19 @@
   import { onMount } from 'svelte';
   import { initAuth } from '@kestrel/shared/stores';
   import { parseKestrelDeepLink } from '@kestrel/shared';
+  import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
 
   onMount(() => {
     initAuth();
+    setPomodoroCompleteHandler((phase) => {
+      const body = phase === 'work' ? 'Focus session complete — time for a break.' : 'Break over — back to focus.';
+      if ((window as any).__TAURI_INTERNALS__) {
+        import('@tauri-apps/plugin-notification')
+          .then(({ sendNotification }) => sendNotification({ title: 'Pomodoro', body }))
+          .catch(() => {});
+      }
+      showToast(body, 'success');
+    });
 
     // Deep Link Listener for OAuth callbacks & "create event" actions
     if ((window as any).__TAURI_INTERNALS__) {

@@ -17,6 +17,18 @@
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
   import { onMount, untrack, onDestroy } from 'svelte';
+  import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
+
+  function announcePomodoroPhase(phase: string) {
+    const body = phase === 'work' ? 'Focus session complete — time for a break.' : 'Break over — back to focus.';
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-notification')
+        .then(({ sendNotification }) => sendNotification({ title: 'Pomodoro', body }))
+        .catch(() => {});
+    } else {
+      console.info('[Pomodoro]', body);
+    }
+  }
 
   async function replayOutbox() {
     if (!navigator.onLine) return;
@@ -816,6 +828,7 @@
 
   onMount(() => {
     initAuth();
+    setPomodoroCompleteHandler(announcePomodoroPhase);
 
     // Pop-out compose window: hydrate from the staged draft.
     const nonce = popoutDraftNonce();
@@ -831,7 +844,7 @@
         console.error('[popout] staged draft missing for nonce', nonce);
       }
     }
-        
+    
     // Deep Link Listener for OAuth Callbacks
     if ((window as any).__TAURI_INTERNALS__) {
       import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
