@@ -46,6 +46,7 @@
   import EventInviteCard from './EventInviteCard.svelte';
   import DOMPurify from 'dompurify';
   import { parseChecklists } from '@kestrel/shared';
+  import { blockRemoteImages, senderDomain, isDomainAllowed, allowSenderDomain } from '@kestrel/shared';
   import { get, set } from 'idb-keyval';
 
   export interface Email {
@@ -136,7 +137,19 @@
 
   // UI state variables
   let showReplyDraft = $state(false);
-  let replyType = $state<'reply' | 'reply_all' | 'forward'>('reply');
+  // Tracking protection: reset per email, refresh when the whitelist changes
+  let showRemoteOnce = $state(false);
+  let allowVersion = $state(0);
+  let protectedBody = $derived.by(() => {
+    // Tracked so the banner refreshes after "Always allow sender"
+    void allowVersion;
+    if (!email) return { html: '', blockedCount: 0 };
+    const parsed = parseChecklists(email.body);
+    if (showRemoteOnce || isDomainAllowed(senderDomain(email.senderEmail || ''))) {
+      return { html: parsed, blockedCount: 0 };
+    }
+    return blockRemoteImages(parsed);
+  });  let replyType = $state<'reply' | 'reply_all' | 'forward'>('reply');
   let replyToRecipients = $state<string[]>([]);
   let textareaEl: HTMLTextAreaElement | null = null;
   let replyText = $state('');
@@ -246,6 +259,7 @@
     if (email && email.id !== previousEmailId) {
       icsEvent = null;
       loadingIcs = false;
+      showRemoteOnce = false;
       previousEmailId = email.id;
     }
 
@@ -462,10 +476,31 @@
 
           <!-- Message HTML Render Content (Task 33: Body Sandboxing) -->
           <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">
+            {#if protectedBody.blockedCount > 0}
+              <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200/90 text-xs">
+                <span class="font-medium">{protectedBody.blockedCount} remote image{protectedBody.blockedCount === 1 ? '' : 's'} blocked to protect your privacy</span>
+                <span class="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onclick={() => { showRemoteOnce = true; }}
+                    class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-md font-semibold transition-colors cursor-pointer"
+                  >
+                    Show once
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => { if (email) { allowSenderDomain(email.senderEmail); allowVersion++; } }}
+                    class="px-2.5 py-1 hover:bg-amber-500/20 border border-transparent hover:border-amber-500/50 rounded-md transition-colors cursor-pointer"
+                  >
+                    Always allow sender
+                  </button>
+                </span>
+              </div>
+            {/if}
             <iframe 
               title="Email Body"
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
-              srcdoc={DOMPurify.sanitize(parseChecklists(email.body), { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
+              srcdoc={DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
               class="w-full min-h-[20vh] bg-white"
               onload={(e) => { 
                 const target = e.currentTarget as HTMLIFrameElement;
