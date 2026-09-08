@@ -52,3 +52,10 @@ export {
   toggleFocusMode,
   exitFocusMode,
 } from './focusMode.js';
+
+export {
+  recentBreadcrumbs,
+  pushBreadcrumb,
+  clearBreadcrumbs,
+  type Breadcrumb,
+} from './breadcrumbs.js';
