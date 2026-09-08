@@ -75,6 +75,8 @@ export {
   revokedAccounts,
   addRevokedAccount,
   mailDenseMode,
+  mailDensity,
+  type MailDensity,
   mailDefaultLandingView,
   mailDefaultSendAction,
   mailSignature,

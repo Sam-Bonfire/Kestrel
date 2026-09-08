@@ -9,6 +9,9 @@ export {
 
 export {
   mailDenseMode,
+  mailDensity,
+  resolveDensity,
+  type MailDensity,
   mailDefaultLandingView,
   mailDefaultSendAction,
   mailSignature,

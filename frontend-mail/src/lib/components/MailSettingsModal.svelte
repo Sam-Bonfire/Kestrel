@@ -2,7 +2,8 @@
   import { Settings, X, Plus, Trash2 } from 'lucide-svelte';
   import RichTextSignature from './RichTextSignature.svelte';
   import {
-    mailDenseMode,
+    mailDensity,
+    type MailDensity,
     mailDefaultLandingView,
     mailSnoozeDefault,
     swipeLeftAction,
@@ -21,7 +22,7 @@
   }>();
 
   let activeTab = $state<'general' | 'snippets' | 'signatures'>('general');
-  let accounts = $state<any[]>([]);
+  const densityOptions: [MailDensity, string][] = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['roomy', 'Roomy']];  let accounts = $state<any[]>([]);
   let updateMessage = $state<string | null>(null);
   let updateAvailable = $state(false);
   let checkingUpdate = $state(false);
@@ -136,13 +137,18 @@
       <!-- Scrollable Options -->
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
         {#if activeTab === 'general'}
-          <label class="flex items-center justify-between p-3 bg-neutral-900/35 border border-white/5 rounded-xl cursor-pointer">
-            <div class="space-y-0.5">
-              <span class="font-semibold text-white">Dense Layout Mode</span>
-              <p class="text-[10px] text-[var(--color-text-secondary)]">Narrower heights for list elements.</p>
+          <fieldset class="p-3 bg-neutral-900/35 border border-white/5 rounded-xl">
+            <legend class="font-semibold text-white px-1">List Density</legend>
+            <p class="text-[10px] text-[var(--color-text-secondary)] mb-2">Row heights for list elements.</p>
+            <div class="flex gap-2">
+              {#each densityOptions as [value, label]}
+                <label class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors {$mailDensity === value ? 'bg-blue-500/20 border-blue-500/60 text-white' : 'border-white/10 text-neutral-400 hover:border-white/25'}">
+                  <input type="radio" name="mail-density" {value} bind:group={$mailDensity} class="accent-blue-500 cursor-pointer" />
+                  {label}
+                </label>
+              {/each}
             </div>
-            <input type="checkbox" bind:checked={$mailDenseMode} class="accent-blue-500 rounded cursor-pointer" />
-          </label>
+          </fieldset>
 
           <div class="space-y-1">
             <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Default Landing View</span>

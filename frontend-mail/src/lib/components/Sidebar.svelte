@@ -36,7 +36,6 @@
   } from 'lucide-svelte';
   import RichTextSignature from './RichTextSignature.svelte';
   import {
-    mailDenseMode,
     mailDefaultLandingView,
     mailSignature,
     labelCustomizations,
