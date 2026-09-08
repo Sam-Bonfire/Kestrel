@@ -70,6 +70,7 @@
 
   let {
     email = null,
+    docked = false,
     onClose = () => {},
     onNavigate = (dir: 'prev' | 'next') => {},
     hasPrev = false,
@@ -103,6 +104,7 @@
     onExitBatch = () => {}
   } = $props<{
     email?: Email | null;
+    docked?: boolean;
     onClose?: () => void;
     onNavigate?: (direction: 'prev' | 'next') => void;
     hasPrev?: boolean;
@@ -325,22 +327,27 @@
   <div
     transition:fade={{ duration: 200 }}
     id="center-peek-overlay"
-    class="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-[2px]"
-    role="button"
+    class={docked
+      ? 'fixed inset-0 z-40 pointer-events-none'
+      : 'fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-[2px]'}
+    role={docked ? 'complementary' : 'button'}
+    aria-label={docked ? 'Email reader' : undefined}
     tabindex="0"
-    onclick={onClose}
-    onkeydown={(e) => e.key === 'Escape' && onClose()}
+    onclick={docked ? undefined : onClose}
+    onkeydown={(e) => { if (e.key === 'Escape' && !docked) onClose(); }}
   >
     <!-- Modal Container -->
     <div
-      transition:fly={{ y: 20, duration: 300, easing: cubicOut }}
+      transition:fly={{ x: docked ? 20 : 0, y: docked ? 0 : 20, duration: 300, easing: cubicOut }}
       id="center-peek-modal"
-      class="w-full md:max-w-4xl h-screen md:h-auto md:max-h-[90vh] md:min-h-[50vh] bg-[#0d0d0d] flex flex-col rounded-none md:rounded-xl shadow-2xl overflow-hidden font-sans border border-[var(--color-border-hairline)]"
-      role="dialog"
-      aria-modal="true"
+      class={docked
+        ? 'absolute right-0 top-0 bottom-0 w-full sm:w-[480px] lg:w-[520px] bg-[#0d0d0d] flex flex-col shadow-2xl overflow-hidden font-sans border-l border-[var(--color-border-hairline)] pointer-events-auto'
+        : 'w-full md:max-w-4xl h-screen md:h-auto md:max-h-[90vh] md:min-h-[50vh] bg-[#0d0d0d] flex flex-col rounded-none md:rounded-xl shadow-2xl overflow-hidden font-sans border border-[var(--color-border-hairline)]'}
+      role={docked ? undefined : 'dialog'}
+      aria-modal={docked ? undefined : true}
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
+      onkeydown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }}
     >
       {#if isBatchMode}
         <div class="px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between text-blue-400 shrink-0">

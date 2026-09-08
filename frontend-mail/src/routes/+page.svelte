@@ -140,6 +140,18 @@
   $effect(() => {
     pushBreadcrumb(currentView);
   });
+
+  // Split-pane reader: docked panel keeps the list visible.
+  let readerDocked = $state(
+    typeof localStorage !== 'undefined' && localStorage.getItem('kestrel:mail:reader_docked') === 'true'
+  );
+  $effect(() => {
+    try {
+      localStorage.setItem('kestrel:mail:reader_docked', String(readerDocked));
+    } catch {
+      // Non-fatal
+    }
+  });
   let searchQuery      = $state('');
   let selectedThreadId = $state<string | null>(null);
   let previousSelectedThreadId = $state<string | null>(null);
@@ -946,6 +958,8 @@
     <ThreadList
       threads={finalThreads}
       {currentView}
+      {readerDocked}
+      onToggleDock={() => { readerDocked = !readerDocked; }}
       {selectedThreadId}
       {allLabels}
       onSelectThread={(id) => {
@@ -1038,9 +1052,10 @@
   </div>
 
   <!-- Center peek modal overlay -->
-  {#if activeEmail}
+    {#if activeEmail}
     <CenterPeek
       email={activeEmail}
+      docked={readerDocked}
       initialReplyMode={initialReplyMode}
       onClose={() => { selectedThreadId = null; initialReplyMode = null; }}
       onNavigate={navigatePeek}

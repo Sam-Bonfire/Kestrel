@@ -116,4 +116,23 @@ describe('ThreadList', () => {
 
     expect(mailStore.unreadFilterOnly).toBe(true);
   });
+
+  it('toggles the split-pane reader from the toolbar', async () => {
+    let docked = false;
+    const { getByRole, rerender } = render(ThreadList, {
+      props: {
+        threads: mockThreads,
+        currentView: 'inbox',
+        readerDocked: docked,
+        onToggleDock: () => { docked = !docked; }
+      }
+    });
+
+    const toggle = getByRole('button', { name: 'Toggle split-pane reader' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    await fireEvent.click(toggle);
+    expect(docked).toBe(true);
+    await rerender({ threads: mockThreads, currentView: 'inbox', readerDocked: docked });
+    expect(getByRole('button', { name: 'Toggle split-pane reader' }).getAttribute('aria-pressed')).toBe('true');
+  });
 });

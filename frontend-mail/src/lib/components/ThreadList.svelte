@@ -4,11 +4,11 @@
   import { fade, slide, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { isTyping } from '$lib/utils/keyboard';
-  import { 
+  import {
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
     ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check, ListPlus,
     Clock, AlertTriangle, Sparkles, Tag, Plus, X, Folder, ChevronRight,
-    Reply, ReplyAll, Forward, BellOff, AlertOctagon
+    Reply, ReplyAll, Forward, BellOff, AlertOctagon, PanelRight
   } from 'lucide-svelte';
   import { WindowControls } from '@kestrel/shared/components';
   import {
@@ -70,7 +70,9 @@
     allLabels = [] as string[],
     onOpenMobileSidebar = () => {},
     onRetryOutbox = (id: string) => {},
-    onDiscardOutbox = (id: string) => {}
+    onDiscardOutbox = (id: string) => {},
+    readerDocked = false,
+    onToggleDock = () => {}
   } = $props<{
     threads?: EmailThread[];
     selectedThreadId?: string | null;
@@ -98,6 +100,8 @@
     onOpenMobileSidebar?: () => void;
     onRetryOutbox?: (id: string) => void;
     onDiscardOutbox?: (id: string) => void;
+    readerDocked?: boolean;
+    onToggleDock?: () => void;
   }>();
 
   let selectedIndex = $state(0);
@@ -338,7 +342,7 @@
   });
 </script>
 
-<div class="flex-1 h-screen bg-[var(--color-canvas-base)] flex flex-col overflow-hidden font-sans pb-16 lg:pb-0">
+<div class="flex-1 h-screen bg-[var(--color-canvas-base)] flex flex-col overflow-hidden font-sans pb-16 lg:pb-0 {readerDocked && selectedThreadId ? 'lg:pr-[520px]' : ''}">
   
   <!-- Thread list header -->
   <div 
@@ -396,6 +400,17 @@
         title="Filter applied views"
       >
         <ListFilter class="w-3.5 h-3.5" />
+      </button>
+
+      <!-- Split-pane reader toggle -->
+      <button
+        onclick={onToggleDock}
+        class="hidden sm:block p-1.5 rounded-lg hover:bg-[var(--color-canvas-hover)] hover:text-white transition-colors {readerDocked ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400' : ''}"
+        title={readerDocked ? 'Pop reader out to modal' : 'Dock reader beside the list'}
+        aria-pressed={readerDocked}
+        aria-label="Toggle split-pane reader"
+      >
+        <PanelRight class="w-3.5 h-3.5" />
       </button>
     </div>
   </div>
