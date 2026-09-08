@@ -7,7 +7,7 @@
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
     Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer
   } from 'lucide-svelte';
-  import { AppShell, UndoToast, Breadcrumbs } from '@kestrel/shared/components';
+  import { AppShell, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
   import { authState, triggerUndoAction, pushBreadcrumb } from '@kestrel/shared/stores';
   import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
   import { DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
@@ -670,6 +670,7 @@
 
   {#snippet children()}
   <Breadcrumbs />
+  <SyncErrorBanner />
   <!-- Main View Canvas area -->
   <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}"
        ontouchstart={handleTouchStart}

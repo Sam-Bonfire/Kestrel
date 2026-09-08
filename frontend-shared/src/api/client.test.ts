@@ -19,6 +19,7 @@ import {
   getSettings,
   updateSettings,
   searchMessages,
+  triggerSync,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -267,6 +268,41 @@ describe('API Client & Contract Validation', () => {
       const res = await checkServerHealth('https://offline.server.com');
       expect(res.ok).toBe(false);
       expect(res.error).toBe('Connection refused');
+    });
+  });
+
+  describe('triggerSync', () => {
+    it('posts the account id for per-account retry', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', message: 'synced' }),
+      });
+
+      await triggerSync('acc-123');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/sync/trigger`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ account_id: 'acc-123' }),
+        })
+      );
+    });
+
+    it('posts null account id for global sync', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', message: 'synced' }),
+      });
+
+      await triggerSync();
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/sync/trigger`,
+        expect.objectContaining({
+          body: JSON.stringify({ account_id: null }),
+        })
+      );
     });
   });
 });

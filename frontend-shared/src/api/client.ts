@@ -547,8 +547,8 @@ export function createSyncStream(token?: string): EventSource {
   return new EventSource(url.toString(), { withCredentials: true });
 }
 
-export async function triggerSync(token?: string): Promise<void> {
-  return request<void>('POST', '/sync/trigger', { token });
+export async function triggerSync(accountId?: string, token?: string): Promise<void> {
+  return request<void>('POST', '/sync/trigger', { token, body: { account_id: accountId ?? null } });
 }
 
 // ── Calendar endpoints ──────────────────────────────────────────
