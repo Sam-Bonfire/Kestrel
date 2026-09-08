@@ -4,7 +4,7 @@ import ThreadList from './ThreadList.svelte';
 import { mailStore } from '../stores/mailStore.svelte.js';
 
 vi.mock('@kestrel/shared', () => ({
-  mailDenseMode: { subscribe: (fn: any) => { fn(false); return () => {}; } },
+  mailDensity: { subscribe: (fn: any) => { fn('comfortable'); return () => {}; } },
   labelCustomizations: { subscribe: (fn: any) => { fn({}); return () => {}; } },
   getLabelStyle: vi.fn(),
   Dropdown: vi.fn()

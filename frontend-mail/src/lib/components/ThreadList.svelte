@@ -12,7 +12,8 @@
   } from 'lucide-svelte';
   import { WindowControls } from '@kestrel/shared/components';
   import {
-    mailDenseMode,
+    mailDensity,
+    type MailDensity,
     labelCustomizations,
     getLabelStyle,
     Dropdown,
@@ -171,6 +172,12 @@
   let showCategoryFilterDropdown = $state(false);
   let showLabelFilterDropdown = $state(false);
   let showDateRangeDropdown = $state(false);
+
+  const densityRowClasses: Record<MailDensity, string> = {
+    compact: 'py-2 sm:py-1 px-3 sm:px-3 min-h-[50px] sm:min-h-[32px]',
+    comfortable: 'py-3 sm:py-2.5 px-4 min-h-[64px] sm:min-h-[44px]',
+    roomy: 'py-4 sm:py-3.5 px-5 min-h-[84px] sm:min-h-[60px]',
+  };
 
   const viewLabels: Record<string, string> = {
     inbox: 'Inbox', unread: 'Unread', sent: 'Sent', drafts: 'Drafts',
@@ -636,7 +643,7 @@
           animate:flip={{ duration: 300 }}
           class="group relative flex flex-col sm:flex-row sm:items-center bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 hover:-translate-y-px hover:shadow-md hover:z-10 rounded-lg cursor-pointer transition-all duration-200 border border-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas-base)] focus:outline-none touch-pan-y
             {selectedThreadId === thread.id ? 'bg-[var(--color-canvas-hover)]/60 border-white/5 shadow-sm -translate-y-px z-10' : ''}
-            {$mailDenseMode ? 'py-2 sm:py-1 px-3 sm:px-3 min-h-[50px] sm:min-h-[32px]' : 'py-3 sm:py-2.5 px-4 min-h-[64px] sm:min-h-[44px]'}"
+            {densityRowClasses[$mailDensity]}"
           style={swipeStart?.id === thread.id && swipeOffset !== 0 ? `transform: translateX(${swipeOffset}px);` : undefined}
           onclick={() => {
             if (suppressClickId === thread.id) { suppressClickId = null; return; }
