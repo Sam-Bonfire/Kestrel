@@ -1,6 +1,8 @@
 <script lang="ts">
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ThreadList from '$lib/components/ThreadList.svelte';
+  import ScreenerQueue from '$lib/components/ScreenerQueue.svelte';
+  import { firstTimeSenders, approveSender, loadScreened } from '@kestrel/shared';
   import CenterPeek from '$lib/components/CenterPeek.svelte';
   import ComposeModal from '$lib/components/ComposeModal.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
@@ -285,6 +287,7 @@
     counts['all-mail'] = getCountStr(e => e.isUnread && !e.isTrash);
     counts['spam'] = getCountStr(e => e.isUnread && e.isSpam);
     counts['trash'] = getCountStr(e => e.isUnread && e.isTrash);
+    counts['screener'] = screenerQueue.length;
 
     allLabels.forEach((lbl: string) => {
       counts[`label-${lbl}`] = getCountStr(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase()));
@@ -292,6 +295,32 @@
 
     return counts;
   });
+
+  // ── First-time sender screener ────────────────────────────────────
+  let screened = $state(loadScreened());
+  let screenerQueue = $derived(
+    firstTimeSenders(
+      allEmails.filter((e) => activeAccountId === 'all' || e.accountId === activeAccountId),
+      screened,
+      activeAccountId
+    )
+  );
+
+  function allowSender(email: string) {
+    screened = approveSender(email, screened, activeAccountId);
+  }
+
+  async function blockScreenedSender(email: string) {
+    // Approve only after the block succeeds, so a failed request
+    // leaves the sender in the queue instead of losing them.
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.blockSender(email);
+      screened = approveSender(email, screened, activeAccountId);
+    } catch (e) {
+      console.error('Failed to block sender', e);
+    }
+  }
 
   // ── Filtered thread list ─────────────────────────────────────────
   let threads = $derived(
@@ -877,6 +906,14 @@
     {/if}
     <!-- Mail panel: full width thread list, no reader pane -->
     <Breadcrumbs />
+    {#if currentView === 'screener'}
+      <ScreenerQueue
+        senders={screenerQueue}
+        onAllow={allowSender}
+        onBlock={blockScreenedSender}
+        onOpen={(id) => { selectedThreadId = id; }}
+      />
+    {:else}
     <ThreadList
       threads={finalThreads}
       {currentView}
@@ -945,6 +982,7 @@
         allEmails = allEmails.filter(e => e.id !== id);
       }}
     />
+    {/if}
     
     <!-- Mobile FAB for Compose -->
     <button
