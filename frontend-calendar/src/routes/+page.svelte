@@ -28,6 +28,18 @@
   $effect(() => {
     pushBreadcrumb(viewMode);
   });
+
+  // Deep-link target not yet loaded: retried after each events refresh.
+  let pendingDeepLinkEventId = $state<string | null>(null);
+
+  function resolveDeepLinkEvent(id: string): boolean {
+    const target = events.find((ev: any) => ev.id === id);
+    if (!target) return false;
+    if (target.date) selectedDate = new Date(target.date);
+    selectedEvent = target;
+    clickPosition = null;
+    return true;
+  }
   let selectedEvent = $state<any | null>(null);
   let clickPosition = $state<{x: number, y: number} | null>(null);
 
@@ -153,6 +165,7 @@
 
   import { onMount } from 'svelte';
   import { initAuth } from '@kestrel/shared/stores';
+  import { parseKestrelDeepLink } from '@kestrel/shared';
 
   onMount(() => {
     initAuth();
@@ -178,6 +191,11 @@
               openNewEventPanel(date, startTime);
               if (endTime && selectedEvent) {
                 selectedEvent.endTime = endTime;
+              }
+            } else {
+              const link = parseKestrelDeepLink(url);
+              if (link?.app === 'calendar' && link.kind === 'event') {
+                if (!resolveDeepLinkEvent(link.id)) pendingDeepLinkEventId = link.id;
               }
             }
           }
@@ -271,6 +289,14 @@
                 }
               });
               events = expandedEvents;
+              if (pendingDeepLinkEventId) {
+                if (resolveDeepLinkEvent(pendingDeepLinkEventId)) {
+                  pendingDeepLinkEventId = null;
+                } else {
+                  showToast('Event not found — it may have been deleted or not synced yet', 'error');
+                  pendingDeepLinkEventId = null;
+                }
+              }
             }
           }).catch(console.error);
         });

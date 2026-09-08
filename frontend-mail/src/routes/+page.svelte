@@ -782,6 +782,7 @@
 
   // ── Keyboard shortcuts ───────────────────────────────────────────
   import { isTyping } from '$lib/utils/keyboard';
+  import { parseKestrelDeepLink } from '@kestrel/shared';
 
   onMount(() => {
     initAuth();
@@ -796,6 +797,15 @@
               // We'd want to focus the accounts tab if we had one here, but isSettingsOpen exposes the shared SettingsModal.
               // We can also trigger a re-fetch of accounts here.
               // The simplest way to signal the settings modal to load accounts is toggling it open.
+            }
+            const link = parseKestrelDeepLink(url);
+            if (link?.app === 'mail' && link.kind === 'thread') {
+              // Select directly; fall back to all-mail only when the thread
+              // isn't in the loaded list. The selected-thread effect below
+              // loads the full body and marks it read.
+              if (!allEmails.some((e) => e.id === link.id)) currentView = 'all-mail';
+              selectedThreadId = link.id;
+              isMobileSidebarOpen = false;
             }
           }
         });
