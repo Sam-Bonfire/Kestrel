@@ -7,8 +7,8 @@
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
     Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer
   } from 'lucide-svelte';
-  import { AppShell, UndoToast } from '@kestrel/shared/components';
-  import { authState, triggerUndoAction } from '@kestrel/shared/stores';
+  import { AppShell, UndoToast, Breadcrumbs } from '@kestrel/shared/components';
+  import { authState, triggerUndoAction, pushBreadcrumb } from '@kestrel/shared/stores';
   import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
   import { DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
 
@@ -21,6 +21,13 @@
 
   let selectedDate = $state(new Date());
   let viewMode = $state<string>('month');
+
+  // ── Recent activity trail ─────────────────────────────────────────
+  // $effect (not per-handler pushes): viewMode changes from several dropdown
+  // and shortcut sites, so a single effect covers them all.
+  $effect(() => {
+    pushBreadcrumb(viewMode);
+  });
   let selectedEvent = $state<any | null>(null);
   let clickPosition = $state<{x: number, y: number} | null>(null);
 
@@ -662,6 +669,7 @@
   {/snippet}
 
   {#snippet children()}
+  <Breadcrumbs />
   <!-- Main View Canvas area -->
   <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}"
        ontouchstart={handleTouchStart}

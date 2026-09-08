@@ -6,8 +6,8 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
-  import { AppShell, ReauthBanner, UndoToast } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault } from '@kestrel/shared/stores';
+  import { AppShell, ReauthBanner, UndoToast, Breadcrumbs } from '@kestrel/shared/components';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
   import { get } from 'svelte/store';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
@@ -118,6 +118,13 @@
 
   // ── App state ───────────────────────────────────────────────────
   let currentView      = $state('inbox');
+
+  // ── Recent activity trail ─────────────────────────────────────────
+  // $effect (not per-handler pushes): currentView also changes from keyboard
+  // shortcuts, so a single effect covers every change site.
+  $effect(() => {
+    pushBreadcrumb(currentView);
+  });
   let searchQuery      = $state('');
   let selectedThreadId = $state<string | null>(null);
   let previousSelectedThreadId = $state<string | null>(null);
@@ -858,6 +865,7 @@
       </div>
     {/if}
     <!-- Mail panel: full width thread list, no reader pane -->
+    <Breadcrumbs />
     <ThreadList
       threads={finalThreads}
       {currentView}
