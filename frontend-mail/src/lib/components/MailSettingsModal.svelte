@@ -2,8 +2,11 @@
   import { Settings, X, Plus, Trash2 } from 'lucide-svelte';
   import RichTextSignature from './RichTextSignature.svelte';
   import {
+    mailDenseMode,
     mailDensity,
     type MailDensity,
+    theme,
+    type ThemeMode,
     mailDefaultLandingView,
     mailSnoozeDefault,
     swipeLeftAction,
@@ -22,7 +25,9 @@
   }>();
 
   let activeTab = $state<'general' | 'snippets' | 'signatures'>('general');
-  const densityOptions: [MailDensity, string][] = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['roomy', 'Roomy']];  let accounts = $state<any[]>([]);
+  const densityOptions: [MailDensity, string][] = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['roomy', 'Roomy']];
+  const themeOptions: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
+  let accounts = $state<any[]>([]);
   let updateMessage = $state<string | null>(null);
   let updateAvailable = $state(false);
   let checkingUpdate = $state(false);
@@ -144,6 +149,18 @@
               {#each densityOptions as [value, label]}
                 <label class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors {$mailDensity === value ? 'bg-blue-500/20 border-blue-500/60 text-white' : 'border-white/10 text-neutral-400 hover:border-white/25'}">
                   <input type="radio" name="mail-density" {value} bind:group={$mailDensity} class="accent-blue-500 cursor-pointer" />
+                  {label}
+                </label>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset class="p-3 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-xl">
+            <legend class="font-semibold text-[var(--color-text-primary)] px-1">Theme</legend>
+            <div class="flex gap-2">
+              {#each themeOptions as [value, label]}
+                <label class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors {$theme === value ? 'bg-blue-500/20 border-blue-500/60 text-[var(--color-text-primary)]' : 'border-[var(--color-border-hairline)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-secondary)]'}">
+                  <input type="radio" name="app-theme" {value} bind:group={$theme} class="accent-blue-500 cursor-pointer" />
                   {label}
                 </label>
               {/each}

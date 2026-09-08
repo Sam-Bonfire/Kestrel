@@ -8,7 +8,7 @@
     Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer
   } from 'lucide-svelte';
   import { AppShell, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
-  import { authState, triggerUndoAction, pushBreadcrumb } from '@kestrel/shared/stores';
+  import { authState, triggerUndoAction, pushBreadcrumb, theme } from '@kestrel/shared/stores';
   import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
   import { DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
 
@@ -1207,6 +1207,18 @@
               <input type="checkbox" bind:checked={showWeekends} class="peer sr-only" />
               <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-2">
+            <span class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">Theme</span>
+            <div class="flex gap-2">
+              {#each [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']] as [value, label]}
+                <label class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors {$theme === value ? 'bg-rose-500/20 border-rose-500/60 text-[var(--color-text-primary)]' : 'border-[var(--color-border-hairline)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-secondary)]'}">
+                  <input type="radio" name="cal-theme" {value} bind:group={$theme} class="accent-rose-500 cursor-pointer" />
+                  {label}
+                </label>
+              {/each}
             </div>
           </div>
 

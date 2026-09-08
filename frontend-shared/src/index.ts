@@ -77,6 +77,7 @@ export {
   mailDenseMode,
   mailDensity,
   type MailDensity,
+  theme,
   mailDefaultLandingView,
   mailDefaultSendAction,
   mailSignature,
@@ -211,3 +212,9 @@ export {
   loadScreened,
   type ScreenedSender,
 } from './utils/screener.js';
+export {
+  resolveEffectiveTheme,
+  applyTheme,
+  initTheme,
+  type ThemeMode,
+} from './utils/theme.js';
