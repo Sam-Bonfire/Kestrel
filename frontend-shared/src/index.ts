@@ -1,4 +1,4 @@
-// ── Design tokens ───────────────────────────────────────────────
+﻿// ΓöÇΓöÇ Design tokens ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   colors,
   tagColors,
@@ -18,7 +18,7 @@ export type { DesignTokens } from './tokens/index.js';
 
 export { default as SettingsModal } from './components/SettingsModal.svelte';
 
-// ── API client ──────────────────────────────────────────────────
+// ΓöÇΓöÇ API client ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   ApiError,
   getHealth,
@@ -63,7 +63,7 @@ export type {
   Signature,
 } from './api/index.js';
 
-// ── Auth store & Settings store ─────────────────────────────────
+// ΓöÇΓöÇ Auth store & Settings store ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   initAuth,
 } from './stores/auth.svelte.js';
@@ -107,7 +107,7 @@ export {
   relativeTimeTick,
 } from './stores/index.js';
 
-// ── Offline queue ───────────────────────────────────────────────
+// ΓöÇΓöÇ Offline queue ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   enqueueMutation,
   dequeuePending,
@@ -118,7 +118,7 @@ export {
 
 export type { QueuedMutation } from './offline/index.js';
 
-// ── Components ──────────────────────────────────────────────────
+// ΓöÇΓöÇ Components ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   Button,
   Spinner,
@@ -136,7 +136,7 @@ export {
   ServerConfig,
 } from './components/index.js';
 
-// ── Utils ───────────────────────────────────────────────────────
+// ΓöÇΓöÇ Utils ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   getLabelStyle,
   buildLabelTree,
@@ -247,3 +247,4 @@ export {
   shouldRunTriage,
   markTriageRun,
 } from './utils/triage.js';
+export { findConflicts, nextFreeSlot, type Schedulable, type FreeSlot } from './utils/conflicts.js';
