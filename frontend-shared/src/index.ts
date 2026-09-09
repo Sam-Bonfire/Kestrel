@@ -191,3 +191,4 @@ export {
   parseTimeToMinutes,
   type WorkingHoursConfig,
 } from './utils/workingHours.js';
+export { setUnreadBadge } from './utils/badge.js';
