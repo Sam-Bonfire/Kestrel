@@ -23,6 +23,7 @@ export {
   swipeRightAction,
   type SwipeActionType,
   mailSnoozeDefault,
+  smartTriageEnabled,
 } from './settings.js';
 
 export {

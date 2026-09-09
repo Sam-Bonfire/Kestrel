@@ -12,6 +12,7 @@
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
+  import { triageCandidates, shouldRunTriage, markTriageRun, smartTriageEnabled } from '@kestrel/shared';
   import { get } from 'svelte/store';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
   import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
@@ -387,6 +388,31 @@
       console.error('Failed to block sender', e);
     }
   }
+
+  // ── Smart triage: archive stale low-value mail once a day ─────────
+  let triageDone = $state(false);
+  $effect(() => {
+    if (!triageDone && authState.isAuthenticated && !isLoading && $smartTriageEnabled && shouldRunTriage()) {
+      triageDone = true;
+      const idSet = new Set(triageCandidates(allEmails.map((e) => ({ ...e, snippet: e.body ?? '' }))));
+      markTriageRun();
+      if (idSet.size === 0) return;
+      const ids = [...idSet];
+      allEmails = allEmails.map((e) => (idSet.has(e.id) ? { ...e, isArchived: true } : e));
+      triggerUndoAction({
+        title: `Smart triage archived ${ids.length} old message${ids.length === 1 ? '' : 's'}`,
+        timeoutMs: 15000,
+        onCommit: async () => {
+          const { bulkAction } = await import('@kestrel/shared/api');
+          await bulkAction(ids, 'archive', true).catch((err) => console.error('Triage archive failed:', err));
+        },
+        onUndo: () => {
+          allEmails = allEmails.map((e) => (idSet.has(e.id) ? { ...e, isArchived: false } : e));
+        },
+        type: 'info',
+      });
+    }
+  });
 
   // ── Filtered thread list ─────────────────────────────────────────
   let threads = $derived(

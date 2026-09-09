@@ -58,6 +58,13 @@ export const mailSnoozeDefault = writable<SnoozePreset>(
   loadStr(SNOOZE_DEFAULT_KEY, DEFAULT_SNOOZE_PRESET) as SnoozePreset
 );
 
+const TRIAGE_KEY = 'kestrel:settings:smart_triage';
+// ponytail: device-local on purpose, never synced to the backend.
+export const smartTriageEnabled = writable<boolean>(loadBool(TRIAGE_KEY, false));
+smartTriageEnabled.subscribe((val) => {
+  saveItem(TRIAGE_KEY, String(val));
+});
+
 let isInitializing = false;
 let isUpdating = false;
 
