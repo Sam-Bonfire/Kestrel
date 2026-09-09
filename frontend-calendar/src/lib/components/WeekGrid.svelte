@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare, Pencil, Trash2 } from 'lucide-svelte';
-  import { detectConferenceLink, isWorkingDay, parseTimeToMinutes, DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
+  import { detectConferenceLink, isWorkingDay, 
+parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, type WorkingHoursConfig } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
   import EventHoverPopover from './EventHoverPopover.svelte';
 
@@ -498,7 +499,7 @@
                   {/if}
                 </div>
                 {#if ev.description}
-                  <p class="text-[11px] text-[var(--color-text-secondary)]/80 line-clamp-2 pt-1">{ev.description}</p>
+                  <p class="text-[11px] text-[var(--color-text-secondary)]/80 line-clamp-2 pt-1">{plainText(ev.description)}</p>
                 {/if}
               </div>
             </button>

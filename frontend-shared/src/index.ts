@@ -232,3 +232,4 @@ export {
   shiftTime,
   type ParsedEvent,
 } from './utils/nlpEvent.js';
+export { plainText } from './utils/html.js';
