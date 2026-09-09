@@ -233,3 +233,4 @@ export {
   type ParsedEvent,
 } from './utils/nlpEvent.js';
 export { plainText } from './utils/html.js';
+export { mergeDuplicateEvents, type MergedEvent } from './utils/duplicates.js';
