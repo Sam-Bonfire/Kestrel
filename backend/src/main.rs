@@ -3,6 +3,7 @@ mod config;
 mod core;
 mod db;
 mod plugins;
+mod telemetry;
 
 use api::outbox_worker::start_outbox_worker;
 use api::rate_limit::RateLimiter;
@@ -51,6 +52,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let config = Config::from_env();
+
+    if config.crash_log {
+        let data_dir = telemetry::data_dir_from_database_url(&config.database_url);
+        telemetry::init_crash_reporting(data_dir);
+        tracing::info!("Local crash reports enabled");
+    }
 
     let db = init_pool(&config.database_url).await?;
     run_migrations(&db).await?;
