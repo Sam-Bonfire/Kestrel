@@ -144,3 +144,23 @@ pub trait HistoricalRevisionRepository: Send + Sync {
         resource_id: Uuid,
     ) -> Result<i32, sqlx::Error>;
 }
+
+#[async_trait]
+pub trait EventPollRepository: Send + Sync {
+    async fn create_poll(
+        &self,
+        event_id: Uuid,
+        question: &str,
+        options: &[String],
+    ) -> Result<crate::core::models::EventPoll, sqlx::Error>;
+    async fn list_polls(
+        &self,
+        event_id: Uuid,
+    ) -> Result<Vec<crate::core::models::EventPollWithVotes>, sqlx::Error>;
+    async fn vote(
+        &self,
+        poll_id: Uuid,
+        voter_email: &str,
+        option_index: i32,
+    ) -> Result<bool, sqlx::Error>;
+}

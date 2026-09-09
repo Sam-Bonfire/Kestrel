@@ -419,6 +419,50 @@ export async function blockSender(
   });
 }
 
+// ── Event polls ────────────────────────────────────────────────
+
+export interface EventPollVote {
+  voter_email: string;
+  option_index: number;
+}
+
+export interface EventPoll {
+  id: string;
+  event_id: string;
+  question: string;
+  options: string[];
+  votes: EventPollVote[];
+}
+
+export async function listEventPolls(eventId: string, token?: string): Promise<EventPoll[]> {
+  return request<EventPoll[]>('GET', `/events/${eventId}/polls`, { token });
+}
+
+export async function createEventPoll(
+  eventId: string,
+  question: string,
+  options: string[],
+  token?: string,
+): Promise<EventPoll> {
+  return request<EventPoll>('POST', `/events/${eventId}/polls`, {
+    token,
+    body: { question, options },
+  });
+}
+
+export async function voteEventPoll(
+  eventId: string,
+  pollId: string,
+  voterEmail: string,
+  optionIndex: number,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', `/events/${eventId}/polls/${pollId}/vote`, {
+    token,
+    body: { voter_email: voterEmail, option_index: optionIndex },
+  });
+}
+
 export async function getRawEmlBlob(messageId: string, token?: string): Promise<Blob> {
   const activeToken = token || authState.token;
   const headers: Record<string, string> = {};

@@ -82,6 +82,11 @@ export type CreateEventResponse = {
 	created_at: number | null,
 };
 
+export type CreatePollRequest = {
+	question: string,
+	options: string[],
+};
+
 /**
  *  A UUID wrapper that correctly handles SQLite TEXT encoding/decoding.
  *  SQLite stores UUIDs as TEXT (36-char strings), but sqlx's default `Uuid`
@@ -119,6 +124,22 @@ export type EventListParams = {
 export type EventListResponse = {
 	events: EventSummary[],
 	total: number | null,
+};
+
+export type EventPoll = {
+	id: DbUuid,
+	event_id: DbUuid,
+	question: string,
+	options_json: string,
+	created_at: number | null,
+};
+
+export type EventPollWithVotes = {
+	id: DbUuid,
+	event_id: DbUuid,
+	question: string,
+	options: string[],
+	votes: PollVote[],
 };
 
 export type EventSummary = {
@@ -202,6 +223,13 @@ export type MessageSummary = {
 	is_archived: boolean,
 	has_attachments: boolean,
 	labels: string | null,
+};
+
+export type PollVote = {
+	poll_id: DbUuid,
+	voter_email: string,
+	option_index: number,
+	created_at: number | null,
 };
 
 export type RegisterRequest = {
@@ -318,4 +346,9 @@ export type UpdateEventRequest = {
 	recurrence_rules: string | null,
 	attendees: string | null,
 	status: string | null,
+};
+
+export type VoteRequest = {
+	voter_email: string,
+	option_index: number,
 };

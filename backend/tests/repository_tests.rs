@@ -2,8 +2,8 @@ mod common;
 
 use backend::core::models::{Account, CalendarEvent, Contact, User};
 use backend::core::repository::{
-    AccountRepository, CalendarRepository, ContactRepository, EventRepository, MessageRepository,
-    UserPreferencesRepository, UserRepository,
+    AccountRepository, CalendarRepository, ContactRepository, EventPollRepository, EventRepository,
+    MessageRepository, UserPreferencesRepository, UserRepository,
 };
 use backend::core::types::DbUuid;
 use backend::db::sqlite::account_repository::SqliteAccountRepository;
@@ -11,6 +11,7 @@ use backend::db::sqlite::calendar_repository::SqliteCalendarRepository;
 use backend::db::sqlite::contact_repository::SqliteContactRepository;
 use backend::db::sqlite::event_repository::SqliteEventRepository;
 use backend::db::sqlite::message_repository::SqliteMessageRepository;
+use backend::db::sqlite::poll_repository::SqlitePollRepository;
 use backend::db::sqlite::user_preferences_repository::SqliteUserPreferencesRepository;
 use backend::db::sqlite::user_repository::SqliteUserRepository;
 use common::{
@@ -387,6 +388,41 @@ async fn test_contact_repository_upsert_and_search() {
         .expect("search failed");
     assert_eq!(results_email.len(), 1);
     assert_eq!(results_email[0].name, Some("Bob Johnson".to_string()));
+}
+
+#[tokio::test]
+async fn test_event_poll_roundtrip() {
+    let pool = setup_test_db().await;
+    let repo = SqlitePollRepository::new(get_sqlite_pool(&pool));
+    let event_id = Uuid::new_v4();
+
+    let poll = repo
+        .create_poll(
+            event_id,
+            "Lunch spot?",
+            &["Sushi".to_string(), "Tacos".to_string()],
+        )
+        .await
+        .expect("create_poll failed");
+
+    assert!(repo.vote(poll.id.0, "a@example.com", 0).await.unwrap());
+    assert!(repo.vote(poll.id.0, "b@example.com", 1).await.unwrap());
+    // Idempotent re-vote.
+    assert!(repo.vote(poll.id.0, "a@example.com", 0).await.unwrap());
+    // Unknown poll.
+    assert!(!repo.vote(Uuid::new_v4(), "a@example.com", 0).await.unwrap());
+
+    let polls = repo.list_polls(event_id).await.expect("list failed");
+    assert_eq!(polls.len(), 1);
+    assert_eq!(polls[0].question, "Lunch spot?");
+    assert_eq!(
+        polls[0].options,
+        vec!["Sushi".to_string(), "Tacos".to_string()]
+    );
+    assert_eq!(polls[0].votes.len(), 2);
+
+    let empty = repo.list_polls(Uuid::new_v4()).await.unwrap();
+    assert!(empty.is_empty());
 }
 
 #[tokio::test]
