@@ -188,6 +188,36 @@
     }
     nlpInput = '';
   }
+  import { buildDailyBriefing, shouldShowBriefing, markBriefingShown } from '@kestrel/shared';
+
+  // Morning briefing: today's agenda, once per day after backend load.
+  let briefingDone = false;
+  let eventsFromBackend = $state(false);
+  $effect(() => {
+    if (!briefingDone && authState.isAuthenticated && eventsFromBackend) {
+      briefingDone = true;
+      deliverCalendarBriefing();
+    }
+  });
+  function deliverCalendarBriefing() {
+    if (!shouldShowBriefing()) return;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const briefing = buildDailyBriefing({
+      events: events
+        .filter((ev: any) => ev.date === todayStr)
+        .map((ev: any) => ({ title: ev.title || 'Untitled', startTime: ev.startTime || '09:00', location: ev.location })),
+      unreadCount: 0,
+    });
+    markBriefingShown();
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-notification')
+        .then(({ sendNotification }) => sendNotification({ title: briefing.title, body: briefing.body }))
+        .catch(() => {});
+    } else {
+      showToast(`${briefing.title}\n${briefing.body}`, 'info');
+    }
+  }
 
   onMount(() => {
     initAuth();
@@ -200,6 +230,7 @@
       }
       showToast(body, 'success');
     });
+
 
     // Deep Link Listener for OAuth callbacks & "create event" actions
     if ((window as any).__TAURI_INTERNALS__) {
@@ -328,6 +359,7 @@
                   pendingDeepLinkEventId = null;
                 }
               }
+              eventsFromBackend = true;
             }
           }).catch(console.error);
         });
