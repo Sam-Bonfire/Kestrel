@@ -240,3 +240,4 @@ export {
   markBriefingShown,
   type DailyBriefing,
 } from './utils/briefing.js';
+export { focusDayColumn, focusEventInColumn } from './utils/gridNav.js';

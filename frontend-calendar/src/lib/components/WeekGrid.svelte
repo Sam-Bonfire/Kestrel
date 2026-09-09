@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare, Pencil, Trash2 } from 'lucide-svelte';
   import { detectConferenceLink, isWorkingDay,
-parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, type WorkingHoursConfig } from '@kestrel/shared';
+parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focusDayColumn, focusEventInColumn, type WorkingHoursConfig } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
   import EventHoverPopover from './EventHoverPopover.svelte';
 
@@ -280,6 +280,38 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, type
     leftPct: number;
     color: string;
   } | null>(null);
+
+  // ── Keyboard grid navigation ────────────────────────────────────
+  // Arrow keys move between day columns (Left/Right) and events within a
+  // day (Up/Down); Enter activates; Home/End jump to first/last event.
+  function handleDayColumnKeydown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable]')) return;
+    const column = e.currentTarget as HTMLElement;
+    const grid = column.closest('[data-day-grid]');
+    let handled = false;
+    switch (e.key) {
+      case 'ArrowLeft':
+        handled = grid ? focusDayColumn(grid, -1) : false;
+        break;
+      case 'ArrowRight':
+        handled = grid ? focusDayColumn(grid, 1) : false;
+        break;
+      case 'ArrowUp':
+        handled = focusEventInColumn(column, -1);
+        break;
+      case 'ArrowDown':
+        handled = focusEventInColumn(column, 1);
+        break;
+      case 'Home':
+        handled = focusEventInColumn(column, 'first');
+        break;
+      case 'End':
+        handled = focusEventInColumn(column, 'last');
+        break;
+    }
+    if (handled) e.preventDefault();
+  }
 
   // Convert a Y coordinate (relative to the timeline body) into HH:MM,
   // snapped to 15-minute increments and clamped to 23:59.
@@ -618,8 +650,8 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, type
         {/each}
       </div>
 
-      <!-- Time blocks columns -->
-      <div class="relative min-h-[1440px] grid" 
+        <!-- Time blocks columns -->
+        <div class="relative min-h-[1440px] grid" data-day-grid role="group" aria-label="Calendar week grid"
            style="grid-template-columns: {gutterWidth}px repeat({visibleDates().length}, minmax(0, 1fr));">
         
         <!-- Y-Axis Hours list labels -->
@@ -647,7 +679,8 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, type
           {@const dateStr = toISODateString(date)}
           {@const dayEvents = mergeDuplicateEvents(getEventsForDate(dateStr))}
           {@const layoutInfo = getTimedEventsLayout(dayEvents)}
-          <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors cursor-cell select-none"
+          <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors cursor-cell select-none focus-visible:outline-2 focus-visible:outline-white"
+               data-day-col={dateStr}
                ondragover={(e) => {
                  e.preventDefault();
                  e.dataTransfer!.dropEffect = 'move';
@@ -752,7 +785,12 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, type
                }}
                role="button"
                tabindex="0"
-               onkeydown={(e) => { if (e.key === 'Enter') onEmptySlotClick?.(dateStr, '09:00'); }}
+               onkeydown={(e) => {
+                 if (e.key === 'Enter' || e.key === ' ') {
+                   if (e.key === ' ') e.preventDefault();
+                   onEmptySlotClick?.(dateStr, '09:00');
+                 } else handleDayColumnKeydown(e);
+               }}
           >
             <!-- Working hours shading overlay (1px per minute, 60px per hour) -->
             {#if workingHours.enabled && !isWorkingDay(date, workingHours)}
@@ -843,7 +881,7 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, type
                 onpointerenter={(e) => handlePointerEnter(e, ev)}
                 onpointerleave={handlePointerLeave}
                 data-event-card
-                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-grab overflow-hidden active:cursor-grabbing select-none
+                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-grab overflow-hidden active:cursor-grabbing select-none focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none
                   {colStyle.bg} {colStyle.border} {isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}
                   {dragMove?.id === ev.id ? 'opacity-30' : ''}"
                 style="top: {displayTop}px; height: {displayHeight}px; left: {leftPct}%; width: calc({widthPct}% - 4px);"
