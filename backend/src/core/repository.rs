@@ -131,6 +131,15 @@ pub trait ContactRepository: Send + Sync {
         query: &str,
         limit: i64,
     ) -> Result<Vec<crate::core::models::Contact>, sqlx::Error>;
+    async fn delete(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error>;
+    /// Record a merge (tombstone the loser) so sync upserts don't resurrect it.
+    async fn record_merge(
+        &self,
+        account_id: Uuid,
+        keep_email: &str,
+        loser_email: &str,
+    ) -> Result<bool, sqlx::Error>;
+    async fn is_merged(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error>;
 }
 
 #[async_trait]

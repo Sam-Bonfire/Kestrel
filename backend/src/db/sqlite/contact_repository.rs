@@ -39,6 +39,49 @@ impl ContactRepository for SqliteContactRepository {
         Ok(())
     }
 
+    async fn delete(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM contacts WHERE account_id = ? AND email = ?")
+            .bind(account_id.to_string())
+            .bind(email)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn record_merge(
+        &self,
+        account_id: Uuid,
+        keep_email: &str,
+        loser_email: &str,
+    ) -> Result<bool, sqlx::Error> {
+        if keep_email.eq_ignore_ascii_case(loser_email) {
+            return self.delete(account_id, loser_email).await;
+        }
+        sqlx::query(
+            "INSERT INTO merged_contacts (account_id, email, merged_into) VALUES (?, ?, ?)
+             ON CONFLICT(account_id, email) DO UPDATE SET merged_into = excluded.merged_into",
+        )
+        .bind(account_id.to_string())
+        .bind(loser_email)
+        .bind(keep_email)
+        .execute(&self.pool)
+        .await?;
+        self.delete(account_id, loser_email).await
+    }
+
+    async fn is_merged(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error> {
+        let found: Option<String> = sqlx::query_scalar(
+            "SELECT email FROM merged_contacts WHERE account_id = ? AND email = ?",
+        )
+        .bind(account_id.to_string())
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(found.is_some())
+    }
+
     async fn search(
         &self,
         account_ids: &[Uuid],

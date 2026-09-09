@@ -390,6 +390,61 @@ async fn test_contact_repository_upsert_and_search() {
 }
 
 #[tokio::test]
+async fn test_contact_merge_tombstone() {
+    let pool = setup_test_db().await;
+    let sqlite_pool = get_sqlite_pool(&pool);
+    let repo = SqliteContactRepository::new(sqlite_pool);
+
+    let user = seed_user(&pool, "merge_user@kestrel.dev").await;
+    let account = seed_account(&pool, user.id.0, "gmail", "Personal").await;
+
+    let now = chrono::Utc::now().timestamp();
+    for email in ["keep@example.com", "lose@example.com"] {
+        repo.upsert(&Contact {
+            id: DbUuid::from(Uuid::new_v4()),
+            account_id: DbUuid::from(account.id.0),
+            name: Some("Same Person".to_string()),
+            email: email.to_string(),
+            avatar_url: None,
+            last_contacted_at: now,
+            created_at: now,
+        })
+        .await
+        .expect("upsert failed");
+    }
+
+    assert!(
+        !repo
+            .is_merged(account.id.0, "lose@example.com")
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.record_merge(account.id.0, "keep@example.com", "lose@example.com")
+            .await
+            .expect("record_merge failed")
+    );
+    assert!(
+        repo.is_merged(account.id.0, "lose@example.com")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .is_merged(account.id.0, "keep@example.com")
+            .await
+            .unwrap()
+    );
+
+    // Loser row is gone, keeper remains.
+    let remaining = repo.search(&[account.id.0], "keep", 10).await.unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].email, "keep@example.com");
+    let gone = repo.search(&[account.id.0], "lose", 10).await.unwrap();
+    assert!(gone.is_empty());
+}
+
+#[tokio::test]
 async fn test_user_preferences_repository() {
     let pool = setup_test_db().await;
     let sqlite_pool = get_sqlite_pool(&pool);

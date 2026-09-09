@@ -1,6 +1,7 @@
 import { authState, logout } from '../stores/auth.svelte.js';
 export * from './generated/types.js';
 import type {
+  Contact,
   CreateEventRequest,
   CreateEventResponse,
   UpdateEventRequest,
@@ -417,6 +418,28 @@ export async function blockSender(
     token,
     body: { email },
   });
+}
+
+export async function deleteContact(
+  accountId: string,
+  email: string,
+  keepEmail?: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('DELETE', '/contacts', {
+    token,
+    body: { account_id: accountId, email, keep_email: keepEmail ?? null },
+  });
+}
+
+export async function listContacts(
+  accountId?: string,
+  token?: string,
+): Promise<Contact[]> {
+  const params = new URLSearchParams();
+  if (accountId) params.set('account_id', accountId);
+  const query = params.toString();
+  return request<Contact[]>('GET', `/contacts${query ? `?${query}` : ''}`, { token });
 }
 
 export async function getRawEmlBlob(messageId: string, token?: string): Promise<Blob> {

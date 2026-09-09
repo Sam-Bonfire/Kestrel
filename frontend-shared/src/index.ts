@@ -191,3 +191,4 @@ export {
   parseTimeToMinutes,
   type WorkingHoursConfig,
 } from './utils/workingHours.js';
+export { findDuplicateGroups, normalizeContactName } from './utils/merge.js';

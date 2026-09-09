@@ -19,6 +19,8 @@ import {
   getSettings,
   updateSettings,
   searchMessages,
+  deleteContact,
+  listContacts,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -267,6 +269,39 @@ describe('API Client & Contract Validation', () => {
       const res = await checkServerHealth('https://offline.server.com');
       expect(res.ok).toBe(false);
       expect(res.error).toBe('Connection refused');
+    });
+  });
+
+  describe('contact merge', () => {
+    it('lists scoped or all contacts', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+
+      await listContacts('acc-1');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts?account_id=acc-1'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('deletes by account and email', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      });
+
+      await deleteContact('acc-1', 'a@b.com', 'keep@b.com');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/contacts`,
+        expect.objectContaining({
+          method: 'DELETE',
+          body: JSON.stringify({ account_id: 'acc-1', email: 'a@b.com', keep_email: 'keep@b.com' }),
+        })
+      );
     });
   });
 });

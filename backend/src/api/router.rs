@@ -133,6 +133,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/messages/send", post(messages::send_message))
         .route("/api/v1/search", get(search::search_messages))
         .route("/api/contacts/search", get(contacts::search_contacts))
+        .route(
+            "/api/v1/contacts",
+            get(contacts::list_contacts).delete(contacts::delete_contact),
+        )
         .route("/api/v1/calendars", get(calendars::list_calendars))
         .route("/api/v1/calendars/:id", get(calendars::get_calendar))
         .route(
