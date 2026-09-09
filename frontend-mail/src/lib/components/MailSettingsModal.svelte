@@ -91,6 +91,68 @@
     templateStore.signatures = templateStore.signatures.filter(s => s.id !== id);
   }
 
+  // --- Out-of-office auto-responder ---
+  let oooAccountId = $state('');
+  let oooEnabled = $state(false);
+  let oooSubject = $state('');
+  let oooBody = $state('');
+  let oooStart = $state('');
+  let oooEnd = $state('');
+  let oooStatus: string | null = $state(null);
+  let oooBusy = $state(false);
+
+  function millisToDate(millis: number | null): string {
+    if (millis == null) return '';
+    const d = new Date(millis);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  function dateToMillis(date: string): number | null {
+    if (!date) return null;
+    const t = Date.parse(`${date}T00:00:00Z`);
+    return Number.isNaN(t) ? null : t;
+  }
+
+  async function loadVacation(accountId: string) {
+    oooStatus = null;
+    if (!accountId) return;
+    oooBusy = true;
+    try {
+      const { getVacation } = await import('@kestrel/shared/api');
+      const v = await getVacation(accountId);
+      oooEnabled = v.enabled;
+      oooSubject = v.subject ?? '';
+      oooBody = v.bodyText ?? '';
+      oooStart = millisToDate(v.startTime);
+      oooEnd = millisToDate(v.endTime);
+    } catch (e) {
+      oooStatus = e instanceof Error ? e.message : String(e);
+    } finally {
+      oooBusy = false;
+    }
+  }
+
+  async function saveVacation() {
+    if (!oooAccountId) return;
+    oooBusy = true;
+    oooStatus = null;
+    try {
+      const { setVacation } = await import('@kestrel/shared/api');
+      await setVacation(oooAccountId, {
+        enabled: oooEnabled,
+        subject: oooSubject || null,
+        bodyText: oooBody,
+        startTime: dateToMillis(oooStart),
+        endTime: dateToMillis(oooEnd),
+      });
+      oooStatus = 'Saved.';
+    } catch (e) {
+      oooStatus = e instanceof Error ? e.message : String(e);
+    } finally {
+      oooBusy = false;
+    }
+  }
+
   let wasOpen = $state(false);
 
   // Effect to sync changes whenever modal closes
@@ -143,6 +205,68 @@
             </div>
             <input type="checkbox" bind:checked={$mailDenseMode} class="accent-blue-500 rounded cursor-pointer" />
           </label>
+
+          <div class="p-3 bg-neutral-900/35 border border-white/5 rounded-xl space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="space-y-0.5">
+                <span class="font-semibold text-white">Out of Office</span>
+                <p class="text-[10px] text-[var(--color-text-secondary)]">Provider auto-reply per account.</p>
+              </div>
+              <input
+                type="checkbox"
+                bind:checked={oooEnabled}
+                aria-label="Enable out-of-office replies"
+                class="accent-blue-500 rounded cursor-pointer"
+              />
+            </div>
+            <select
+              bind:value={oooAccountId}
+              onchange={() => loadVacation(oooAccountId)}
+              aria-label="Account for out-of-office"
+              class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2 outline-none border border-white/10 cursor-pointer text-xs"
+            >
+              <option value="">Select account…</option>
+              {#each accounts as acc}
+                <option value={acc.id}>{acc.display_name ?? acc.email}</option>
+              {/each}
+            </select>
+            {#if oooAccountId}
+              {@const oooProvider = accounts.find((a) => a.id === oooAccountId)?.provider}
+              {#if oooProvider !== 'outlook'}
+                <input
+                  type="text"
+                  bind:value={oooSubject}
+                  placeholder="Subject (optional)"
+                  aria-label="Auto-reply subject"
+                  class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2 outline-none border border-white/10 text-xs placeholder:text-neutral-600"
+                />
+              {:else}
+                <p class="text-[10px] text-[var(--color-text-secondary)]">Outlook has no subject field — only the message is sent.</p>
+              {/if}
+              <textarea
+                bind:value={oooBody}
+                rows="3"
+                placeholder="I am out of office…"
+                aria-label="Auto-reply message"
+                class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2 outline-none border border-white/10 text-xs placeholder:text-neutral-600 resize-y"
+              ></textarea>
+              <div class="flex items-center gap-2">
+                <label class="text-[10px] text-[var(--color-text-secondary)]">From <input type="date" bind:value={oooStart} class="bg-[var(--color-canvas-base)] text-white rounded p-1 outline-none border border-white/10 text-xs" style="color-scheme: dark;" /></label>
+                <label class="text-[10px] text-[var(--color-text-secondary)]">To <input type="date" bind:value={oooEnd} class="bg-[var(--color-canvas-base)] text-white rounded p-1 outline-none border border-white/10 text-xs" style="color-scheme: dark;" /></label>
+                <button
+                  type="button"
+                  onclick={saveVacation}
+                  disabled={oooBusy}
+                  class="ml-auto px-3 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-medium rounded-md transition-colors cursor-pointer"
+                >
+                  {oooBusy ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            {/if}
+            {#if oooStatus}
+              <p class="text-[11px] text-[var(--color-text-secondary)]">{oooStatus}</p>
+            {/if}
+          </div>
 
           <div class="space-y-1">
             <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Default Landing View</span>

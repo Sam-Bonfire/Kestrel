@@ -319,3 +319,19 @@ export type UpdateEventRequest = {
 	attendees: string | null,
 	status: string | null,
 };
+
+export type VacationDto = {
+	enabled: boolean,
+	subject: string | null,
+	bodyText: string,
+	startTime: number | null,
+	endTime: number | null,
+};
+
+export type VacationUpdate = {
+	enabled: boolean,
+	subject: string | null,
+	bodyText: string,
+	startTime: number | null,
+	endTime: number | null,
+};

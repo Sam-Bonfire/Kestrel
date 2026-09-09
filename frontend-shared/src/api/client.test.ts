@@ -19,6 +19,8 @@ import {
   getSettings,
   updateSettings,
   searchMessages,
+  getVacation,
+  setVacation,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -267,6 +269,40 @@ describe('API Client & Contract Validation', () => {
       const res = await checkServerHealth('https://offline.server.com');
       expect(res.ok).toBe(false);
       expect(res.error).toBe('Connection refused');
+    });
+  });
+
+  describe('vacation auto-responder', () => {
+    it('normalizes the provider payload', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ enabled: true, subject: 'OOO', bodyText: 'Away', startTime: 1, endTime: 2 }),
+      });
+
+      const res = await getVacation('acc-1');
+      expect(res).toEqual({ enabled: true, subject: 'OOO', bodyText: 'Away', startTime: 1, endTime: 2 });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/accounts/acc-1/vacation`,
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('puts camelCase settings', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      });
+
+      await setVacation('acc-1', { enabled: true, subject: null, bodyText: 'Away', startTime: 1, endTime: 2 });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/accounts/acc-1/vacation`,
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ enabled: true, subject: null, bodyText: 'Away', startTime: 1, endTime: 2 }),
+        })
+      );
     });
   });
 });
