@@ -177,7 +177,7 @@
     spam: 'Spam', trash: 'Trash', github: 'GitHub', 'all-mail': 'All Mail', starred: 'Starred'
   };
 
-  let displayTitle = $derived(viewLabels[currentView] ?? currentView.replace('label-', ''));
+  let displayTitle = $derived(viewLabels[currentView] ?? currentView.replace('label-', '').replace('category-', ''));
 
   // Filtered threads displayed in list
   let filteredList = $derived(
