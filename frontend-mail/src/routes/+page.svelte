@@ -9,6 +9,7 @@
   import { AppShell, ReauthBanner, UndoToast } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
+  import { isNewsletter } from '@kestrel/shared';
   import { get } from 'svelte/store';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
@@ -278,6 +279,15 @@
     counts['all-mail'] = getCountStr(e => e.isUnread && !e.isTrash);
     counts['spam'] = getCountStr(e => e.isUnread && e.isSpam);
     counts['trash'] = getCountStr(e => e.isUnread && e.isTrash);
+    counts['feed'] = getCountStr(e => {
+      if (e.isTrash || e.isSpam || !e.isUnread) return false;
+      return isNewsletter({
+        senderEmail: e.senderEmail,
+        subject: e.subject,
+        snippet: (e.body ?? '').replace(/<[^>]*>?/gm, ''),
+        labels: e.labels,
+      });
+    });
 
     allLabels.forEach((lbl: string) => {
       counts[`label-${lbl}`] = getCountStr(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase()));
@@ -299,6 +309,15 @@
         if (currentView === 'starred')  return e.isStarred && !e.isTrash;
         if (currentView === 'spam')     return e.isSpam;
         if (currentView === 'trash')    return e.isTrash;
+        if (currentView === 'feed') {
+          if (e.isTrash || e.isSpam) return false;
+          return isNewsletter({
+            senderEmail: e.senderEmail,
+            subject: e.subject,
+            snippet: (e.body ?? '').replace(/<[^>]*>?/gm, ''),
+            labels: e.labels,
+          });
+        }
         if (currentView === 'github')   return e.sender === 'GitHub' && !e.isTrash;
         if (currentView === 'all-mail') return !e.isTrash;
         if (currentView.startsWith('label-')) {

@@ -6,6 +6,7 @@
     FileText,
     Github,
     Mail,
+    Newspaper,
     AlertTriangle,
     Trash2,
     Settings,
@@ -100,6 +101,7 @@
     { id: 'all-mail', label: 'All Mail', icon: Mail,          color: 'text-pink-400'   },
     { id: 'spam',     label: 'Spam',     icon: AlertTriangle, color: 'text-orange-400' },
     { id: 'trash',    label: 'Trash',    icon: Trash2,        color: 'text-red-400'    },
+    { id: 'feed',     label: 'Feed',     icon: Newspaper,     color: 'text-teal-400'   },
   ] as const;
 
   // Icons map for dynamic rendering
