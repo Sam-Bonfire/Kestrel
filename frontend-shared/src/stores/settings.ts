@@ -1,6 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { getSettings, updateSettings } from '../api/client.js';
 import { DEFAULT_SNOOZE_PRESET, type SnoozePreset } from '../utils/snooze.js';
+import type { ThemeMode } from '../utils/theme.js';
 
 const DENSE_KEY = 'kestrel:settings:dense_mode';
 const LANDING_KEY = 'kestrel:settings:landing_view';
@@ -207,7 +208,18 @@ function saveItem(key: string, val: string): void {
   }
 }
 const THEME_KEY = 'kestrel:settings:theme';
-export const theme = writable<string>(loadStr(THEME_KEY, 'system'));
+function isThemeMode(v: string): v is ThemeMode {
+  return v === 'light' || v === 'dark' || v === 'system';
+}
+function loadTheme(): ThemeMode {
+  try {
+    const val = localStorage.getItem(THEME_KEY);
+    return val !== null && isThemeMode(val) ? val : 'system';
+  } catch {
+    return 'system';
+  }
+}
+export const theme = writable<ThemeMode>(loadTheme());
 theme.subscribe((val) => {
   saveItem(THEME_KEY, val);
   syncToBackend();

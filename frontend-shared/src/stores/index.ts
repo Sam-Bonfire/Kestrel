@@ -12,6 +12,7 @@ export {
   mailDensity,
   resolveDensity,
   type MailDensity,
+  theme,
   mailDefaultLandingView,
   mailDefaultSendAction,
   mailSignature,
