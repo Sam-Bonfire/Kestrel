@@ -199,3 +199,9 @@ export {
   allowSenderDomain,
   blockRemoteImages,
 } from './utils/trackingProtection.js';
+export {
+  parseKestrelDeepLink,
+  buildThreadDeepLink,
+  buildEventDeepLink,
+  type KestrelDeepLink,
+} from './utils/deepLinks.js';
