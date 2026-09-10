@@ -20,6 +20,8 @@ import {
   updateSettings,
   searchMessages,
   triggerSync,
+  searchContacts,
+  updateContactNotes,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -301,6 +303,39 @@ describe('API Client & Contract Validation', () => {
         `${API_BASE}/sync/trigger`,
         expect.objectContaining({
           body: JSON.stringify({ account_id: null }),
+        })
+      );
+    });
+  });
+
+  describe('contact notes', () => {
+    it('searchContacts queries by q with limit', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+
+      await searchContacts('alice@example.com', 5);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts/search?q=alice%40example.com&limit=5'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('updateContactNotes posts account, email and notes', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      });
+
+      await updateContactNotes('acc-1', 'a@b.com', 'VIP');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/contacts/notes`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ account_id: 'acc-1', email: 'a@b.com', notes: 'VIP' }),
         })
       );
     });

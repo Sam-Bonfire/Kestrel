@@ -53,6 +53,7 @@
     id: string;
     sender: string;
     senderEmail: string;
+    accountId?: string;
     to: string;
     subject: string;
     body: string;
@@ -149,7 +150,40 @@
       return { html: parsed, blockedCount: 0 };
     }
     return blockRemoteImages(parsed);
-  });  let replyType = $state<'reply' | 'reply_all' | 'forward'>('reply');
+  });
+  // Contact notes for the sender
+  let notesOpen = $state(false);
+  let contactNotes = $state('');
+  let notesLoadedFor: string | null = $state(null);
+  let notesSaving = $state(false);
+  $effect(() => {
+    const key = email?.senderEmail;
+    if (!notesOpen || !key || key === notesLoadedFor) return;
+    notesLoadedFor = key;
+    contactNotes = '';
+    import('@kestrel/shared/api').then(async ({ searchContacts }) => {
+      try {
+        const res = await searchContacts(key, 5);
+        const match = res.find((c) => c.email.toLowerCase() === key.toLowerCase());
+        if (match?.notes && notesLoadedFor === key) contactNotes = match.notes;
+      } catch (e) {
+        console.error('Failed to load contact notes', e);
+      }
+    });
+  });
+  async function saveContactNotes() {
+    if (!email || !email.accountId) return;
+    notesSaving = true;
+    try {
+      const { updateContactNotes } = await import('@kestrel/shared/api');
+      await updateContactNotes(email.accountId, email.senderEmail, contactNotes);
+    } catch (e) {
+      console.error('Failed to save contact notes', e);
+    } finally {
+      notesSaving = false;
+    }
+  }
+  let replyType = $state<'reply' | 'reply_all' | 'forward'>('reply');
   let replyToRecipients = $state<string[]>([]);
   let textareaEl: HTMLTextAreaElement | null = null;
   let replyText = $state('');
@@ -443,6 +477,13 @@
                 <div class="text-xs text-[var(--color-text-secondary)] truncate">
                   To: <span class="font-mono">{email.to}</span>
                 </div>
+                <button
+                  type="button"
+                  onclick={() => { notesOpen = !notesOpen; }}
+                  class="text-[11px] text-blue-400/80 hover:text-blue-300 hover:underline cursor-pointer"
+                >
+                  {notesOpen ? 'Hide notes' : contactNotes ? 'Notes' : 'Add note'}
+                </button>
               </div>
             </div>
 
@@ -472,6 +513,33 @@
 
           {#if icsEvent}
             <EventInviteCard event={icsEvent} emailId={email.id} />
+          {/if}
+
+          {#if notesOpen}
+            <div class="bg-[#131313] border border-[var(--color-border-hairline)] rounded-xl p-3 space-y-2">
+              <label for="contact-notes" class="block text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+                Notes for {email.senderEmail}
+              </label>
+              <textarea
+                id="contact-notes"
+                bind:value={contactNotes}
+                rows="3"
+                maxlength="2000"
+                placeholder="Remember context about this contact…"
+                class="w-full bg-[var(--color-canvas-base)] text-sm text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-blue-500/50 resize-y placeholder:text-neutral-600"
+              ></textarea>
+              <div class="flex justify-end">
+                <button
+                  type="button"
+                  onclick={saveContactNotes}
+                  disabled={notesSaving || !email.accountId}
+                  title={!email.accountId ? 'Account unknown for this message' : 'Save notes'}
+                  class="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-medium rounded-md transition-colors cursor-pointer"
+                >
+                  {notesSaving ? 'Saving…' : 'Save notes'}
+                </button>
+              </div>
+            </div>
           {/if}
 
           <!-- Message HTML Render Content (Task 33: Body Sandboxing) -->

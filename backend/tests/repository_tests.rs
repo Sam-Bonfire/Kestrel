@@ -353,6 +353,7 @@ async fn test_contact_repository_upsert_and_search() {
         name: Some("Alice Smith".to_string()),
         email: "alice.smith@example.com".to_string(),
         avatar_url: None,
+        notes: None,
         last_contacted_at: now,
         created_at: now,
     };
@@ -362,6 +363,7 @@ async fn test_contact_repository_upsert_and_search() {
         name: Some("Bob Johnson".to_string()),
         email: "bob.j@example.com".to_string(),
         avatar_url: None,
+        notes: None,
         last_contacted_at: now,
         created_at: now,
     };
@@ -388,6 +390,74 @@ async fn test_contact_repository_upsert_and_search() {
         .expect("search failed");
     assert_eq!(results_email.len(), 1);
     assert_eq!(results_email[0].name, Some("Bob Johnson".to_string()));
+}
+
+#[tokio::test]
+async fn test_contact_notes_roundtrip() {
+    let pool = setup_test_db().await;
+    let sqlite_pool = get_sqlite_pool(&pool);
+    let repo = SqliteContactRepository::new(sqlite_pool);
+
+    let user = seed_user(&pool, "notes_user@kestrel.dev").await;
+    let account = seed_account(&pool, user.id.0, "gmail", "Personal").await;
+
+    let now = chrono::Utc::now().timestamp();
+    repo.upsert(&backend::core::models::Contact {
+        id: DbUuid::from(Uuid::new_v4()),
+        account_id: DbUuid::from(account.id.0),
+        name: Some("Noted Person".to_string()),
+        email: "noted@example.com".to_string(),
+        avatar_url: None,
+        notes: None,
+        last_contacted_at: now,
+        created_at: now,
+    })
+    .await
+    .expect("upsert failed");
+
+    assert!(
+        repo.set_notes(account.id.0, "noted@example.com", "VIP, prefers mornings")
+            .await
+            .expect("set_notes failed")
+    );
+
+    let found = repo
+        .search(&[account.id.0], "noted@", 10)
+        .await
+        .expect("search failed");
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].notes.as_deref(), Some("VIP, prefers mornings"));
+
+    // Sync upserts with empty notes must not clobber saved notes.
+    repo.upsert(&backend::core::models::Contact {
+        id: DbUuid::from(Uuid::new_v4()),
+        account_id: DbUuid::from(account.id.0),
+        name: None,
+        email: "noted@example.com".to_string(),
+        avatar_url: None,
+        notes: None,
+        last_contacted_at: now,
+        created_at: now,
+    })
+    .await
+    .expect("re-upsert failed");
+    let kept = repo
+        .search(&[account.id.0], "noted@", 10)
+        .await
+        .expect("search failed");
+    assert_eq!(kept[0].notes.as_deref(), Some("VIP, prefers mornings"));
+
+    assert!(
+        repo.set_notes(account.id.0, "ghost@example.com", "x")
+            .await
+            .expect("set_notes failed")
+    );
+    let created = repo
+        .search(&[account.id.0], "ghost@", 10)
+        .await
+        .expect("search failed");
+    assert_eq!(created.len(), 1);
+    assert_eq!(created[0].notes.as_deref(), Some("x"));
 }
 
 #[tokio::test]

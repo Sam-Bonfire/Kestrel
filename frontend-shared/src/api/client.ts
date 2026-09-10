@@ -1,6 +1,7 @@
 import { authState, logout } from '../stores/auth.svelte.js';
 export * from './generated/types.js';
 import type {
+  Contact,
   CreateEventRequest,
   CreateEventResponse,
   UpdateEventRequest,
@@ -416,6 +417,30 @@ export async function blockSender(
   return request<void>('POST', '/senders/block', {
     token,
     body: { email },
+  });
+}
+
+// ── Contacts endpoints ─────────────────────────────────────────
+
+export async function searchContacts(
+  q: string,
+  limit?: number,
+  token?: string,
+): Promise<Contact[]> {
+  const params = new URLSearchParams({ q });
+  if (limit != null) params.set('limit', String(limit));
+  return request<Contact[]>('GET', `/contacts/search?${params.toString()}`, { token });
+}
+
+export async function updateContactNotes(
+  accountId: string,
+  email: string,
+  notes: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', '/contacts/notes', {
+    token,
+    body: { account_id: accountId, email, notes },
   });
 }
 

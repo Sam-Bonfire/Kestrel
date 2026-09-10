@@ -131,6 +131,12 @@ pub trait ContactRepository: Send + Sync {
         query: &str,
         limit: i64,
     ) -> Result<Vec<crate::core::models::Contact>, sqlx::Error>;
+    async fn set_notes(
+        &self,
+        account_id: Uuid,
+        email: &str,
+        notes: &str,
+    ) -> Result<bool, sqlx::Error>;
 }
 
 #[async_trait]
