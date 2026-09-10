@@ -99,6 +99,7 @@
     { id: 'all-mail', label: 'All Mail', icon: Mail,          color: 'text-pink-400'   },
     { id: 'spam',     label: 'Spam',     icon: AlertTriangle, color: 'text-orange-400' },
     { id: 'trash',    label: 'Trash',    icon: Trash2,        color: 'text-red-400'    },
+    { id: 'screener', label: 'Screener', icon: UserCheck,     color: 'text-emerald-400'},
   ] as const;
 
   // Icons map for dynamic rendering
