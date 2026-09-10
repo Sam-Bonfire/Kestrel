@@ -3,6 +3,7 @@
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { detectConferenceLink } from '@kestrel/shared';
+  import { builtInEventTemplates, applyEventTemplate, type EventTemplate } from '@kestrel/shared/stores';
   import { openUrl } from '@tauri-apps/plugin-opener';
 
   export interface EventDetail {
@@ -163,6 +164,20 @@
     onClose();
   }
 
+  function applyTemplate(template: EventTemplate) {
+    const applied = applyEventTemplate(template, startTime);
+    if (!title.trim()) title = applied.title;
+    endTime = applied.endTime;
+    category = applied.category;
+    color = applied.color;
+    if (!description.trim() && applied.description) description = applied.description;
+    if (applied.spansNextDay) {
+      const d = new Date(date + 'T12:00:00');
+      d.setDate(d.getDate() + 1);
+      date = d.toISOString().split('T')[0];
+    }
+  }
+
   function updateRsvp(newStatus: string) {
     if (!event || !event.id) return;
     const newRsvpStatus = newStatus === 'accepted' ? 'yes' : newStatus === 'declined' ? 'no' : 'maybe';
@@ -232,6 +247,21 @@
           class="w-full bg-transparent border-none outline-none text-base font-bold text-white leading-snug hover:bg-white/5 p-1 -m-1 rounded transition-colors placeholder:text-neutral-500"
         />
       </div>
+
+      {#if !event?.id}
+        <div class="flex flex-wrap gap-1.5" role="group" aria-label="Event templates">
+          {#each builtInEventTemplates as template}
+            <button
+              type="button"
+              onclick={() => applyTemplate(template)}
+              title="Apply {template.name} ({template.durationMins}m)"
+              class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/25 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+            >
+              {template.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
 
       <!-- Planned Execution Date / Time Block (Inline Editable) -->
       <div class="space-y-2.5 bg-neutral-900/50 p-3 rounded-xl border border-neutral-800/40">

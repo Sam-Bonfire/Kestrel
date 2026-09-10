@@ -62,3 +62,10 @@ export {
   clearBreadcrumbs,
   type Breadcrumb,
 } from './breadcrumbs.js';
+
+export {
+  builtInEventTemplates,
+  applyEventTemplate,
+  type EventTemplate,
+  type AppliedTemplate,
+} from './eventTemplates.js';
