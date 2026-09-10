@@ -11,6 +11,7 @@
   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
+  import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
   import { get } from 'svelte/store';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
   import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
@@ -179,6 +180,22 @@
   let searchResults = $state<any[] | null>(null);
   let isLoading = $state(true);
 
+  // Single choke point for split-inbox categorization (backend sends no category).
+  function classifyEmail(raw: any): EmailCategory {
+    let labels: string[] = [];
+    try {
+      labels = Array.isArray(raw.labels) ? raw.labels : raw.labels ? JSON.parse(raw.labels) : [];
+    } catch {
+      labels = [];
+    }
+    return categorizeEmail({
+      senderEmail: raw.sender_email ?? raw.senderEmail ?? '',
+      subject: raw.subject ?? '',
+      snippet: raw.snippet ?? raw.body ?? '',
+      labels,
+    });
+  }
+
   $effect(() => {
     if (authState.isInitialized && !authState.isAuthenticated) {
       import('$app/navigation').then(({ goto }) => goto('/login'));
@@ -205,7 +222,7 @@
             isSpam: false,
             hasAttachment: m.has_attachments,
             labels: m.labels ? JSON.parse(m.labels) : [],
-            category: 'Primary'
+            category: classifyEmail(m)
           }));
           isLoading = false;
         }).catch(err => {
@@ -244,11 +261,11 @@
                   isTrash: false,
                   isDraft: false,
                   isSpam: false,
-                  hasAttachment: m.has_attachments,
-                  labels: m.labels ? JSON.parse(m.labels) : [],
-                  category: 'Primary'
-                }));
-              });
+              hasAttachment: m.has_attachments,
+              labels: m.labels ? JSON.parse(m.labels) : [],
+              category: classifyEmail(m)
+            }));
+          });
               
               // Trigger Tauri native notification (Task 35)
               if (data.type === 'new_mail') {
@@ -407,7 +424,7 @@
       isReplyLater: false,
           hasAttachment: false,
           labels: [],
-          category: 'Primary'
+          category: classifyEmail(e)
         }))
       : threads
   );

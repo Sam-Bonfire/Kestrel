@@ -169,7 +169,7 @@
   let showFiltersBar = $state(false);
 
   // Filtering states
-  let activeCategory = $state<'All' | 'Primary' | 'Updates' | 'Social' | 'Forums'>('All');
+  let activeCategory = $state<'All' | 'Primary' | 'Updates' | 'Social' | 'Promotions' | 'Forums'>('All');
   let activeLabelFilter = $state<'All' | string>('All');
   let hasAttachmentFilterOnly = $state(false);
   let activeDateRange = $state<'All' | 'Today' | 'This Week' | 'This Month'>('All');
@@ -433,7 +433,7 @@
           {/snippet}
           {#snippet content()}
             <div class="w-44 py-1 font-sans text-xs">
-              {#each ['All', 'Primary', 'Updates', 'Social', 'Forums'] as cat}
+              {#each ['All', 'Primary', 'Updates', 'Social', 'Promotions', 'Forums'] as cat}
                 <button
                   onclick={() => { activeCategory = cat as any; showCategoryFilterDropdown = false; }}
                   class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
