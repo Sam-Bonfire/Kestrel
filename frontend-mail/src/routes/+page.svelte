@@ -31,6 +31,29 @@
       console.info('[Pomodoro]', body);
     }
   }
+  import { buildDailyBriefing, shouldShowBriefing, markBriefingShown } from '@kestrel/shared';
+
+  // Morning briefing: unread digest, once per day after inbox loads.
+  let briefingDone = $state(false);
+  $effect(() => {
+    if (!briefingDone && authState.isAuthenticated && !isLoading) {
+      briefingDone = true;
+      deliverMailBriefing();
+    }
+  });
+  function deliverMailBriefing() {
+    if (!shouldShowBriefing()) return;
+    const unread = allEmails.filter((e) => e.isUnread && !e.isTrash && !e.isSpam).length;
+    const briefing = buildDailyBriefing({ events: [], unreadCount: unread });
+    markBriefingShown();
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-notification')
+        .then(({ sendNotification }) => sendNotification({ title: briefing.title, body: briefing.body }))
+        .catch(() => {});
+    } else {
+      console.info('[Briefing]', briefing.title, briefing.body);
+    }
+  }
 
   async function replayOutbox() {
     if (!navigator.onLine) return;

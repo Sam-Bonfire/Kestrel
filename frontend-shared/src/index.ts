@@ -234,3 +234,9 @@ export {
 } from './utils/nlpEvent.js';
 export { plainText } from './utils/html.js';
 export { mergeDuplicateEvents, type MergedEvent } from './utils/duplicates.js';
+export {
+  buildDailyBriefing,
+  shouldShowBriefing,
+  markBriefingShown,
+  type DailyBriefing,
+} from './utils/briefing.js';
