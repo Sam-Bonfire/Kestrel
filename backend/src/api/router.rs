@@ -138,6 +138,8 @@ pub fn create_router(state: AppState) -> Router {
             "/api/v1/contacts/notes",
             post(contacts::update_contact_notes),
         )
+        .route("/api/v1/contacts/export", get(contacts::export_contacts))
+        .route("/api/v1/contacts/import", post(contacts::import_contacts))
         .route("/api/v1/calendars", get(calendars::list_calendars))
         .route("/api/v1/calendars/:id", get(calendars::get_calendar))
         .route(

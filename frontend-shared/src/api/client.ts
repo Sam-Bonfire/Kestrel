@@ -420,6 +420,30 @@ export async function blockSender(
   });
 }
 
+export async function exportContactsBlob(accountId?: string, token?: string): Promise<Blob> {
+  const params = new URLSearchParams();
+  if (accountId) params.set('account_id', accountId);
+  const query = params.toString();
+  const res = await fetch(`${getApiBase()}/contacts/export${query ? `?${query}` : ''}`, {
+    headers: buildHeaders(token),
+    credentials: 'include',
+  });
+  if (!res.ok) throw new ApiError(res.status, `Export failed: ${res.statusText}`);
+  return res.blob();
+}
+
+export async function importContacts(
+  accountId: string,
+  format: 'csv' | 'vcard',
+  content: string,
+  token?: string,
+): Promise<{ imported: number; skipped: number }> {
+  return request<{ imported: number; skipped: number }>('POST', '/contacts/import', {
+    token,
+    body: { account_id: accountId, format, content },
+  });
+}
+
 // ── Contacts endpoints ─────────────────────────────────────────
 
 export async function searchContacts(
