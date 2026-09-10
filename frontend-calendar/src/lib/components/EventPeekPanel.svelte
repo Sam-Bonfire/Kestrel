@@ -5,6 +5,7 @@
   import { detectConferenceLink } from '@kestrel/shared';
   import { builtInEventTemplates, applyEventTemplate, type EventTemplate } from '@kestrel/shared/stores';
   import { RichTextEditor } from '@kestrel/shared/components';
+  import type { Schedulable, FreeSlot } from '@kestrel/shared';
   import { openUrl } from '@tauri-apps/plugin-opener';
 
   export interface EventDetail {
@@ -32,6 +33,8 @@
     isDocked = false,
     isMobileOrTablet = false,
     accounts = [],
+    conflicts = [],
+    suggestedSlot = null,
     onClose = () => {},
     onSave = (eventData: any) => {},
     onDelete = () => {}
@@ -41,6 +44,8 @@
     isDocked?: boolean;
     isMobileOrTablet?: boolean;
     accounts?: any[];
+    conflicts?: Schedulable[];
+    suggestedSlot?: FreeSlot | null;
     onClose?: () => void;
     onSave?: (eventData: any) => void;
     onDelete?: () => void;
@@ -179,6 +184,13 @@
     }
   }
 
+  function resolveToSuggestedSlot() {
+    if (!suggestedSlot) return;
+    startTime = suggestedSlot.startTime;
+    endTime = suggestedSlot.endTime;
+    handleSave(false);
+  }
+
   function updateRsvp(newStatus: string) {
     if (!event || !event.id) return;
     const newRsvpStatus = newStatus === 'accepted' ? 'yes' : newStatus === 'declined' ? 'no' : 'maybe';
@@ -238,6 +250,22 @@
 
     <!-- Scrollable Organized Center Peek Body -->
     <div class="px-5 py-4 space-y-4 flex-1 overflow-y-auto">
+      {#if conflicts.length > 0}
+        <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2" role="alert">
+          <div class="text-xs font-semibold text-amber-200">
+            Overlaps {conflicts.length === 1 ? '1 event' : `${conflicts.length} events`}: {conflicts.map((c) => c.title || 'Untitled').slice(0, 3).join(', ')}
+          </div>
+          {#if suggestedSlot}
+            <button
+              type="button"
+              onclick={resolveToSuggestedSlot}
+              class="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 text-[11px] font-medium transition-colors cursor-pointer"
+            >
+              Move to {suggestedSlot.startTime}–{suggestedSlot.endTime}
+            </button>
+          {/if}
+        </div>
+      {/if}
       <!-- Title (Inline Editable) -->
       <div>
         <input

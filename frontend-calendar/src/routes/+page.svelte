@@ -168,6 +168,7 @@
   import { parseKestrelDeepLink } from '@kestrel/shared';
   import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
   import { parseNaturalEvent, shiftTime } from '@kestrel/shared';
+  import { findConflicts, nextFreeSlot, parseTimeToMinutes } from '@kestrel/shared';
 
   // Quick-add bar: deterministic natural-language event creation.
   let nlpInput = $state('');
@@ -1199,12 +1200,33 @@
 
   <!-- Event Details Sidebar Peek -->
   {#if selectedEvent}
+    {@const selectedKey = selectedEvent.id ?? '__new__'}
+    {@const selectedConflicts = !selectedEvent.isAllDay
+      ? findConflicts(
+          { id: selectedKey, date: selectedEvent.date, startTime: selectedEvent.startTime, endTime: selectedEvent.endTime },
+          events.filter((ev: any) => ev.id !== selectedEvent.id)
+        )
+      : []}
+    {@const selectedDuration =
+      (() => {
+        const raw = parseTimeToMinutes(selectedEvent.endTime || '10:00') - parseTimeToMinutes(selectedEvent.startTime || '09:00');
+        return raw > 0 ? raw : 60;
+      })()}
     <EventPeekPanel
       event={selectedEvent}
       {clickPosition}
       isDocked={isDetailsDocked && !isMobileOrTablet}
       isMobileOrTablet={isMobileOrTablet}
       {accounts}
+      conflicts={selectedConflicts}
+      suggestedSlot={selectedConflicts.length > 0
+        ? nextFreeSlot(
+            events.filter((ev: any) => ev.id !== selectedEvent.id),
+            selectedEvent.date,
+            selectedDuration,
+            selectedEvent.startTime
+          )
+        : null}
       onClose={() => selectedEvent = null}
       onSave={(updatedEvent) => {
         handleSaveEvent(updatedEvent);
