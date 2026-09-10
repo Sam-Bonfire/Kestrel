@@ -218,3 +218,11 @@ export {
   initTheme,
   type ThemeMode,
 } from './utils/theme.js';
+export {
+  stagePopoutDraft,
+  takePopoutDraft,
+  popoutDraftNonce,
+  buildPopoutUrl,
+  openComposePopout,
+  type PopoutDraft,
+} from './utils/popout.js';
