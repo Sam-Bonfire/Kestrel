@@ -16,6 +16,7 @@
   import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
+  import { inboxCategory } from '$lib/utils/inboxCategory';
   import { onMount, untrack, onDestroy } from 'svelte';
   import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
 
@@ -353,6 +354,9 @@
         if (currentView.startsWith('label-')) {
           const lbl = currentView.replace('label-', '');
           return e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase());
+        }
+        if (currentView.startsWith('category-')) {
+          return inboxCategory(e) === currentView.replace('category-', '');
         }
         return true;
       })
