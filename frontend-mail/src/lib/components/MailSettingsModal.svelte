@@ -7,6 +7,7 @@
     type MailDensity,
     theme,
     type ThemeMode,
+    smartTriageEnabled,
     mailDefaultLandingView,
     mailSnoozeDefault,
     swipeLeftAction,
@@ -166,6 +167,14 @@
               {/each}
             </div>
           </fieldset>
+
+          <label class="flex items-center justify-between p-3 bg-neutral-900/35 border border-white/5 rounded-xl cursor-pointer">
+            <div class="space-y-0.5">
+              <span class="font-semibold text-white">Smart Triage</span>
+              <p class="text-[10px] text-[var(--color-text-secondary)]">Auto-archive read promos older than 30 days, once a day.</p>
+            </div>
+            <input type="checkbox" bind:checked={$smartTriageEnabled} class="accent-blue-500 rounded cursor-pointer" />
+          </label>
 
           <div class="space-y-1">
             <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Default Landing View</span>

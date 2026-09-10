@@ -88,6 +88,7 @@ export {
   swipeRightAction,
   type SwipeActionType,
   mailSnoozeDefault,
+  smartTriageEnabled,
 } from './stores/index.js';
 
 export {
@@ -241,3 +242,8 @@ export {
   type DailyBriefing,
 } from './utils/briefing.js';
 export { focusDayColumn, focusEventInColumn } from './utils/gridNav.js';
+export {
+  triageCandidates,
+  shouldRunTriage,
+  markTriageRun,
+} from './utils/triage.js';
