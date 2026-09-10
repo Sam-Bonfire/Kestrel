@@ -20,6 +20,12 @@ export type BulkActionParams = {
 
 export type BulkActionType = "mark_read" | "archive" | "trash" | "toggle_star" | "apply_label" | "remove_label";
 
+export type BusyBlockDto = {
+	email: string,
+	start_time: number | null,
+	end_time: number | null,
+};
+
 export type CalendarDetail = {
 	id: string,
 	account_id: string,
@@ -133,6 +139,12 @@ export type EventSummary = {
 	location: string | null,
 	status: string | null,
 	has_conflict: boolean,
+};
+
+export type FreebusyRequest = {
+	emails: string[],
+	start_time: number | null,
+	end_time: number | null,
 };
 
 export type LabelCustomization = {

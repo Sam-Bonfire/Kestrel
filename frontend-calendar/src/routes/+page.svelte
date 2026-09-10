@@ -147,6 +147,76 @@
   import { onMount } from 'svelte';
   import { initAuth } from '@kestrel/shared/stores';
 
+  // Team availability overlays (provider free/busy for chosen emails).
+  let availabilityOn = $state(false);
+  let availabilityEmails = $state('');
+  let availabilityAccountId = $state('');
+  let availabilityBlocks = $state<{ date: string; startTime: string; endTime: string; email: string }[]>([]);
+  let availabilityError: string | null = $state(null);
+  let availabilitySeq = 0;
+
+  function toISODateLocal(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function toHM(unixSecs: number): string {
+    const d = new Date(unixSecs * 1000);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  async function refreshAvailability() {
+    availabilityError = null;
+    if (!availabilityOn) {
+      availabilityBlocks = [];
+      return;
+    }
+    const emails = availabilityEmails.split(',').map((e) => e.trim()).filter(Boolean).slice(0, 20);
+    const accountId = availabilityAccountId || accounts[0]?.id;
+    if (!accountId || emails.length === 0) {
+      availabilityBlocks = [];
+      return;
+    }
+    // Visible week (Monday-Sunday) around the selected date.
+    const day = new Date(selectedDate);
+    const monday = new Date(day);
+    monday.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 7);
+    const seq = ++availabilitySeq;
+    try {
+      const { queryFreebusy } = await import('@kestrel/shared/api');
+      const blocks = await queryFreebusy(
+        accountId,
+        emails,
+        Math.floor(monday.getTime() / 1000),
+        Math.floor(sunday.getTime() / 1000)
+      );
+      if (seq !== availabilitySeq) return;
+      availabilityBlocks = blocks.map((b) => {
+        const start = new Date(b.start_time * 1000);
+        const end = new Date(Math.min(b.end_time, Math.floor(new Date(start).setHours(23, 59, 59) / 1000)));
+        return {
+          date: toISODateLocal(start),
+          startTime: toHM(b.start_time),
+          endTime: toHM(Math.floor(end.getTime() / 1000)),
+          email: b.email,
+        };
+      });
+    } catch (e) {
+      if (seq !== availabilitySeq) return;
+      availabilityError = e instanceof Error ? e.message : String(e);
+      availabilityBlocks = [];
+    }
+  }
+
+  $effect(() => {
+    // Refresh overlays when the visible week changes while enabled.
+    void selectedDate;
+    void availabilityOn;
+    if (availabilityOn) refreshAvailability();
+  });
+
   onMount(() => {
     initAuth();
 
@@ -1025,6 +1095,43 @@
 
 
 
+    <!-- Team availability overlays -->
+    <div class="shrink-0 px-4 py-1.5 border-b border-[var(--color-border-hairline)] bg-[#0a0a0a] flex items-center gap-2">
+      <button
+        type="button"
+        onclick={() => { availabilityOn = !availabilityOn; }}
+        aria-pressed={availabilityOn}
+        title="Overlay teammates' busy times"
+        class="px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer {availabilityOn ? 'bg-rose-500/20 border-rose-500/60 text-white' : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'}"
+      >
+        Team busy
+      </button>
+      {#if availabilityOn}
+        <input
+          type="text"
+          bind:value={availabilityEmails}
+          onkeydown={(e) => { if (e.key === 'Enter') refreshAvailability(); }}
+          placeholder="teammate mails, comma separated"
+          aria-label="Teammate emails"
+          class="bg-transparent text-white text-xs flex-1 outline-none placeholder:text-neutral-600 font-mono min-w-0"
+        />
+        <select
+          bind:value={availabilityAccountId}
+          onchange={refreshAvailability}
+          aria-label="Account for availability lookup"
+          class="bg-[#1a1a1a] border border-neutral-800 rounded-md text-[11px] text-white px-1.5 py-1 outline-none cursor-pointer max-w-[140px]"
+        >
+          <option value="">Default account</option>
+          {#each accounts as acc}
+            <option value={acc.id}>{acc.email}</option>
+          {/each}
+        </select>
+        {#if availabilityError}
+          <span class="text-[11px] text-red-400 truncate" role="alert">{availabilityError}</span>
+        {/if}
+      {/if}
+    </div>
+
     <!-- Unified timeline/month/agenda grid view component -->
     {#if viewMode === 'year'}
       <YearGrid
@@ -1042,6 +1149,7 @@
       {startHour}
       {secondaryTimezones}
       {workingHours}
+      {availabilityBlocks}
       selectedEventId={selectedEvent?.id}
       onEventClick={(ev, e) => {
         selectedEvent = ev;

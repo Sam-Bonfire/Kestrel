@@ -24,7 +24,7 @@ impl exports::kestrel::provider::provider_branding::Guest for OutlookPlugin {
 use kestrel::provider::http_client::{HttpRequest, request};
 use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload};
 use exports::kestrel::provider::mail_provider::MessagePayload;
-use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload};
+use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload, BusyBlock};
 
 fn parse_outlook_date(date_str: Option<&str>) -> i64 {
     if let Some(s) = date_str {
@@ -73,6 +73,21 @@ fn map_message(v: &Value) -> Option<MessagePayload> {
         labels: None, // Graph API uses folders/categories, simplified for now
         is_read,
     })
+}
+
+fn millis_to_graph(millis: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(millis)
+        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_default()
+}
+
+fn graph_schedule_to_secs(value: &serde_json::Value) -> Option<i64> {
+    // WIT freebusy times are unix seconds.
+    value
+        .get("dateTime")
+        .and_then(|d| d.as_str())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.timestamp())
 }
 
 impl MailGuest for OutlookPlugin {
@@ -455,6 +470,55 @@ impl CalendarGuest for OutlookPlugin {
         };
         let res = request(&req)?;
         if res.status == 204 || res.status == 200 || res.status == 404 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+    }
+
+    fn query_freebusy(
+        auth_token: String,
+        emails: Vec<String>,
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<BusyBlock>, String> {
+        let body = serde_json::json!({
+            "schedules": emails,
+            "startTime": { "dateTime": millis_to_graph(start_time * 1000), "timeZone": "UTC" },
+            "endTime": { "dateTime": millis_to_graph(end_time * 1000), "timeZone": "UTC" },
+            "availabilityViewInterval": 30,
+        });
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: "https://graph.microsoft.com/v1.0/me/calendar/getSchedule".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            body: Some(serde_json::to_vec(&body).unwrap()),
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to query freebusy: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse freebusy")?;
+        let mut blocks = Vec::new();
+        if let Some(schedules) = json["value"].as_array() {
+            for schedule in schedules {
+                let email = schedule["scheduleId"].as_str().unwrap_or_default().to_string();
+                if let Some(items) = schedule["scheduleItems"].as_array() {
+                    for item in items {
+                        let status = item["status"].as_str().unwrap_or("");
+                        if !["busy", "oof", "tentative"].contains(&status) {
+                            continue;
+                        }
+                        if let (Some(start), Some(end)) = (
+                            graph_schedule_to_secs(&item["start"]),
+                            graph_schedule_to_secs(&item["end"]),
+                        ) {
+                            blocks.push(BusyBlock { email: email.clone(), start_time: start, end_time: end });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(blocks)
     }
 }
 

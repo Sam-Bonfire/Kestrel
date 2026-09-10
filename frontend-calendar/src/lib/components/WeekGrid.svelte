@@ -23,6 +23,13 @@
     rsvpStatus?: 'yes' | 'no' | 'maybe';
   }
 
+  export interface AvailabilityBlock {
+    date: string; // YYYY-MM-DD
+    startTime: string; // HH:MM
+    endTime: string; // HH:MM
+    email: string;
+  }
+
   let {
     events = [] as CalendarEvent[],
     selectedDate = new Date(),
@@ -32,6 +39,7 @@
     secondaryTimezones = [] as string[],
     selectedEventId = null as string | null,
     workingHours = DEFAULT_WORKING_HOURS as WorkingHoursConfig,
+    availabilityBlocks = [] as AvailabilityBlock[],
     onEventClick = (ev: CalendarEvent) => {},
     onEmptySlotClick = () => {},
     onChangeViewMode = () => {},
@@ -45,9 +53,10 @@
     startHour?: number;
     secondaryTimezones?: string[];
     selectedEventId?: string | null;
+    workingHours?: WorkingHoursConfig;
+    availabilityBlocks?: AvailabilityBlock[];
     onEventClick?: (ev: CalendarEvent, e?: MouseEvent) => void;
     onEmptySlotClick?: (dateStr: string, timeStr: string, e?: MouseEvent) => void;
-    workingHours?: WorkingHoursConfig;
     onChangeViewMode?: (v: string) => void;
     onEventDelete?: (id: string) => void;
     onEventUpdate?: (id: string, updates: Partial<CalendarEvent>) => void;
@@ -768,6 +777,15 @@
                 </div>
               </div>
             {/if}
+
+            <!-- Teammate availability overlays -->
+            {#each availabilityBlocks.filter((b) => b.date === dateStr) as block}
+              <div
+                class="absolute left-0 right-0 pointer-events-none z-0 opacity-60"
+                style="top: {getEventTopOffset(block.startTime)}px; height: {Math.max(getEventHeight(block.startTime, block.endTime), 12)}px; background: repeating-linear-gradient(45deg, rgba(244,63,94,0.18) 0 6px, transparent 6px 12px);"
+                title="{block.email} busy"
+              ></div>
+            {/each}
 
             <!-- Render events for this column day -->
             {#each dayEvents as ev}

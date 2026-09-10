@@ -4,8 +4,9 @@ use wasmtime::component::Component;
 
 use super::bindings::KestrelPlugin;
 use super::traits::{
-    BrandingPayload, CalendarPayload, CalendarProvider, EventPayload, MailProvider, MessageBody,
-    MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload, SyncResult,
+    BrandingPayload, BusyBlock, CalendarPayload, CalendarProvider, EventPayload, MailProvider,
+    MessageBody, MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload,
+    SyncResult,
 };
 use super::wasm_runtime::{WasmEngine, WasmState};
 
@@ -321,6 +322,34 @@ impl CalendarProvider for WasmPlugin {
 
         match result {
             Ok(_) => Ok(()),
+            Err(e) => Err(PluginError(e)),
+        }
+    }
+
+    async fn query_freebusy(
+        &self,
+        auth_token: &str,
+        emails: &[String],
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<BusyBlock>, PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+
+        let result = instance
+            .kestrel_provider_calendar_provider()
+            .call_query_freebusy(&mut store, auth_token, emails, start_time, end_time)
+            .await
+            .map_err(|e| PluginError(e.to_string()))?;
+
+        match result {
+            Ok(blocks) => Ok(blocks
+                .into_iter()
+                .map(|b| BusyBlock {
+                    email: b.email,
+                    start_time: b.start_time,
+                    end_time: b.end_time,
+                })
+                .collect()),
             Err(e) => Err(PluginError(e)),
         }
     }

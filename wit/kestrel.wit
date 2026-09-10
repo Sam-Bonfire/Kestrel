@@ -117,6 +117,16 @@ interface calendar-provider {
 
     /// Soft-delete an event on the provider.
     delete-event: func(auth-token: string, external-id: string) -> result<_, string>;
+
+    /// A busy block for one person. Times are unix seconds (UTC).
+    record busy-block {
+        email: string,
+        start-time: s64,
+        end-time: s64,
+    }
+
+    /// Query free/busy blocks for emails within a UTC timestamp range.
+    query-freebusy: func(auth-token: string, emails: list<string>, start-time: s64, end-time: s64) -> result<list<busy-block>, string>;
 }
 
 // ─────────────────────────────────────────────
