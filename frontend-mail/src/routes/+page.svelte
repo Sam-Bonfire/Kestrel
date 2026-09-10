@@ -6,7 +6,7 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
-  import { AppShell, ReauthBanner, UndoToast, Breadcrumbs } from '@kestrel/shared/components';
+  import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
   import { get } from 'svelte/store';
@@ -837,6 +837,7 @@
 
 <AppShell bind:isMobileSidebarOpen>
   <ReauthBanner />
+  <SyncErrorBanner />
   {#snippet sidebar()}
     <Sidebar
       {currentView}
