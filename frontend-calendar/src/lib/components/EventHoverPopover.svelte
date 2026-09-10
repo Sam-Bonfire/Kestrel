@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Clock, MapPin, Video, Users, CheckCircle2, HelpCircle, XCircle } from 'lucide-svelte';
   import { fade } from 'svelte/transition';
+  import { plainText } from '@kestrel/shared';
   import type { CalendarEvent } from './WeekGrid.svelte';
 
   let {
@@ -196,7 +197,7 @@
     <!-- Description snippet -->
     {#if event.description}
       <div class="text-[11px] text-[var(--color-text-secondary)]/80 line-clamp-3 bg-white/5 rounded-lg p-2 mt-1">
-        {event.description}
+        {plainText(event.description)}
       </div>
     {/if}
 

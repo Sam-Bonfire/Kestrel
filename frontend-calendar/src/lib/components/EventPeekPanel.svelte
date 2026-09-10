@@ -4,6 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { detectConferenceLink } from '@kestrel/shared';
   import { builtInEventTemplates, applyEventTemplate, type EventTemplate } from '@kestrel/shared/stores';
+  import { RichTextEditor } from '@kestrel/shared/components';
   import { openUrl } from '@tauri-apps/plugin-opener';
 
   export interface EventDetail {
@@ -445,13 +446,9 @@
           <AlignLeft class="w-3.5 h-3.5 text-neutral-500/60" />
           <span>Notes & Description</span>
         </div>
-        <textarea
-          placeholder="Add notes or description..."
-          bind:value={description}
-          oninput={() => { if (event?.id) handleSave(false); }}
-          rows="3"
-          class="w-full text-xs text-neutral-300 leading-relaxed bg-neutral-900/30 rounded-xl p-3 max-h-36 overflow-y-auto whitespace-pre-line border border-neutral-800/30 outline-none hover:border-neutral-700 transition-colors placeholder:text-neutral-500 resize-none"
-        ></textarea>
+        <div oninput={() => { if (event?.id) handleSave(false); }}>
+          <RichTextEditor bind:value={description} placeholder="Add notes or description..." />
+        </div>
       </div>
 
       <!-- Priority & Calendar Attributes -->
