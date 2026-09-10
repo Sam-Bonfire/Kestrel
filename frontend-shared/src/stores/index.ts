@@ -70,3 +70,18 @@ export {
   type EventTemplate,
   type AppliedTemplate,
 } from './eventTemplates.js';
+
+export {
+  pomodoro,
+  pomodoroDurations,
+  startPomodoro,
+  pausePomodoro,
+  resetPomodoro,
+  skipPomodoroPhase,
+  tickPomodoro,
+  stopPomodoro,
+  setPomodoroCompleteHandler,
+  type PomodoroPhase,
+  type PomodoroStatus,
+  type PomodoroState,
+} from './pomodoro.js';

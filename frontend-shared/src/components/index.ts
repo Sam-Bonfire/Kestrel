@@ -17,3 +17,4 @@ export { default as ShortcutCheatSheet } from './ShortcutCheatSheet.svelte';
 export { default as ServerConfig } from './ServerConfig.svelte';
 export { default as Breadcrumbs } from './Breadcrumbs.svelte';
 export { default as SyncErrorBanner } from './SyncErrorBanner.svelte';
+export { default as PomodoroWidget } from './PomodoroWidget.svelte';
