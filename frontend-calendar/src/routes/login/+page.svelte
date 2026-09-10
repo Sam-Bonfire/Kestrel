@@ -23,8 +23,12 @@
     loading = true;
     errorMsg = '';
     try {
-      await login(email, password);
-      window.location.href = '/';
+      const res = await login(email, password);
+      if (!res.success) {
+        errorMsg = res.error || 'Calendar Login failed. Please check credentials or host URL.';
+      } else {
+        window.location.href = '/';
+      }
     } catch (e: any) {
       errorMsg = e?.message || 'Calendar Login failed. Please check credentials or host URL.';
     } finally {

@@ -48,6 +48,12 @@ export async function initAuth() {
 export async function login(username: string, password: string) {
     try {
         const data = await createToken(username, password);
+        if (data === undefined) {
+            return { success: false, error: 'Cannot reach the server. Check your connection or host URL.' };
+        }
+        if (!data.token) {
+            throw new Error('Malformed auth response: missing token');
+        }
         
         authState.userId = data.user_id;
         if (data.token) {

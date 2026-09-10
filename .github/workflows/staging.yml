@@ -542,7 +542,7 @@ jobs:
   staging-integration:
     name: Staging Deployment Verification
     runs-on: ubuntu-latest
-    needs: [build-backend, build-mail, build-mail-android, build-calendar, build-calendar-android]
+    needs: [build-backend, build-mail, build-mail-android, build-calendar, build-calendar-android, e2e]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -561,6 +561,50 @@ jobs:
           sleep 5
           curl -f http://localhost:8080/api/v1/health
           kill $PID
+
+  e2e:
+    name: Offline E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [validate-mail, validate-calendar]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache pnpm
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.local/share/pnpm/store
+            ~/AppData/Local/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
+        with:
+          install: true
+          cache: true
+
+      - name: Run offline E2E suite
+        run: |
+          pnpm install
+          mise run test:e2e:install
+          mise run test:e2e
+
+      - name: Upload trace artifacts
+        if: failure()
+        uses: actions/upload-artifact@v8
+        with:
+          name: e2e-traces
+          path: e2e/test-results/
+          retention-days: 7
 
   promote-to-main:
     name: Promote to Main

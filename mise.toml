@@ -98,6 +98,18 @@ description = "Run all automated tests (backend + frontend)"
 depends = ["test:backend", "test:frontend"]
 run = "echo \"==> All test suites passed!\""
 
+[tasks."test:e2e"]
+description = "Run Playwright offline E2E suite against built frontends"
+run = [
+    "pnpm --filter frontend-mail build",
+    "pnpm --filter frontend-calendar build",
+    "pnpm --filter @kestrel/e2e test",
+]
+
+[tasks."test:e2e:install"]
+description = "Install Playwright browsers for the E2E suite"
+run = "pnpm --filter @kestrel/e2e exec playwright install --with-deps chromium"
+
 [tasks."db:migrate"]
 description = "Run SQLx migrations locally"
 dir = "backend"
