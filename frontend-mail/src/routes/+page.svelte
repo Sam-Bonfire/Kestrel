@@ -11,7 +11,7 @@
   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
-  import { isNewsletter } from '@kestrel/shared';
+  import { isNewsletter, setUnreadBadge } from '@kestrel/shared';
   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
   import { triageCandidates, shouldRunTriage, markTriageRun, smartTriageEnabled } from '@kestrel/shared';
   import { get } from 'svelte/store';
@@ -322,8 +322,14 @@
     Array.from(new Set([...allEmails.flatMap(e => e.labels), ...customLabels]))
   );
 
+  // OS dock/taskbar badge mirrors total unread.
+  let totalUnread = $derived(allEmails.filter((e) => e.isUnread && !e.isTrash && !e.isSpam).length);
+  $effect(() => {
+    void setUnreadBadge(totalUnread);
+  });
+
   let unreadCount = $derived.by(() => {
-    const total = allEmails.filter(e => e.isUnread && !e.isTrash && !e.isSpam).length;
+    const total = totalUnread;
     const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isTrash && !e.isSpam).length;
     if (total === 0) return 0;
     return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;

@@ -197,6 +197,7 @@ export {
 } from './utils/workingHours.js';
 export { findDuplicateGroups, normalizeContactName } from './utils/merge.js';
 export { isNewsletter } from './utils/newsletters.js';
+export { setUnreadBadge } from './utils/badge.js';
 export {
   senderDomain,
   isDomainAllowed,
