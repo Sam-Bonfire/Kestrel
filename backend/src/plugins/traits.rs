@@ -100,6 +100,26 @@ pub trait MailProvider: Send + Sync {
         auth_token: &str,
         payload: SendMessagePayload,
     ) -> Result<(), PluginError>;
+
+    /// Read the provider's out-of-office auto-responder configuration.
+    async fn get_vacation(&self, auth_token: &str) -> Result<VacationSettings, PluginError>;
+
+    /// Write the provider's out-of-office auto-responder configuration.
+    async fn set_vacation(
+        &self,
+        auth_token: &str,
+        settings: VacationSettings,
+    ) -> Result<(), PluginError>;
+}
+
+/// Out-of-office auto-responder settings. Times are unix millis (UTC).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VacationSettings {
+    pub enabled: bool,
+    pub subject: Option<String>,
+    pub body_text: String,
+    pub start_time: Option<i64>,
+    pub end_time: Option<i64>,
 }
 
 // ─────────────────────────────────────────────
@@ -157,6 +177,23 @@ pub trait CalendarProvider: Send + Sync {
 
     /// Soft-delete an event on the provider.
     async fn delete_event(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError>;
+
+    /// Query free/busy blocks for emails within a UTC timestamp range.
+    async fn query_freebusy(
+        &self,
+        auth_token: &str,
+        emails: &[String],
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<BusyBlock>, PluginError>;
+}
+
+/// One person's busy block. Times are unix seconds (UTC).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BusyBlock {
+    pub email: String,
+    pub start_time: i64,
+    pub end_time: i64,
 }
 
 // ─────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { authState, logout } from '../stores/auth.svelte.js';
 export * from './generated/types.js';
 import type {
+  Contact,
   CreateEventRequest,
   CreateEventResponse,
   UpdateEventRequest,
@@ -419,6 +420,179 @@ export async function blockSender(
   });
 }
 
+// ── Vacation auto-responder ────────────────────────────────────
+
+export interface VacationSettings {
+  enabled: boolean;
+  subject: string | null;
+  bodyText: string;
+  startTime: number | null;
+  endTime: number | null;
+}
+
+export async function getVacation(accountId: string, token?: string): Promise<VacationSettings> {
+  const raw = await request<Record<string, unknown>>('GET', `/accounts/${accountId}/vacation`, { token });
+  return {
+    enabled: raw.enabled === true,
+    subject: typeof raw.subject === 'string' ? raw.subject : null,
+    bodyText: typeof raw.bodyText === 'string' ? raw.bodyText : '',
+    startTime: typeof raw.startTime === 'number' ? raw.startTime : null,
+    endTime: typeof raw.endTime === 'number' ? raw.endTime : null,
+  };
+}
+
+export async function setVacation(
+  accountId: string,
+  settings: VacationSettings,
+  token?: string,
+): Promise<void> {
+  return request<void>('PUT', `/accounts/${accountId}/vacation`, {
+    token,
+    body: {
+      enabled: settings.enabled,
+      subject: settings.subject,
+      bodyText: settings.bodyText,
+      startTime: settings.startTime,
+      endTime: settings.endTime,
+    },
+  });
+}
+
+export async function deleteContact(
+  accountId: string,
+  email: string,
+  keepEmail?: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('DELETE', '/contacts', {
+    token,
+    body: { account_id: accountId, email, keep_email: keepEmail ?? null },
+  });
+}
+
+export async function listContacts(
+  accountId?: string,
+  token?: string,
+): Promise<Contact[]> {
+  const params = new URLSearchParams();
+  if (accountId) params.set('account_id', accountId);
+  const query = params.toString();
+  return request<Contact[]>('GET', `/contacts${query ? `?${query}` : ''}`, { token });
+}
+
+export async function exportContactsBlob(accountId?: string, token?: string): Promise<Blob> {
+  const params = new URLSearchParams();
+  if (accountId) params.set('account_id', accountId);
+  const query = params.toString();
+  const res = await fetch(`${getApiBase()}/contacts/export${query ? `?${query}` : ''}`, {
+    headers: buildHeaders(token),
+    credentials: 'include',
+  });
+  if (!res.ok) throw new ApiError(res.status, `Export failed: ${res.statusText}`);
+  return res.blob();
+}
+
+export async function importContacts(
+  accountId: string,
+  format: 'csv' | 'vcard',
+  content: string,
+  token?: string,
+): Promise<{ imported: number; skipped: number }> {
+  return request<{ imported: number; skipped: number }>('POST', '/contacts/import', {
+    token,
+    body: { account_id: accountId, format, content },
+  });
+}
+
+// ── Contacts endpoints ─────────────────────────────────────────
+
+export async function searchContacts(
+  q: string,
+  limit?: number,
+  token?: string,
+): Promise<Contact[]> {
+  const params = new URLSearchParams({ q });
+  if (limit != null) params.set('limit', String(limit));
+  return request<Contact[]>('GET', `/contacts/search?${params.toString()}`, { token });
+}
+
+export async function updateContactNotes(
+  accountId: string,
+  email: string,
+  notes: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', '/contacts/notes', {
+    token,
+    body: { account_id: accountId, email, notes },
+  });
+}
+
+// ── Event polls ────────────────────────────────────────────────
+
+export interface EventPollVote {
+  voter_email: string;
+  option_index: number;
+}
+
+export interface EventPoll {
+  id: string;
+  event_id: string;
+  question: string;
+  options: string[];
+  votes: EventPollVote[];
+}
+
+export async function listEventPolls(eventId: string, token?: string): Promise<EventPoll[]> {
+  return request<EventPoll[]>('GET', `/events/${eventId}/polls`, { token });
+}
+
+export async function createEventPoll(
+  eventId: string,
+  question: string,
+  options: string[],
+  token?: string,
+): Promise<EventPoll> {
+  return request<EventPoll>('POST', `/events/${eventId}/polls`, {
+    token,
+    body: { question, options },
+  });
+}
+
+export async function voteEventPoll(
+  eventId: string,
+  pollId: string,
+  voterEmail: string,
+  optionIndex: number,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', `/events/${eventId}/polls/${pollId}/vote`, {
+    token,
+    body: { voter_email: voterEmail, option_index: optionIndex },
+  });
+}
+
+// ── Team availability ──────────────────────────────────────────
+
+export interface BusyBlock {
+  email: string;
+  start_time: number;
+  end_time: number;
+}
+
+export async function queryFreebusy(
+  accountId: string,
+  emails: string[],
+  startTime: number,
+  endTime: number,
+  token?: string,
+): Promise<BusyBlock[]> {
+  return request<BusyBlock[]>('POST', `/accounts/${accountId}/freebusy`, {
+    token,
+    body: { emails, start_time: startTime, end_time: endTime },
+  });
+}
+
 export async function getRawEmlBlob(messageId: string, token?: string): Promise<Blob> {
   const activeToken = token || authState.token;
   const headers: Record<string, string> = {};
@@ -547,8 +721,8 @@ export function createSyncStream(token?: string): EventSource {
   return new EventSource(url.toString(), { withCredentials: true });
 }
 
-export async function triggerSync(token?: string): Promise<void> {
-  return request<void>('POST', '/sync/trigger', { token });
+export async function triggerSync(accountId?: string, token?: string): Promise<void> {
+  return request<void>('POST', '/sync/trigger', { token, body: { account_id: accountId ?? null } });
 }
 
 // ── Calendar endpoints ──────────────────────────────────────────

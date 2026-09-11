@@ -5,10 +5,10 @@
   import EventPeekPanel from '$lib/components/EventPeekPanel.svelte';
   import {
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
-    Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer
+    Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer, Sparkles
   } from 'lucide-svelte';
-  import { AppShell, UndoToast } from '@kestrel/shared/components';
-  import { authState, triggerUndoAction } from '@kestrel/shared/stores';
+  import { AppShell, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
+  import { authState, triggerUndoAction, pushBreadcrumb, theme } from '@kestrel/shared/stores';
   import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
   import { DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
 
@@ -21,6 +21,25 @@
 
   let selectedDate = $state(new Date());
   let viewMode = $state<string>('month');
+
+  // ── Recent activity trail ─────────────────────────────────────────
+  // $effect (not per-handler pushes): viewMode changes from several dropdown
+  // and shortcut sites, so a single effect covers them all.
+  $effect(() => {
+    pushBreadcrumb(viewMode);
+  });
+
+  // Deep-link target not yet loaded: retried after each events refresh.
+  let pendingDeepLinkEventId = $state<string | null>(null);
+
+  function resolveDeepLinkEvent(id: string): boolean {
+    const target = events.find((ev: any) => ev.id === id);
+    if (!target) return false;
+    if (target.date) selectedDate = new Date(target.date);
+    selectedEvent = target;
+    clickPosition = null;
+    return true;
+  }
   let selectedEvent = $state<any | null>(null);
   let clickPosition = $state<{x: number, y: number} | null>(null);
 
@@ -147,8 +166,143 @@
   import { onMount } from 'svelte';
   import { initAuth } from '@kestrel/shared/stores';
 
+  // Team availability overlays (provider free/busy for chosen emails).
+  let availabilityOn = $state(false);
+  let availabilityEmails = $state('');
+  let availabilityAccountId = $state('');
+  let availabilityBlocks = $state<{ date: string; startTime: string; endTime: string; email: string }[]>([]);
+  let availabilityError: string | null = $state(null);
+  let availabilitySeq = 0;
+
+  function toISODateLocal(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function toHM(unixSecs: number): string {
+    const d = new Date(unixSecs * 1000);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  async function refreshAvailability() {
+    availabilityError = null;
+    if (!availabilityOn) {
+      availabilityBlocks = [];
+      return;
+    }
+    const emails = availabilityEmails.split(',').map((e) => e.trim()).filter(Boolean).slice(0, 20);
+    const accountId = availabilityAccountId || accounts[0]?.id;
+    if (!accountId || emails.length === 0) {
+      availabilityBlocks = [];
+      return;
+    }
+    // Visible week (Monday-Sunday) around the selected date.
+    const day = new Date(selectedDate);
+    const monday = new Date(day);
+    monday.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 7);
+    const seq = ++availabilitySeq;
+    try {
+      const { queryFreebusy } = await import('@kestrel/shared/api');
+      const blocks = await queryFreebusy(
+        accountId,
+        emails,
+        Math.floor(monday.getTime() / 1000),
+        Math.floor(sunday.getTime() / 1000)
+      );
+      if (seq !== availabilitySeq) return;
+      availabilityBlocks = blocks.map((b) => {
+        const start = new Date(b.start_time * 1000);
+        const end = new Date(Math.min(b.end_time, Math.floor(new Date(start).setHours(23, 59, 59) / 1000)));
+        return {
+          date: toISODateLocal(start),
+          startTime: toHM(b.start_time),
+          endTime: toHM(Math.floor(end.getTime() / 1000)),
+          email: b.email,
+        };
+      });
+    } catch (e) {
+      if (seq !== availabilitySeq) return;
+      availabilityError = e instanceof Error ? e.message : String(e);
+      availabilityBlocks = [];
+    }
+  }
+
+  $effect(() => {
+    // Refresh overlays when the visible week changes while enabled.
+    void selectedDate;
+    void availabilityOn;
+    if (availabilityOn) refreshAvailability();
+  });
+
+  import { parseKestrelDeepLink } from '@kestrel/shared';
+  import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
+  import { parseNaturalEvent, shiftTime } from '@kestrel/shared';
+  import { findConflicts, nextFreeSlot, parseTimeToMinutes } from '@kestrel/shared';
+
+  // Quick-add bar: deterministic natural-language event creation.
+  let nlpInput = $state('');
+  let nlpParsed = $derived(nlpInput.trim() ? parseNaturalEvent(nlpInput) : null);
+  function submitNlpEvent() {
+    const parsed = nlpParsed;
+    if (!parsed) return;
+    openNewEventPanel(parsed.date, parsed.startTime);
+    if (selectedEvent) {
+      selectedEvent.title = parsed.title;
+      const { endTime, daysAfter } = shiftTime(parsed.startTime, parsed.durationMins);
+      selectedEvent.endTime = endTime;
+      if (daysAfter > 0) {
+        const d = new Date(parsed.date + 'T12:00:00');
+        d.setDate(d.getDate() + daysAfter);
+        selectedEvent.date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+    }
+    nlpInput = '';
+  }
+  import { buildDailyBriefing, shouldShowBriefing, markBriefingShown } from '@kestrel/shared';
+
+  // Morning briefing: today's agenda, once per day after backend load.
+  let briefingDone = false;
+  let eventsFromBackend = $state(false);
+  $effect(() => {
+    if (!briefingDone && authState.isAuthenticated && eventsFromBackend) {
+      briefingDone = true;
+      deliverCalendarBriefing();
+    }
+  });
+  function deliverCalendarBriefing() {
+    if (!shouldShowBriefing()) return;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const briefing = buildDailyBriefing({
+      events: events
+        .filter((ev: any) => ev.date === todayStr)
+        .map((ev: any) => ({ title: ev.title || 'Untitled', startTime: ev.startTime || '09:00', location: ev.location })),
+      unreadCount: 0,
+    });
+    markBriefingShown();
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-notification')
+        .then(({ sendNotification }) => sendNotification({ title: briefing.title, body: briefing.body }))
+        .catch(() => {});
+    } else {
+      showToast(`${briefing.title}\n${briefing.body}`, 'info');
+    }
+  }
+
   onMount(() => {
     initAuth();
+    setPomodoroCompleteHandler((phase) => {
+      const body = phase === 'work' ? 'Focus session complete — time for a break.' : 'Break over — back to focus.';
+      if ((window as any).__TAURI_INTERNALS__) {
+        import('@tauri-apps/plugin-notification')
+          .then(({ sendNotification }) => sendNotification({ title: 'Pomodoro', body }))
+          .catch(() => {});
+      }
+      showToast(body, 'success');
+    });
+
 
     // Deep Link Listener for OAuth callbacks & "create event" actions
     if ((window as any).__TAURI_INTERNALS__) {
@@ -171,6 +325,11 @@
               openNewEventPanel(date, startTime);
               if (endTime && selectedEvent) {
                 selectedEvent.endTime = endTime;
+              }
+            } else {
+              const link = parseKestrelDeepLink(url);
+              if (link?.app === 'calendar' && link.kind === 'event') {
+                if (!resolveDeepLinkEvent(link.id)) pendingDeepLinkEventId = link.id;
               }
             }
           }
@@ -264,6 +423,15 @@
                 }
               });
               events = expandedEvents;
+              if (pendingDeepLinkEventId) {
+                if (resolveDeepLinkEvent(pendingDeepLinkEventId)) {
+                  pendingDeepLinkEventId = null;
+                } else {
+                  showToast('Event not found — it may have been deleted or not synced yet', 'error');
+                  pendingDeepLinkEventId = null;
+                }
+              }
+              eventsFromBackend = true;
             }
           }).catch(console.error);
         });
@@ -662,6 +830,8 @@
   {/snippet}
 
   {#snippet children()}
+  <Breadcrumbs />
+  <SyncErrorBanner />
   <!-- Main View Canvas area -->
   <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}"
        ontouchstart={handleTouchStart}
@@ -996,6 +1166,28 @@
       </header>
     {/if}
 
+    <!-- Quick-add bar -->
+    <div class="shrink-0 px-4 py-1.5 border-b border-[var(--color-border-hairline)] bg-[#0a0a0a] flex items-center gap-2">
+      <Sparkles class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0" />
+      <input
+        type="text"
+        placeholder='Quick add: "lunch tomorrow 12:30 1h"'
+        bind:value={nlpInput}
+        onkeydown={(e) => { if (e.key === 'Enter') submitNlpEvent(); }}
+        aria-label="Quick add event"
+        class="bg-transparent text-white text-xs flex-1 outline-none placeholder:text-neutral-600 font-mono min-w-0"
+      />
+      {#if nlpParsed}
+        <button
+          type="button"
+          onclick={submitNlpEvent}
+          class="shrink-0 px-2.5 py-1 rounded-md bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-[11px] font-medium transition-colors cursor-pointer truncate max-w-[50%]"
+        >
+          Add: {nlpParsed.title} · {nlpParsed.date} {nlpParsed.startTime}
+        </button>
+      {/if}
+    </div>
+
     <!-- Mobile Search Overlay (Task 28) -->
     {#if isMobileSearchOpen && isMobileOrTablet}
       <div class="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col p-4 animate-fadeIn">
@@ -1025,6 +1217,43 @@
 
 
 
+    <!-- Team availability overlays -->
+    <div class="shrink-0 px-4 py-1.5 border-b border-[var(--color-border-hairline)] bg-[#0a0a0a] flex items-center gap-2">
+      <button
+        type="button"
+        onclick={() => { availabilityOn = !availabilityOn; }}
+        aria-pressed={availabilityOn}
+        title="Overlay teammates' busy times"
+        class="px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer {availabilityOn ? 'bg-rose-500/20 border-rose-500/60 text-white' : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'}"
+      >
+        Team busy
+      </button>
+      {#if availabilityOn}
+        <input
+          type="text"
+          bind:value={availabilityEmails}
+          onkeydown={(e) => { if (e.key === 'Enter') refreshAvailability(); }}
+          placeholder="teammate mails, comma separated"
+          aria-label="Teammate emails"
+          class="bg-transparent text-white text-xs flex-1 outline-none placeholder:text-neutral-600 font-mono min-w-0"
+        />
+        <select
+          bind:value={availabilityAccountId}
+          onchange={refreshAvailability}
+          aria-label="Account for availability lookup"
+          class="bg-[#1a1a1a] border border-neutral-800 rounded-md text-[11px] text-white px-1.5 py-1 outline-none cursor-pointer max-w-[140px]"
+        >
+          <option value="">Default account</option>
+          {#each accounts as acc}
+            <option value={acc.id}>{acc.email}</option>
+          {/each}
+        </select>
+        {#if availabilityError}
+          <span class="text-[11px] text-red-400 truncate" role="alert">{availabilityError}</span>
+        {/if}
+      {/if}
+    </div>
+
     <!-- Unified timeline/month/agenda grid view component -->
     {#if viewMode === 'year'}
       <YearGrid
@@ -1042,6 +1271,7 @@
       {startHour}
       {secondaryTimezones}
       {workingHours}
+      {availabilityBlocks}
       selectedEventId={selectedEvent?.id}
       onEventClick={(ev, e) => {
         selectedEvent = ev;
@@ -1079,12 +1309,33 @@
 
   <!-- Event Details Sidebar Peek -->
   {#if selectedEvent}
+    {@const selectedKey = selectedEvent.id ?? '__new__'}
+    {@const selectedConflicts = !selectedEvent.isAllDay
+      ? findConflicts(
+          { id: selectedKey, date: selectedEvent.date, startTime: selectedEvent.startTime, endTime: selectedEvent.endTime },
+          events.filter((ev: any) => ev.id !== selectedEvent.id)
+        )
+      : []}
+    {@const selectedDuration =
+      (() => {
+        const raw = parseTimeToMinutes(selectedEvent.endTime || '10:00') - parseTimeToMinutes(selectedEvent.startTime || '09:00');
+        return raw > 0 ? raw : 60;
+      })()}
     <EventPeekPanel
       event={selectedEvent}
       {clickPosition}
       isDocked={isDetailsDocked && !isMobileOrTablet}
       isMobileOrTablet={isMobileOrTablet}
       {accounts}
+      conflicts={selectedConflicts}
+      suggestedSlot={selectedConflicts.length > 0
+        ? nextFreeSlot(
+            events.filter((ev: any) => ev.id !== selectedEvent.id),
+            selectedEvent.date,
+            selectedDuration,
+            selectedEvent.startTime
+          )
+        : null}
       onClose={() => selectedEvent = null}
       onSave={(updatedEvent) => {
         handleSaveEvent(updatedEvent);
@@ -1172,6 +1423,18 @@
               <input type="checkbox" bind:checked={showWeekends} class="peer sr-only" />
               <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-2">
+            <span class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">Theme</span>
+            <div class="flex gap-2">
+              {#each [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']] as [value, label]}
+                <label class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors {$theme === value ? 'bg-rose-500/20 border-rose-500/60 text-[var(--color-text-primary)]' : 'border-[var(--color-border-hairline)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-secondary)]'}">
+                  <input type="radio" name="cal-theme" {value} bind:group={$theme} class="accent-rose-500 cursor-pointer" />
+                  {label}
+                </label>
+              {/each}
             </div>
           </div>
 

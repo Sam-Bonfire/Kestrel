@@ -196,6 +196,9 @@ importers:
       '@tauri-apps/plugin-http':
         specifier: ^2.5.9
         version: 2.5.9
+      dompurify:
+        specifier: ^3.4.12
+        version: 3.4.12
       idb-keyval:
         specifier: ^6.3.0
         version: 6.3.0

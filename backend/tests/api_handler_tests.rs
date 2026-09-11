@@ -874,6 +874,28 @@ impl backend::plugins::traits::MailProvider for NetworkFailProvider {
             "connection timed out after 30s",
         ))
     }
+
+    async fn get_vacation(
+        &self,
+        _auth_token: &str,
+    ) -> Result<backend::plugins::traits::VacationSettings, backend::plugins::traits::PluginError>
+    {
+        Ok(backend::plugins::traits::VacationSettings {
+            enabled: false,
+            subject: None,
+            body_text: String::new(),
+            start_time: None,
+            end_time: None,
+        })
+    }
+
+    async fn set_vacation(
+        &self,
+        _auth_token: &str,
+        _settings: backend::plugins::traits::VacationSettings,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -911,6 +933,17 @@ impl backend::plugins::traits::CalendarProvider for NetworkFailProvider {
         _external_id: &str,
     ) -> Result<(), backend::plugins::traits::PluginError> {
         Ok(())
+    }
+
+    async fn query_freebusy(
+        &self,
+        _auth_token: &str,
+        _emails: &[String],
+        _start_time: i64,
+        _end_time: i64,
+    ) -> Result<Vec<backend::plugins::traits::BusyBlock>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
     }
 }
 
@@ -1110,6 +1143,28 @@ impl backend::plugins::traits::MailProvider for ScriptedProvider {
         }
         Ok(())
     }
+
+    async fn get_vacation(
+        &self,
+        _auth_token: &str,
+    ) -> Result<backend::plugins::traits::VacationSettings, backend::plugins::traits::PluginError>
+    {
+        Ok(backend::plugins::traits::VacationSettings {
+            enabled: false,
+            subject: None,
+            body_text: String::new(),
+            start_time: None,
+            end_time: None,
+        })
+    }
+
+    async fn set_vacation(
+        &self,
+        _auth_token: &str,
+        _settings: backend::plugins::traits::VacationSettings,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -1147,6 +1202,17 @@ impl backend::plugins::traits::CalendarProvider for ScriptedProvider {
         _external_id: &str,
     ) -> Result<(), backend::plugins::traits::PluginError> {
         Ok(())
+    }
+
+    async fn query_freebusy(
+        &self,
+        _auth_token: &str,
+        _emails: &[String],
+        _start_time: i64,
+        _end_time: i64,
+    ) -> Result<Vec<backend::plugins::traits::BusyBlock>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
     }
 }
 

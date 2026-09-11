@@ -4,8 +4,9 @@ use wasmtime::component::Component;
 
 use super::bindings::KestrelPlugin;
 use super::traits::{
-    BrandingPayload, CalendarPayload, CalendarProvider, EventPayload, MailProvider, MessageBody,
-    MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload, SyncResult,
+    BrandingPayload, BusyBlock, CalendarPayload, CalendarProvider, EventPayload, MailProvider,
+    MessageBody, MessagePayload, PluginError, ProviderBranding, ProviderPlugin, SendMessagePayload,
+    SyncResult, VacationSettings,
 };
 use super::wasm_runtime::{WasmEngine, WasmState};
 
@@ -172,6 +173,55 @@ impl MailProvider for WasmPlugin {
         }
     }
 
+    async fn get_vacation(&self, auth_token: &str) -> Result<VacationSettings, PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+
+        let result = instance
+            .kestrel_provider_mail_provider()
+            .call_get_vacation(&mut store, auth_token)
+            .await
+            .map_err(|e| PluginError(e.to_string()))?;
+
+        match result {
+            Ok(res) => Ok(VacationSettings {
+                enabled: res.enabled,
+                subject: res.subject,
+                body_text: res.body_text,
+                start_time: res.start_time,
+                end_time: res.end_time,
+            }),
+            Err(e) => Err(PluginError(e)),
+        }
+    }
+
+    async fn set_vacation(
+        &self,
+        auth_token: &str,
+        settings: VacationSettings,
+    ) -> Result<(), PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+
+        let wit_settings =
+            crate::plugins::bindings::exports::kestrel::provider::mail_provider::VacationSettings {
+                enabled: settings.enabled,
+                subject: settings.subject,
+                body_text: settings.body_text,
+                start_time: settings.start_time,
+                end_time: settings.end_time,
+            };
+
+        let result = instance
+            .kestrel_provider_mail_provider()
+            .call_set_vacation(&mut store, auth_token, &wit_settings)
+            .await
+            .map_err(|e| PluginError(e.to_string()))?;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PluginError(e)),
+        }
+    }
+
     async fn download_attachment(
         &self,
         auth_token: &str,
@@ -321,6 +371,34 @@ impl CalendarProvider for WasmPlugin {
 
         match result {
             Ok(_) => Ok(()),
+            Err(e) => Err(PluginError(e)),
+        }
+    }
+
+    async fn query_freebusy(
+        &self,
+        auth_token: &str,
+        emails: &[String],
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<BusyBlock>, PluginError> {
+        let (mut store, instance) = self.instantiate().await?;
+
+        let result = instance
+            .kestrel_provider_calendar_provider()
+            .call_query_freebusy(&mut store, auth_token, emails, start_time, end_time)
+            .await
+            .map_err(|e| PluginError(e.to_string()))?;
+
+        match result {
+            Ok(blocks) => Ok(blocks
+                .into_iter()
+                .map(|b| BusyBlock {
+                    email: b.email,
+                    start_time: b.start_time,
+                    end_time: b.end_time,
+                })
+                .collect()),
             Err(e) => Err(PluginError(e)),
         }
     }

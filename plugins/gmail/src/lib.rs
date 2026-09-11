@@ -22,8 +22,8 @@ impl exports::kestrel::provider::provider_branding::Guest for GmailPlugin {
 }
 
 use kestrel::provider::http_client::{HttpRequest, request};
-use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload, MessagePayload};
-use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload};
+use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload, MessagePayload, VacationSettings};
+use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload, BusyBlock};
 
 fn get_header<'a>(headers: &'a [Value], name: &str) -> Option<&'a str> {
     headers.iter().find(|h| {
@@ -275,6 +275,54 @@ impl MailGuest for GmailPlugin {
         let res = request(&req)?;
         if res.status == 200 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
     }
+
+    fn get_vacation(auth_token: String) -> Result<VacationSettings, String> {
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/vacation".to_string(),
+            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            body: None,
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to read vacation settings: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse vacation settings")?;
+        Ok(VacationSettings {
+            enabled: json["enableAutoReply"].as_bool().unwrap_or(false),
+            subject: json["responseSubject"].as_str().map(|s| s.to_string()),
+            body_text: json["responseBodyPlainText"].as_str().unwrap_or_default().to_string(),
+            start_time: json["startTime"].as_str().and_then(|s| s.parse::<i64>().ok()),
+            end_time: json["endTime"].as_str().and_then(|s| s.parse::<i64>().ok()),
+        })
+    }
+
+    fn set_vacation(auth_token: String, settings: VacationSettings) -> Result<(), String> {
+        let mut body = json!({
+            "enableAutoReply": settings.enabled,
+            "responseBodyPlainText": settings.body_text,
+        });
+        if let Some(subject) = settings.subject {
+            body["responseSubject"] = json!(subject);
+        }
+        if let Some(start) = settings.start_time {
+            body["startTime"] = json!(start.to_string());
+        }
+        if let Some(end) = settings.end_time {
+            body["endTime"] = json!(end.to_string());
+        }
+        let req = HttpRequest {
+            method: "PUT".to_string(),
+            url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/vacation".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            body: Some(serde_json::to_vec(&body).unwrap()),
+        };
+        let res = request(&req)?;
+        if res.status == 200 { Ok(()) } else { Err(format!("Failed to save vacation settings: HTTP {}", res.status)) }
+    }
 }
 
 // ── Calendar helpers (Gmail) ────────────────────────────────────
@@ -392,6 +440,20 @@ fn parse_gmail_event(item: &Value) -> Option<EventPayload> {
         attendees,
         status,
     })
+}
+
+fn freebusy_rfc3339(secs: i64) -> String {
+    // WIT freebusy times are unix seconds.
+    chrono::DateTime::from_timestamp(secs, 0)
+        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_default()
+}
+
+fn freebusy_parse_time(value: &serde_json::Value) -> Option<i64> {
+    value
+        .as_str()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.timestamp())
 }
 
 impl CalendarGuest for GmailPlugin {
@@ -516,6 +578,47 @@ impl CalendarGuest for GmailPlugin {
         };
         let res = request(&req)?;
         if res.status == 204 || res.status == 200 || res.status == 404 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+    }
+
+    fn query_freebusy(
+        auth_token: String,
+        emails: Vec<String>,
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<BusyBlock>, String> {
+        let items: Vec<Value> = emails.iter().map(|e| json!({ "id": e })).collect();
+        let body = json!({
+            "timeMin": freebusy_rfc3339(start_time),
+            "timeMax": freebusy_rfc3339(end_time),
+            "items": items,
+        });
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: "https://www.googleapis.com/calendar/v3/freeBusy".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            body: Some(serde_json::to_vec(&body).unwrap()),
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to query freebusy: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse freebusy")?;
+        let mut blocks = Vec::new();
+        if let Some(calendars) = json["calendars"].as_object() {
+            for (email, cal) in calendars {
+                if let Some(busy) = cal["busy"].as_array() {
+                    for b in busy {
+                        if let (Some(start), Some(end)) = (freebusy_parse_time(&b["start"]), freebusy_parse_time(&b["end"])) {
+                            blocks.push(BusyBlock { email: email.clone(), start_time: start, end_time: end });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(blocks)
     }
 }
 

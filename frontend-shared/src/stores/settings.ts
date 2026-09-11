@@ -1,6 +1,7 @@
-import { writable, get } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { getSettings, updateSettings } from '../api/client.js';
 import { DEFAULT_SNOOZE_PRESET, type SnoozePreset } from '../utils/snooze.js';
+import type { ThemeMode } from '../utils/theme.js';
 
 const DENSE_KEY = 'kestrel:settings:dense_mode';
 const LANDING_KEY = 'kestrel:settings:landing_view';
@@ -8,7 +9,36 @@ const SEND_ACTION_KEY = 'kestrel:settings:send_action';
 const SIG_KEY = 'kestrel:settings:signature';
 const LABELS_KEY = 'kestrel:settings:label_customizations';
 
-export const mailDenseMode = writable<boolean>(loadBool(DENSE_KEY, false));
+export type MailDensity = 'compact' | 'comfortable' | 'roomy';
+const DENSITY_KEY = 'kestrel:settings:density';
+
+/** Resolve the density from stored values, migrating the legacy boolean once. */
+export function resolveDensity(stored: string | null, legacy: string | null): MailDensity {
+  if (stored === 'compact' || stored === 'comfortable' || stored === 'roomy') return stored;
+  if (legacy !== null) return legacy === 'true' ? 'compact' : 'comfortable';
+  return 'comfortable';
+}
+
+function loadDensity(): MailDensity {
+  try {
+    return resolveDensity(localStorage.getItem(DENSITY_KEY), localStorage.getItem(DENSE_KEY));
+  } catch {
+    return 'comfortable';
+  }
+}
+
+export const mailDensity = writable<MailDensity>(loadDensity());
+// Legacy mirror for backend settings sync (compact maps to dense).
+export const mailDenseMode = derived(mailDensity, ($d) => $d === 'compact');
+// True when the user already picked a 3-way density (snapshot before the
+// store subscriber below persists the default on first module load).
+const hadLocalDensityChoice = (() => {
+  try {
+    return localStorage.getItem(DENSITY_KEY) !== null;
+  } catch {
+    return true;
+  }
+})();
 export const mailDefaultLandingView = writable<string>(loadStr(LANDING_KEY, 'inbox'));
 export const mailDefaultSendAction = writable<string>(loadStr(SEND_ACTION_KEY, 'send'));
 export const mailSignature = writable<string>(loadStr(SIG_KEY, ''));
@@ -28,6 +58,13 @@ export const mailSnoozeDefault = writable<SnoozePreset>(
   loadStr(SNOOZE_DEFAULT_KEY, DEFAULT_SNOOZE_PRESET) as SnoozePreset
 );
 
+const TRIAGE_KEY = 'kestrel:settings:smart_triage';
+// ponytail: device-local on purpose, never synced to the backend.
+export const smartTriageEnabled = writable<boolean>(loadBool(TRIAGE_KEY, false));
+smartTriageEnabled.subscribe((val) => {
+  saveItem(TRIAGE_KEY, String(val));
+});
+
 let isInitializing = false;
 let isUpdating = false;
 
@@ -36,7 +73,9 @@ export async function initializeSettings() {
   isInitializing = true;
   try {
     const settings = await getSettings();
-    if (settings.mailDenseMode != null) mailDenseMode.set(settings.mailDenseMode);
+    if (settings.mailDenseMode != null && !hadLocalDensityChoice) {
+      mailDensity.set(settings.mailDenseMode ? 'compact' : 'comfortable');
+    }
     if (settings.mailDefaultLandingView != null) mailDefaultLandingView.set(settings.mailDefaultLandingView);
     if (settings.mailDefaultSendAction != null) mailDefaultSendAction.set(settings.mailDefaultSendAction);
     if (settings.mailSignature != null) mailSignature.set(settings.mailSignature);
@@ -94,8 +133,9 @@ async function syncToBackend() {
 }
 
 // Subscribe & persist settings changes
-mailDenseMode.subscribe((val) => {
-  saveItem(DENSE_KEY, String(val));
+mailDensity.subscribe((val) => {
+  saveItem(DENSITY_KEY, val);
+  saveItem(DENSE_KEY, String(val === 'compact'));
   syncToBackend();
 });
 mailDefaultLandingView.subscribe((val) => {
@@ -175,7 +215,18 @@ function saveItem(key: string, val: string): void {
   }
 }
 const THEME_KEY = 'kestrel:settings:theme';
-export const theme = writable<string>(loadStr(THEME_KEY, 'system'));
+function isThemeMode(v: string): v is ThemeMode {
+  return v === 'light' || v === 'dark' || v === 'system';
+}
+function loadTheme(): ThemeMode {
+  try {
+    const val = localStorage.getItem(THEME_KEY);
+    return val !== null && isThemeMode(val) ? val : 'system';
+  } catch {
+    return 'system';
+  }
+}
+export const theme = writable<ThemeMode>(loadTheme());
 theme.subscribe((val) => {
   saveItem(THEME_KEY, val);
   syncToBackend();
