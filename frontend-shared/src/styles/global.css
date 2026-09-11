@@ -23,6 +23,21 @@
   --radius-lg: 8px;
 }
 
+/* Light mode: token-driven surfaces adapt; hardcoded hex stays dark. */
+:root[data-theme="light"] {
+  --color-canvas-base: #F5F4F3;
+  --color-canvas-card: #FFFFFF;
+  --color-canvas-hover: #ECEBEA;
+  --color-canvas-modal: #FFFFFF;
+  --color-text-primary: #1A1919;
+  --color-text-secondary: #6E6E6E;
+  --color-border-hairline: #E0DFDE;
+  --color-accent-gmail: #C5221F;
+  --color-accent-outlook: #0B5CAD;
+  --color-today-red: #B3261E;
+  --color-starred-amber: #9A6B00;
+}
+
 html, body {
   background-color: var(--color-canvas-base);
   color: var(--color-text-primary);

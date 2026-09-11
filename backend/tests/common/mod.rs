@@ -199,6 +199,7 @@ pub async fn seed_contact(pool: &DbPool, account_id: Uuid, name: &str, email: &s
         name: Some(name.to_string()),
         email: email.to_string(),
         avatar_url: None,
+        notes: None,
         last_contacted_at: now,
         created_at: now,
     };
