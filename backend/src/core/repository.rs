@@ -131,6 +131,21 @@ pub trait ContactRepository: Send + Sync {
         query: &str,
         limit: i64,
     ) -> Result<Vec<crate::core::models::Contact>, sqlx::Error>;
+    async fn delete(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error>;
+    /// Record a merge (tombstone the loser) so sync upserts don't resurrect it.
+    async fn record_merge(
+        &self,
+        account_id: Uuid,
+        keep_email: &str,
+        loser_email: &str,
+    ) -> Result<bool, sqlx::Error>;
+    async fn is_merged(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error>;
+    async fn set_notes(
+        &self,
+        account_id: Uuid,
+        email: &str,
+        notes: &str,
+    ) -> Result<bool, sqlx::Error>;
 }
 
 #[async_trait]
@@ -143,4 +158,24 @@ pub trait HistoricalRevisionRepository: Send + Sync {
         resource_type: &str,
         resource_id: Uuid,
     ) -> Result<i32, sqlx::Error>;
+}
+
+#[async_trait]
+pub trait EventPollRepository: Send + Sync {
+    async fn create_poll(
+        &self,
+        event_id: Uuid,
+        question: &str,
+        options: &[String],
+    ) -> Result<crate::core::models::EventPoll, sqlx::Error>;
+    async fn list_polls(
+        &self,
+        event_id: Uuid,
+    ) -> Result<Vec<crate::core::models::EventPollWithVotes>, sqlx::Error>;
+    async fn vote(
+        &self,
+        poll_id: Uuid,
+        voter_email: &str,
+        option_index: i32,
+    ) -> Result<bool, sqlx::Error>;
 }

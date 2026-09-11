@@ -4,6 +4,8 @@ pub struct Config {
     pub database_url: String,
     pub jwt_secret: String,
     pub bind_addr: String,
+    /// Opt-in local crash reports (KESTREL_CRASH_LOG=1). Nothing leaves the machine.
+    pub crash_log: bool,
 }
 
 impl Config {
@@ -24,11 +26,16 @@ impl Config {
             let port = get_var("PORT").unwrap_or_else(|| "8080".to_string());
             format!("{}:{}", host, port)
         });
+        let crash_log = matches!(
+            get_var("KESTREL_CRASH_LOG").as_deref(),
+            Some("1") | Some("true")
+        );
 
         Config {
             database_url,
             jwt_secret,
             bind_addr,
+            crash_log,
         }
     }
 
@@ -104,5 +111,14 @@ mod tests {
         let config = Config::from_env_getter(|k| envs.get(k).cloned());
         assert_eq!(config.bind_addr, "0.0.0.0:8080");
         assert_eq!(config.jwt_secret.len(), 32);
+        assert!(!config.crash_log);
+    }
+
+    #[test]
+    fn test_crash_log_opt_in() {
+        let mut envs = HashMap::new();
+        envs.insert("KESTREL_CRASH_LOG".to_string(), "1".to_string());
+        let config = Config::from_env_getter(|k| envs.get(k).cloned());
+        assert!(config.crash_log);
     }
 }

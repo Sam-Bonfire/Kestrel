@@ -9,6 +9,10 @@ export {
 
 export {
   mailDenseMode,
+  mailDensity,
+  resolveDensity,
+  type MailDensity,
+  theme,
   mailDefaultLandingView,
   mailDefaultSendAction,
   mailSignature,
@@ -19,6 +23,7 @@ export {
   swipeRightAction,
   type SwipeActionType,
   mailSnoozeDefault,
+  smartTriageEnabled,
 } from './settings.js';
 
 export {
@@ -52,3 +57,32 @@ export {
   toggleFocusMode,
   exitFocusMode,
 } from './focusMode.js';
+
+export {
+  recentBreadcrumbs,
+  pushBreadcrumb,
+  clearBreadcrumbs,
+  type Breadcrumb,
+} from './breadcrumbs.js';
+
+export {
+  builtInEventTemplates,
+  applyEventTemplate,
+  type EventTemplate,
+  type AppliedTemplate,
+} from './eventTemplates.js';
+
+export {
+  pomodoro,
+  pomodoroDurations,
+  startPomodoro,
+  pausePomodoro,
+  resetPomodoro,
+  skipPomodoroPhase,
+  tickPomodoro,
+  stopPomodoro,
+  setPomodoroCompleteHandler,
+  type PomodoroPhase,
+  type PomodoroStatus,
+  type PomodoroState,
+} from './pomodoro.js';

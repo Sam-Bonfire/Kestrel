@@ -46,12 +46,14 @@
   import EventInviteCard from './EventInviteCard.svelte';
   import DOMPurify from 'dompurify';
   import { parseChecklists } from '@kestrel/shared';
+  import { blockRemoteImages, senderDomain, isDomainAllowed, allowSenderDomain } from '@kestrel/shared';
   import { get, set } from 'idb-keyval';
 
   export interface Email {
     id: string;
     sender: string;
     senderEmail: string;
+    accountId?: string;
     to: string;
     subject: string;
     body: string;
@@ -68,6 +70,7 @@
 
   let {
     email = null,
+    docked = false,
     onClose = () => {},
     onNavigate = (dir: 'prev' | 'next') => {},
     hasPrev = false,
@@ -101,6 +104,7 @@
     onExitBatch = () => {}
   } = $props<{
     email?: Email | null;
+    docked?: boolean;
     onClose?: () => void;
     onNavigate?: (direction: 'prev' | 'next') => void;
     hasPrev?: boolean;
@@ -136,6 +140,51 @@
 
   // UI state variables
   let showReplyDraft = $state(false);
+  // Tracking protection: reset per email, refresh when the whitelist changes
+  let showRemoteOnce = $state(false);
+  let allowVersion = $state(0);
+  let protectedBody = $derived.by(() => {
+    // Tracked so the banner refreshes after "Always allow sender"
+    void allowVersion;
+    if (!email) return { html: '', blockedCount: 0 };
+    const parsed = parseChecklists(email.body);
+    if (showRemoteOnce || isDomainAllowed(senderDomain(email.senderEmail || ''))) {
+      return { html: parsed, blockedCount: 0 };
+    }
+    return blockRemoteImages(parsed);
+  });
+  // Contact notes for the sender
+  let notesOpen = $state(false);
+  let contactNotes = $state('');
+  let notesLoadedFor: string | null = $state(null);
+  let notesSaving = $state(false);
+  $effect(() => {
+    const key = email?.senderEmail;
+    if (!notesOpen || !key || key === notesLoadedFor) return;
+    notesLoadedFor = key;
+    contactNotes = '';
+    import('@kestrel/shared/api').then(async ({ searchContacts }) => {
+      try {
+        const res = await searchContacts(key, 5);
+        const match = res.find((c) => c.email.toLowerCase() === key.toLowerCase());
+        if (match?.notes && notesLoadedFor === key) contactNotes = match.notes;
+      } catch (e) {
+        console.error('Failed to load contact notes', e);
+      }
+    });
+  });
+  async function saveContactNotes() {
+    if (!email || !email.accountId) return;
+    notesSaving = true;
+    try {
+      const { updateContactNotes } = await import('@kestrel/shared/api');
+      await updateContactNotes(email.accountId, email.senderEmail, contactNotes);
+    } catch (e) {
+      console.error('Failed to save contact notes', e);
+    } finally {
+      notesSaving = false;
+    }
+  }
   let replyType = $state<'reply' | 'reply_all' | 'forward'>('reply');
   let replyToRecipients = $state<string[]>([]);
   let textareaEl: HTMLTextAreaElement | null = null;
@@ -246,6 +295,7 @@
     if (email && email.id !== previousEmailId) {
       icsEvent = null;
       loadingIcs = false;
+      showRemoteOnce = false;
       previousEmailId = email.id;
     }
 
@@ -277,22 +327,27 @@
   <div
     transition:fade={{ duration: 200 }}
     id="center-peek-overlay"
-    class="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-[2px]"
-    role="button"
+    class={docked
+      ? 'fixed inset-0 z-40 pointer-events-none'
+      : 'fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-[2px]'}
+    role={docked ? 'complementary' : 'button'}
+    aria-label={docked ? 'Email reader' : undefined}
     tabindex="0"
-    onclick={onClose}
-    onkeydown={(e) => e.key === 'Escape' && onClose()}
+    onclick={docked ? undefined : onClose}
+    onkeydown={(e) => { if (e.key === 'Escape' && !docked) onClose(); }}
   >
     <!-- Modal Container -->
     <div
-      transition:fly={{ y: 20, duration: 300, easing: cubicOut }}
+      transition:fly={{ x: docked ? 20 : 0, y: docked ? 0 : 20, duration: 300, easing: cubicOut }}
       id="center-peek-modal"
-      class="w-full md:max-w-4xl h-screen md:h-auto md:max-h-[90vh] md:min-h-[50vh] bg-[#0d0d0d] flex flex-col rounded-none md:rounded-xl shadow-2xl overflow-hidden font-sans border border-[var(--color-border-hairline)]"
-      role="dialog"
-      aria-modal="true"
+      class={docked
+        ? 'absolute right-0 top-0 bottom-0 w-full sm:w-[480px] lg:w-[520px] bg-[#0d0d0d] flex flex-col shadow-2xl overflow-hidden font-sans border-l border-[var(--color-border-hairline)] pointer-events-auto'
+        : 'w-full md:max-w-4xl h-screen md:h-auto md:max-h-[90vh] md:min-h-[50vh] bg-[#0d0d0d] flex flex-col rounded-none md:rounded-xl shadow-2xl overflow-hidden font-sans border border-[var(--color-border-hairline)]'}
+      role={docked ? undefined : 'dialog'}
+      aria-modal={docked ? undefined : true}
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
+      onkeydown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }}
     >
       {#if isBatchMode}
         <div class="px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between text-blue-400 shrink-0">
@@ -429,6 +484,13 @@
                 <div class="text-xs text-[var(--color-text-secondary)] truncate">
                   To: <span class="font-mono">{email.to}</span>
                 </div>
+                <button
+                  type="button"
+                  onclick={() => { notesOpen = !notesOpen; }}
+                  class="text-[11px] text-blue-400/80 hover:text-blue-300 hover:underline cursor-pointer"
+                >
+                  {notesOpen ? 'Hide notes' : contactNotes ? 'Notes' : 'Add note'}
+                </button>
               </div>
             </div>
 
@@ -460,12 +522,60 @@
             <EventInviteCard event={icsEvent} emailId={email.id} />
           {/if}
 
+          {#if notesOpen}
+            <div class="bg-[#131313] border border-[var(--color-border-hairline)] rounded-xl p-3 space-y-2">
+              <label for="contact-notes" class="block text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+                Notes for {email.senderEmail}
+              </label>
+              <textarea
+                id="contact-notes"
+                bind:value={contactNotes}
+                rows="3"
+                maxlength="2000"
+                placeholder="Remember context about this contact…"
+                class="w-full bg-[var(--color-canvas-base)] text-sm text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-blue-500/50 resize-y placeholder:text-neutral-600"
+              ></textarea>
+              <div class="flex justify-end">
+                <button
+                  type="button"
+                  onclick={saveContactNotes}
+                  disabled={notesSaving || !email.accountId}
+                  title={!email.accountId ? 'Account unknown for this message' : 'Save notes'}
+                  class="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-medium rounded-md transition-colors cursor-pointer"
+                >
+                  {notesSaving ? 'Saving…' : 'Save notes'}
+                </button>
+              </div>
+            </div>
+          {/if}
+
           <!-- Message HTML Render Content (Task 33: Body Sandboxing) -->
           <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">
+            {#if protectedBody.blockedCount > 0}
+              <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200/90 text-xs">
+                <span class="font-medium">{protectedBody.blockedCount} remote image{protectedBody.blockedCount === 1 ? '' : 's'} blocked to protect your privacy</span>
+                <span class="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onclick={() => { showRemoteOnce = true; }}
+                    class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-md font-semibold transition-colors cursor-pointer"
+                  >
+                    Show once
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => { if (email) { allowSenderDomain(email.senderEmail); allowVersion++; } }}
+                    class="px-2.5 py-1 hover:bg-amber-500/20 border border-transparent hover:border-amber-500/50 rounded-md transition-colors cursor-pointer"
+                  >
+                    Always allow sender
+                  </button>
+                </span>
+              </div>
+            {/if}
             <iframe 
               title="Email Body"
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
-              srcdoc={DOMPurify.sanitize(parseChecklists(email.body), { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
+              srcdoc={DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
               class="w-full min-h-[20vh] bg-white"
               onload={(e) => { 
                 const target = e.currentTarget as HTMLIFrameElement;
