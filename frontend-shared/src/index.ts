@@ -196,6 +196,7 @@ export {
   type WorkingHoursConfig,
 } from './utils/workingHours.js';
 export { findDuplicateGroups, normalizeContactName } from './utils/merge.js';
+export { isNewsletter } from './utils/newsletters.js';
 export {
   senderDomain,
   isDomainAllowed,

@@ -185,7 +185,8 @@
 
   const viewLabels: Record<string, string> = {
     inbox: 'Inbox', unread: 'Unread', sent: 'Sent', drafts: 'Drafts',
-    spam: 'Spam', trash: 'Trash', github: 'GitHub', 'all-mail': 'All Mail', starred: 'Starred'
+    spam: 'Spam', trash: 'Trash', github: 'GitHub', 'all-mail': 'All Mail', starred: 'Starred',
+    feed: 'Feed'
   };
 
   let displayTitle = $derived(viewLabels[currentView] ?? currentView.replace('label-', '').replace('category-', ''));

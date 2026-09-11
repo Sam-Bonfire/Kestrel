@@ -11,6 +11,7 @@
   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
+  import { isNewsletter } from '@kestrel/shared';
   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
   import { triageCandidates, shouldRunTriage, markTriageRun, smartTriageEnabled } from '@kestrel/shared';
   import { get } from 'svelte/store';
@@ -354,6 +355,15 @@
     counts['all-mail'] = getCountStr(e => e.isUnread && !e.isTrash);
     counts['spam'] = getCountStr(e => e.isUnread && e.isSpam);
     counts['trash'] = getCountStr(e => e.isUnread && e.isTrash);
+    counts['feed'] = getCountStr(e => {
+      if (e.isTrash || e.isSpam || !e.isUnread) return false;
+      return isNewsletter({
+        senderEmail: e.senderEmail,
+        subject: e.subject,
+        snippet: (e.body ?? '').replace(/<[^>]*>?/gm, ''),
+        labels: e.labels,
+      });
+    });
     counts['screener'] = screenerQueue.length;
 
     allLabels.forEach((lbl: string) => {
@@ -427,6 +437,15 @@
         if (currentView === 'starred')  return e.isStarred && !e.isTrash;
         if (currentView === 'spam')     return e.isSpam;
         if (currentView === 'trash')    return e.isTrash;
+        if (currentView === 'feed') {
+          if (e.isTrash || e.isSpam) return false;
+          return isNewsletter({
+            senderEmail: e.senderEmail,
+            subject: e.subject,
+            snippet: (e.body ?? '').replace(/<[^>]*>?/gm, ''),
+            labels: e.labels,
+          });
+        }
         if (currentView === 'github')   return e.sender === 'GitHub' && !e.isTrash;
         if (currentView === 'all-mail') return !e.isTrash;
         if (currentView.startsWith('label-')) {
