@@ -19,6 +19,8 @@
   import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
+  import { mailStore } from '$lib/stores/mailStore.svelte.js';
+  import { getCustomViews, saveCustomView, deleteCustomView } from '$lib/utils/customViews';
   import { inboxCategory } from '$lib/utils/inboxCategory';
   import { onMount, untrack, onDestroy } from 'svelte';
   import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
@@ -160,6 +162,45 @@
 
   // ── App state ───────────────────────────────────────────────────
   let currentView      = $state('inbox');
+
+  // Lifted list filters (bound into ThreadList) + saved custom views.
+  let filterCategory = $state<'All' | 'Primary' | 'Updates' | 'Social' | 'Forums'>('All');
+  let filterLabel = $state('All');
+  let filterAttachmentsOnly = $state(false);
+  let filterDateRange = $state<'All' | 'Today' | 'This Week' | 'This Month'>('All');
+  let customViews = $state(getCustomViews());
+  let activeCustomViewId = $state<string | null>(null);
+
+  function applyCustomView(id: string) {
+    const view = customViews.find((v) => v.id === id);
+    if (!view) return;
+    currentView = view.filter.view;
+    filterCategory = view.filter.category;
+    filterLabel = view.filter.label;
+    filterAttachmentsOnly = view.filter.attachmentOnly;
+    filterDateRange = view.filter.dateRange;
+    mailStore.setUnreadFilter(view.filter.unreadOnly);
+    selectedThreadId = null;
+    activeCustomViewId = id;
+    isMobileSidebarOpen = false;
+  }
+
+  function saveCurrentView(name: string) {
+    customViews = saveCustomView(name, {
+      view: currentView,
+      category: filterCategory,
+      label: filterLabel,
+      attachmentOnly: filterAttachmentsOnly,
+      dateRange: filterDateRange,
+      unreadOnly: mailStore.unreadFilterOnly,
+    });
+    activeCustomViewId = customViews[customViews.length - 1]?.id ?? null;
+  }
+
+  function removeCustomView(id: string) {
+    customViews = deleteCustomView(id);
+    if (activeCustomViewId === id) activeCustomViewId = null;
+  }
 
   // ── Recent activity trail ─────────────────────────────────────────
   // $effect (not per-handler pushes): currentView also changes from keyboard
@@ -1016,7 +1057,12 @@
   {#snippet sidebar()}
     <Sidebar
       {currentView}
-      onSelectView={(v: any) => { currentView = v; selectedThreadId = null; isMobileSidebarOpen = false; }}
+      onSelectView={(v: any) => { currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
+      {customViews}
+      {activeCustomViewId}
+      onSelectCustomView={applyCustomView}
+      onDeleteCustomView={removeCustomView}
+      onSaveCustomView={saveCurrentView}
       onComposeClick={() => { isComposeOpen = true; isMobileSidebarOpen = false; }}
       onOpenMailSettings={() => { isMailSettingsOpen = true; isMobileSidebarOpen = false; }}
       bind:searchQuery
@@ -1053,6 +1099,11 @@
     <ThreadList
       threads={finalThreads}
       {currentView}
+      bind:activeCategory={filterCategory}
+      bind:activeLabelFilter={filterLabel}
+      bind:hasAttachmentFilterOnly={filterAttachmentsOnly}
+      bind:activeDateRange={filterDateRange}
+      onFilterChange={() => { activeCustomViewId = null; }}
       {readerDocked}
       onToggleDock={() => { readerDocked = !readerDocked; }}
       {selectedThreadId}

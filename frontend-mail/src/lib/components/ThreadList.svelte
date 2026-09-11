@@ -71,6 +71,11 @@
     onOpenMobileSidebar = () => {},
     onRetryOutbox = (id: string) => {},
     onDiscardOutbox = (id: string) => {},
+    activeCategory = $bindable('All'),
+    activeLabelFilter = $bindable('All'),
+    hasAttachmentFilterOnly = $bindable(false),
+    activeDateRange = $bindable('All'),
+    onFilterChange = (_source: string) => {},
     readerDocked = false,
     onToggleDock = () => {}
   } = $props<{
@@ -100,6 +105,11 @@
     onOpenMobileSidebar?: () => void;
     onRetryOutbox?: (id: string) => void;
     onDiscardOutbox?: (id: string) => void;
+    activeCategory?: 'All' | 'Primary' | 'Updates' | 'Social' | 'Promotions' | 'Forums';
+    activeLabelFilter?: string;
+    hasAttachmentFilterOnly?: boolean;
+    activeDateRange?: 'All' | 'Today' | 'This Week' | 'This Month';
+    onFilterChange?: (source: string) => void;
     readerDocked?: boolean;
     onToggleDock?: () => void;
   }>();
@@ -168,11 +178,7 @@
   // Filter Toolbar Toggle
   let showFiltersBar = $state(false);
 
-  // Filtering states
-  let activeCategory = $state<'All' | 'Primary' | 'Updates' | 'Social' | 'Promotions' | 'Forums'>('All');
-  let activeLabelFilter = $state<'All' | string>('All');
-  let hasAttachmentFilterOnly = $state(false);
-  let activeDateRange = $state<'All' | 'Today' | 'This Week' | 'This Month'>('All');
+  // Filtering states (bindable so custom views can save/restore them)
   let showCategoryFilterDropdown = $state(false);
   let showLabelFilterDropdown = $state(false);
   let showDateRangeDropdown = $state(false);
@@ -436,7 +442,7 @@
             <div class="w-44 py-1 font-sans text-xs">
               {#each ['All', 'Primary', 'Updates', 'Social', 'Promotions', 'Forums'] as cat}
                 <button
-                  onclick={() => { activeCategory = cat as any; showCategoryFilterDropdown = false; }}
+                  onclick={() => { activeCategory = cat as any; showCategoryFilterDropdown = false; onFilterChange('category'); }}
                   class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
                 >
                   <span>{cat === 'All' ? 'All Categories' : cat}</span>
@@ -466,7 +472,7 @@
           {#snippet content()}
             <div class="w-48 py-1 font-sans text-xs">
               <button
-                onclick={() => { activeLabelFilter = 'All'; showLabelFilterDropdown = false; }}
+                onclick={() => { activeLabelFilter = 'All'; showLabelFilterDropdown = false; onFilterChange('label'); }}
                 class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
               >
                 <span>All Labels</span>
@@ -476,7 +482,7 @@
               </button>
               {#each allLabels as label}
                 <button
-                  onclick={() => { activeLabelFilter = label; showLabelFilterDropdown = false; }}
+                  onclick={() => { activeLabelFilter = label; showLabelFilterDropdown = false; onFilterChange('label'); }}
                   class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
                 >
                   <span class="truncate pr-2">{label.split('/').pop()}</span>
@@ -492,7 +498,7 @@
 
       <!-- Unread toggle pill -->
       <button
-        onclick={() => mailStore.toggleUnreadFilter()}
+        onclick={() => { mailStore.toggleUnreadFilter(); onFilterChange('unread'); }}
         class="px-2.5 py-1 rounded-full text-xs border transition-colors cursor-pointer
           {mailStore.unreadFilterOnly ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold' : 'bg-[var(--color-canvas-card)] border-[var(--color-border-hairline)] text-[var(--color-text-secondary)]'}"
       >
@@ -516,7 +522,7 @@
             <div class="w-32 py-1 font-sans text-xs">
               {#each (['All', 'Today', 'This Week', 'This Month'] as const) as range}
                 <button
-                  onclick={() => { activeDateRange = range; showDateRangeDropdown = false; }}
+                  onclick={() => { activeDateRange = range; showDateRangeDropdown = false; onFilterChange('date'); }}
                   class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
                 >
                   <span>{range}</span>
@@ -532,7 +538,7 @@
 
       <!-- Has Attachments toggle pill -->
       <button
-        onclick={() => hasAttachmentFilterOnly = !hasAttachmentFilterOnly}
+        onclick={() => { hasAttachmentFilterOnly = !hasAttachmentFilterOnly; onFilterChange('attachments'); }}
         class="px-2.5 py-1 rounded-full text-xs border transition-colors cursor-pointer
           {hasAttachmentFilterOnly ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold' : 'bg-[var(--color-canvas-card)] border-[var(--color-border-hairline)] text-[var(--color-text-secondary)]'}"
       >
@@ -542,7 +548,7 @@
       <!-- Clear action -->
       {#if activeCategory !== 'All' || activeLabelFilter !== 'All' || mailStore.unreadFilterOnly || hasAttachmentFilterOnly || activeDateRange !== 'All'}
         <button 
-          onclick={() => { activeCategory = 'All'; activeLabelFilter = 'All'; mailStore.setUnreadFilter(false); hasAttachmentFilterOnly = false; activeDateRange = 'All'; }}
+          onclick={() => { activeCategory = 'All'; activeLabelFilter = 'All'; mailStore.setUnreadFilter(false); hasAttachmentFilterOnly = false; activeDateRange = 'All'; onFilterChange('clear'); }}
           class="text-[10px] text-white/50 hover:text-white underline cursor-pointer ml-auto"
         >
           Clear filters
