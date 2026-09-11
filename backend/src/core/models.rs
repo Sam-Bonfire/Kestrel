@@ -190,6 +190,34 @@ pub struct Signature {
     pub is_default: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct EventPoll {
+    pub id: DbUuid,
+    pub event_id: DbUuid,
+    pub question: String,
+    pub options_json: String,
+    #[specta(type = f64)]
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct EventPollWithVotes {
+    pub id: DbUuid,
+    pub event_id: DbUuid,
+    pub question: String,
+    pub options: Vec<String>,
+    pub votes: Vec<PollVote>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct PollVote {
+    pub poll_id: DbUuid,
+    pub voter_email: String,
+    pub option_index: i32,
+    #[specta(type = f64)]
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 #[allow(dead_code)]
 pub struct HistoricalRevision {

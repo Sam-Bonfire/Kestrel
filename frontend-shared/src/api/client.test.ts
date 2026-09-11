@@ -26,6 +26,9 @@ import {
   updateContactNotes,
   exportContactsBlob,
   importContacts,
+  listEventPolls,
+  createEventPoll,
+  voteEventPoll,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -409,6 +412,56 @@ describe('API Client & Contract Validation', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ account_id: 'acc-1', format: 'csv', content: 'name,email\na@b.com' }),
+        })
+      );
+    });
+  });
+
+  describe('event polls', () => {
+    it('lists polls for an event', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+
+      await listEventPolls('ev-1');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/events/ev-1/polls`,
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('creates a poll with question and options', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'p-1' }),
+      });
+
+      await createEventPoll('ev-1', 'Lunch?', ['Sushi', 'Tacos']);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/events/ev-1/polls`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ question: 'Lunch?', options: ['Sushi', 'Tacos'] }),
+        })
+      );
+    });
+
+    it('votes with email and option index', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      });
+
+      await voteEventPoll('ev-1', 'p-1', 'a@b.com', 0);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/events/ev-1/polls/p-1/vote`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ voter_email: 'a@b.com', option_index: 0 }),
         })
       );
     });

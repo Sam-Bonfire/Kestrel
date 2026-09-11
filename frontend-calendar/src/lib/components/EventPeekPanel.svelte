@@ -105,6 +105,63 @@
   let initialSnapshot: any = null;
   let currentEventId: string | undefined = undefined;
 
+  // Event polls (proposals voting)
+  type PanelPoll = {
+    id: string;
+    question: string;
+    options: string[];
+    votes: { voter_email: string; option_index: number }[];
+  };
+  let polls = $state<PanelPoll[]>([]);
+  let voterEmail = $state('');
+  let newPollText = $state('');
+  let pollsLoadedFor: string | null = $state(null);
+
+  async function loadPolls(eventId: string) {
+    pollsLoadedFor = eventId;
+    try {
+      const { listEventPolls } = await import('@kestrel/shared/api');
+      const rows = await listEventPolls(eventId);
+      if (pollsLoadedFor === eventId) polls = rows;
+    } catch (e) {
+      console.error('Failed to load polls', e);
+    }
+  }
+
+  async function addPoll() {
+    if (!event?.id) return;
+    const [questionPart, optionsPart] = newPollText.split('?');
+    const options = (optionsPart ?? '')
+      .split(';')
+      .map((o) => o.trim())
+      .filter(Boolean);
+    const question = `${(questionPart ?? '').trim()}?`;
+    if (!questionPart?.trim() || options.length < 2) return;
+    try {
+      const { createEventPoll } = await import('@kestrel/shared/api');
+      const created = await createEventPoll(event.id, question, options);
+      polls = [...polls, { ...created, votes: [] }];
+      newPollText = '';
+    } catch (e) {
+      console.error('Failed to create poll', e);
+    }
+  }
+
+  async function castVote(pollId: string, option_index: number) {
+    if (!event?.id || !voterEmail.trim()) return;
+    try {
+      const { voteEventPoll } = await import('@kestrel/shared/api');
+      await voteEventPoll(event.id, pollId, voterEmail.trim(), option_index);
+      polls = polls.map((p) =>
+        p.id === pollId
+          ? { ...p, votes: [...p.votes, { voter_email: voterEmail.trim().toLowerCase(), option_index }] }
+          : p
+      );
+    } catch (e) {
+      console.error('Failed to vote', e);
+    }
+  }
+
   // Hydrate data when component mounts or event changes
   $effect(() => {
     if (event) {
@@ -112,6 +169,8 @@
         isEditing = !event.id;
         initialSnapshot = JSON.parse(JSON.stringify(event));
         currentEventId = event.id;
+        polls = [];
+        if (event.id) loadPolls(event.id);
       }
 
       title = event.title || '';
@@ -192,6 +251,7 @@
   }
 
   function updateRsvp(newStatus: string) {
+
     if (!event || !event.id) return;
     const newRsvpStatus = newStatus === 'accepted' ? 'yes' : newStatus === 'declined' ? 'no' : 'maybe';
     event.rsvpStatus = newRsvpStatus;
@@ -515,6 +575,58 @@
           </select>
         </div>
       </div>
+
+      {#if event?.id}
+        <div class="space-y-2 pt-2 border-t border-neutral-800/20">
+          <span class="block text-neutral-500 font-mono text-[10px]">Polls</span>
+          {#if pollError}
+            <p class="text-[11px] text-red-400" role="alert">{pollError}</p>
+          {/if}
+          {#each polls as poll (poll.id)}
+            <div class="bg-neutral-900/40 rounded-xl p-3 space-y-1.5 border border-neutral-800/40">
+              <div class="text-xs font-semibold text-white">{poll.question}</div>
+              {#each poll.options as option, i}
+                {@const count = poll.votes.filter((v) => v.option_index === i).length}
+                {@const mine = voterEmail && poll.votes.some((v) => v.option_index === i && v.voter_email === voterEmail.toLowerCase())}
+                <button
+                  type="button"
+                  onclick={() => castVote(poll.id, i)}
+                  disabled={!voterEmail}
+                  title={voterEmail ? `Vote for ${option}` : 'Enter your email below to vote'}
+                  class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer disabled:cursor-not-allowed {mine ? 'bg-blue-500/20 border border-blue-500/50 text-white' : 'bg-white/5 hover:bg-white/10 border border-transparent text-neutral-300'}"
+                >
+                  <span class="truncate">{option}</span>
+                  <span class="font-mono text-[10px] opacity-70 shrink-0 ml-2">{count}</span>
+                </button>
+              {/each}
+            </div>
+          {/each}
+          <input
+            type="email"
+            bind:value={voterEmail}
+            placeholder="Your email to vote"
+            aria-label="Your email to vote"
+            class="w-full bg-neutral-900/40 border border-neutral-800/40 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none placeholder:text-neutral-600"
+          />
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              bind:value={newPollText}
+              placeholder="New poll: question? opt1; opt2"
+              aria-label="New poll"
+              onkeydown={(e) => { if (e.key === 'Enter') addPoll(); }}
+              class="flex-1 bg-neutral-900/40 border border-neutral-800/40 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none placeholder:text-neutral-600 min-w-0"
+            />
+            <button
+              type="button"
+              onclick={addPoll}
+              class="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white transition-colors cursor-pointer shrink-0"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      {/if}
     </div>
 
     <!-- Footer Actions (Save button only shown when creating a new event) -->

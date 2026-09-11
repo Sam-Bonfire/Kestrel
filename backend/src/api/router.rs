@@ -11,6 +11,7 @@ use super::calendars;
 use super::contacts;
 use super::health::health_check;
 use super::messages;
+use super::polls;
 use super::providers;
 use super::rate_limit::RateLimiter;
 use super::revisions;
@@ -159,6 +160,14 @@ pub fn create_router(state: AppState) -> Router {
             get(calendars::get_event)
                 .patch(calendars::update_event)
                 .delete(calendars::delete_event),
+        )
+        .route(
+            "/api/v1/events/:id/polls",
+            get(polls::list_polls).post(polls::create_poll),
+        )
+        .route(
+            "/api/v1/events/:id/polls/:poll_id/vote",
+            post(polls::vote_poll),
         )
         .route(
             "/api/settings",
