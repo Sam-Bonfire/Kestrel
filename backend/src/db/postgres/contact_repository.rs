@@ -41,6 +41,49 @@ impl ContactRepository for PostgresContactRepository {
         Ok(())
     }
 
+    async fn delete(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM contacts WHERE account_id = $1 AND email = $2")
+            .bind(account_id)
+            .bind(email)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn record_merge(
+        &self,
+        account_id: Uuid,
+        keep_email: &str,
+        loser_email: &str,
+    ) -> Result<bool, sqlx::Error> {
+        if keep_email.eq_ignore_ascii_case(loser_email) {
+            return self.delete(account_id, loser_email).await;
+        }
+        sqlx::query(
+            "INSERT INTO merged_contacts (account_id, email, merged_into) VALUES ($1, $2, $3)
+             ON CONFLICT (account_id, email) DO UPDATE SET merged_into = EXCLUDED.merged_into",
+        )
+        .bind(account_id)
+        .bind(loser_email)
+        .bind(keep_email)
+        .execute(&self.pool)
+        .await?;
+        self.delete(account_id, loser_email).await
+    }
+
+    async fn is_merged(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error> {
+        let found: Option<String> = sqlx::query_scalar(
+            "SELECT email FROM merged_contacts WHERE account_id = $1 AND email = $2",
+        )
+        .bind(account_id)
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(found.is_some())
+    }
+
     async fn set_notes(
         &self,
         account_id: Uuid,

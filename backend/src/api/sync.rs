@@ -804,7 +804,14 @@ pub async fn sync_account_messages(
                 last_contacted_at: payload.date_received,
                 created_at: chrono::Utc::now().timestamp(),
             };
-            let _ = contact_repo.upsert(&contact).await;
+            // Merged-away contacts stay merged: sync must not resurrect them.
+            if !contact_repo
+                .is_merged(account.id.0, &contact.email)
+                .await
+                .unwrap_or(false)
+            {
+                let _ = contact_repo.upsert(&contact).await;
+            }
 
             // Upsert contacts for recipients (parsing the JSON string if necessary, assuming it's a JSON array of strings or comma-separated string)
             // Kestrel mail recipients are typically stored as a JSON string `["a@b.com", "c@d.com"]` or comma-separated
@@ -819,6 +826,13 @@ pub async fn sync_account_messages(
                 });
 
             for rec in parsed_recipients {
+                if contact_repo
+                    .is_merged(account.id.0, &rec)
+                    .await
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
                 let contact = crate::core::models::Contact {
                     id: Uuid::new_v4().into(),
                     account_id: account.id,
@@ -1011,7 +1025,14 @@ pub async fn sync_account_calendars(
                 last_contacted_at: payload.start_time,
                 created_at: chrono::Utc::now().timestamp(),
             };
-            let _ = contact_repo.upsert(&contact).await;
+            // Merged-away contacts stay merged: sync must not resurrect them.
+            if !contact_repo
+                .is_merged(account.id.0, &contact.email)
+                .await
+                .unwrap_or(false)
+            {
+                let _ = contact_repo.upsert(&contact).await;
+            }
         }
 
         if let Some(ref attendees_str) = payload.attendees {
@@ -1025,6 +1046,13 @@ pub async fn sync_account_calendars(
                 });
 
             for email in parsed_attendees {
+                if contact_repo
+                    .is_merged(account.id.0, &email)
+                    .await
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
                 let contact = crate::core::models::Contact {
                     id: Uuid::new_v4().into(),
                     account_id: account.id,
