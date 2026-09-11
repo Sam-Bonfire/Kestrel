@@ -57,6 +57,7 @@ export type Contact = {
 	name: string | null,
 	email: string,
 	avatar_url: string | null,
+	notes: string | null,
 	last_contacted_at: number | null,
 	created_at: number | null,
 };
@@ -80,6 +81,11 @@ export type CreateEventResponse = {
 	start_time: number | null,
 	end_time: number | null,
 	created_at: number | null,
+};
+
+export type CreatePollRequest = {
+	question: string,
+	options: string[],
 };
 
 /**
@@ -119,6 +125,22 @@ export type EventListParams = {
 export type EventListResponse = {
 	events: EventSummary[],
 	total: number | null,
+};
+
+export type EventPoll = {
+	id: DbUuid,
+	event_id: DbUuid,
+	question: string,
+	options_json: string,
+	created_at: number | null,
+};
+
+export type EventPollWithVotes = {
+	id: DbUuid,
+	event_id: DbUuid,
+	question: string,
+	options: string[],
+	votes: PollVote[],
 };
 
 export type EventSummary = {
@@ -202,6 +224,13 @@ export type MessageSummary = {
 	is_archived: boolean,
 	has_attachments: boolean,
 	labels: string | null,
+};
+
+export type PollVote = {
+	poll_id: DbUuid,
+	voter_email: string,
+	option_index: number,
+	created_at: number | null,
 };
 
 export type RegisterRequest = {
@@ -334,4 +363,9 @@ export type VacationUpdate = {
 	bodyText: string,
 	startTime: number | null,
 	endTime: number | null,
+};
+
+export type VoteRequest = {
+	voter_email: string,
+	option_index: number,
 };

@@ -3,6 +3,11 @@
   import RichTextSignature from './RichTextSignature.svelte';
   import {
     mailDenseMode,
+    mailDensity,
+    type MailDensity,
+    theme,
+    type ThemeMode,
+    smartTriageEnabled,
     mailDefaultLandingView,
     mailSnoozeDefault,
     swipeLeftAction,
@@ -21,6 +26,8 @@
   }>();
 
   let activeTab = $state<'general' | 'snippets' | 'signatures'>('general');
+  const densityOptions: [MailDensity, string][] = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['roomy', 'Roomy']];
+  const themeOptions: [ThemeMode, string][] = [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']];
   let accounts = $state<any[]>([]);
   let updateMessage = $state<string | null>(null);
   let updateAvailable = $state(false);
@@ -198,12 +205,37 @@
       <!-- Scrollable Options -->
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
         {#if activeTab === 'general'}
+          <fieldset class="p-3 bg-neutral-900/35 border border-white/5 rounded-xl">
+            <legend class="font-semibold text-white px-1">List Density</legend>
+            <p class="text-[10px] text-[var(--color-text-secondary)] mb-2">Row heights for list elements.</p>
+            <div class="flex gap-2">
+              {#each densityOptions as [value, label]}
+                <label class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors {$mailDensity === value ? 'bg-blue-500/20 border-blue-500/60 text-white' : 'border-white/10 text-neutral-400 hover:border-white/25'}">
+                  <input type="radio" name="mail-density" {value} bind:group={$mailDensity} class="accent-blue-500 cursor-pointer" />
+                  {label}
+                </label>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset class="p-3 bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded-xl">
+            <legend class="font-semibold text-[var(--color-text-primary)] px-1">Theme</legend>
+            <div class="flex gap-2">
+              {#each themeOptions as [value, label]}
+                <label class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors {$theme === value ? 'bg-blue-500/20 border-blue-500/60 text-[var(--color-text-primary)]' : 'border-[var(--color-border-hairline)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-secondary)]'}">
+                  <input type="radio" name="app-theme" {value} bind:group={$theme} class="accent-blue-500 cursor-pointer" />
+                  {label}
+                </label>
+              {/each}
+            </div>
+          </fieldset>
+
           <label class="flex items-center justify-between p-3 bg-neutral-900/35 border border-white/5 rounded-xl cursor-pointer">
             <div class="space-y-0.5">
-              <span class="font-semibold text-white">Dense Layout Mode</span>
-              <p class="text-[10px] text-[var(--color-text-secondary)]">Narrower heights for list elements.</p>
+              <span class="font-semibold text-white">Smart Triage</span>
+              <p class="text-[10px] text-[var(--color-text-secondary)]">Auto-archive read promos older than 30 days, once a day.</p>
             </div>
-            <input type="checkbox" bind:checked={$mailDenseMode} class="accent-blue-500 rounded cursor-pointer" />
+            <input type="checkbox" bind:checked={$smartTriageEnabled} class="accent-blue-500 rounded cursor-pointer" />
           </label>
 
           <div class="p-3 bg-neutral-900/35 border border-white/5 rounded-xl space-y-2.5">
