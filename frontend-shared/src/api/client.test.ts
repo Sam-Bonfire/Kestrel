@@ -22,6 +22,8 @@ import {
   triggerSync,
   searchContacts,
   updateContactNotes,
+  exportContactsBlob,
+  importContacts,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -336,6 +338,42 @@ describe('API Client & Contract Validation', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ account_id: 'acc-1', email: 'a@b.com', notes: 'VIP' }),
+        })
+      );
+    });
+  });
+
+  describe('contacts import/export', () => {
+    it('exports scoped or global CSV', async () => {
+      const blob = new Blob(['name,email']);
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, blob: async () => blob });
+
+      await exportContactsBlob('acc-1');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts/export?account_id=acc-1'),
+        expect.objectContaining({ credentials: 'include' })
+      );
+      await exportContactsBlob();
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts/export'),
+        expect.anything()
+      );
+    });
+
+    it('imports with format and content', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ imported: 2, skipped: 0 }),
+      });
+
+      const res = await importContacts('acc-1', 'csv', 'name,email\na@b.com');
+      expect(res).toEqual({ imported: 2, skipped: 0 });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/contacts/import`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ account_id: 'acc-1', format: 'csv', content: 'name,email\na@b.com' }),
         })
       );
     });
