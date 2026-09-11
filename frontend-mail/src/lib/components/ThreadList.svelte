@@ -4,15 +4,16 @@
   import { fade, slide, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { isTyping } from '$lib/utils/keyboard';
-  import { 
+  import {
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
     ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check, ListPlus,
     Clock, AlertTriangle, Sparkles, Tag, Plus, X, Folder, ChevronRight,
-    Reply, ReplyAll, Forward, BellOff, AlertOctagon
+    Reply, ReplyAll, Forward, BellOff, AlertOctagon, PanelRight
   } from 'lucide-svelte';
   import { WindowControls } from '@kestrel/shared/components';
   import {
-    mailDenseMode,
+    mailDensity,
+    type MailDensity,
     labelCustomizations,
     getLabelStyle,
     Dropdown,
@@ -74,7 +75,9 @@
     activeLabelFilter = $bindable('All'),
     hasAttachmentFilterOnly = $bindable(false),
     activeDateRange = $bindable('All'),
-    onFilterChange = (_source: string) => {}
+    onFilterChange = (_source: string) => {},
+    readerDocked = false,
+    onToggleDock = () => {}
   } = $props<{
     threads?: EmailThread[];
     selectedThreadId?: string | null;
@@ -102,11 +105,13 @@
     onOpenMobileSidebar?: () => void;
     onRetryOutbox?: (id: string) => void;
     onDiscardOutbox?: (id: string) => void;
-    activeCategory?: 'All' | 'Primary' | 'Updates' | 'Social' | 'Forums';
+    activeCategory?: 'All' | 'Primary' | 'Updates' | 'Social' | 'Promotions' | 'Forums';
     activeLabelFilter?: string;
     hasAttachmentFilterOnly?: boolean;
     activeDateRange?: 'All' | 'Today' | 'This Week' | 'This Month';
     onFilterChange?: (source: string) => void;
+    readerDocked?: boolean;
+    onToggleDock?: () => void;
   }>();
 
   let selectedIndex = $state(0);
@@ -178,12 +183,19 @@
   let showLabelFilterDropdown = $state(false);
   let showDateRangeDropdown = $state(false);
 
-  const viewLabels: Record<string, string> = {
-    inbox: 'Inbox', unread: 'Unread', sent: 'Sent', drafts: 'Drafts',
-    spam: 'Spam', trash: 'Trash', github: 'GitHub', 'all-mail': 'All Mail', starred: 'Starred'
+  const densityRowClasses: Record<MailDensity, string> = {
+    compact: 'py-2 sm:py-1 px-3 sm:px-3 min-h-[50px] sm:min-h-[32px]',
+    comfortable: 'py-3 sm:py-2.5 px-4 min-h-[64px] sm:min-h-[44px]',
+    roomy: 'py-4 sm:py-3.5 px-5 min-h-[84px] sm:min-h-[60px]',
   };
 
-  let displayTitle = $derived(viewLabels[currentView] ?? currentView.replace('label-', ''));
+  const viewLabels: Record<string, string> = {
+    inbox: 'Inbox', unread: 'Unread', sent: 'Sent', drafts: 'Drafts',
+    spam: 'Spam', trash: 'Trash', github: 'GitHub', 'all-mail': 'All Mail', starred: 'Starred',
+    feed: 'Feed'
+  };
+
+  let displayTitle = $derived(viewLabels[currentView] ?? currentView.replace('label-', '').replace('category-', ''));
 
   // Filtered threads displayed in list
   let filteredList = $derived(
@@ -337,7 +349,7 @@
   });
 </script>
 
-<div class="flex-1 h-screen bg-[var(--color-canvas-base)] flex flex-col overflow-hidden font-sans pb-16 lg:pb-0">
+<div class="flex-1 h-screen bg-[var(--color-canvas-base)] flex flex-col overflow-hidden font-sans pb-16 lg:pb-0 {readerDocked && selectedThreadId ? 'lg:pr-[520px]' : ''}">
   
   <!-- Thread list header -->
   <div 
@@ -396,6 +408,17 @@
       >
         <ListFilter class="w-3.5 h-3.5" />
       </button>
+
+      <!-- Split-pane reader toggle -->
+      <button
+        onclick={onToggleDock}
+        class="hidden sm:block p-1.5 rounded-lg hover:bg-[var(--color-canvas-hover)] hover:text-white transition-colors {readerDocked ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400' : ''}"
+        title={readerDocked ? 'Pop reader out to modal' : 'Dock reader beside the list'}
+        aria-pressed={readerDocked}
+        aria-label="Toggle split-pane reader"
+      >
+        <PanelRight class="w-3.5 h-3.5" />
+      </button>
     </div>
   </div>
 
@@ -417,7 +440,7 @@
           {/snippet}
           {#snippet content()}
             <div class="w-44 py-1 font-sans text-xs">
-              {#each ['All', 'Primary', 'Updates', 'Social', 'Forums'] as cat}
+              {#each ['All', 'Primary', 'Updates', 'Social', 'Promotions', 'Forums'] as cat}
                 <button
                   onclick={() => { activeCategory = cat as any; showCategoryFilterDropdown = false; onFilterChange('category'); }}
                   class="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
@@ -642,7 +665,7 @@
           animate:flip={{ duration: 300 }}
           class="group relative flex flex-col sm:flex-row sm:items-center bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 hover:-translate-y-px hover:shadow-md hover:z-10 rounded-lg cursor-pointer transition-all duration-200 border border-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas-base)] focus:outline-none touch-pan-y
             {selectedThreadId === thread.id ? 'bg-[var(--color-canvas-hover)]/60 border-white/5 shadow-sm -translate-y-px z-10' : ''}
-            {$mailDenseMode ? 'py-2 sm:py-1 px-3 sm:px-3 min-h-[50px] sm:min-h-[32px]' : 'py-3 sm:py-2.5 px-4 min-h-[64px] sm:min-h-[44px]'}"
+            {densityRowClasses[$mailDensity]}"
           style={swipeStart?.id === thread.id && swipeOffset !== 0 ? `transform: translateX(${swipeOffset}px);` : undefined}
           onclick={() => {
             if (suppressClickId === thread.id) { suppressClickId = null; return; }

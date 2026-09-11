@@ -1,4 +1,4 @@
-// ── Design tokens ───────────────────────────────────────────────
+﻿// ΓöÇΓöÇ Design tokens ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   colors,
   tagColors,
@@ -18,7 +18,7 @@ export type { DesignTokens } from './tokens/index.js';
 
 export { default as SettingsModal } from './components/SettingsModal.svelte';
 
-// ── API client ──────────────────────────────────────────────────
+// ΓöÇΓöÇ API client ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   ApiError,
   getHealth,
@@ -63,7 +63,7 @@ export type {
   Signature,
 } from './api/index.js';
 
-// ── Auth store & Settings store ─────────────────────────────────
+// ΓöÇΓöÇ Auth store & Settings store ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   initAuth,
 } from './stores/auth.svelte.js';
@@ -75,6 +75,9 @@ export {
   revokedAccounts,
   addRevokedAccount,
   mailDenseMode,
+  mailDensity,
+  type MailDensity,
+  theme,
   mailDefaultLandingView,
   mailDefaultSendAction,
   mailSignature,
@@ -85,6 +88,7 @@ export {
   swipeRightAction,
   type SwipeActionType,
   mailSnoozeDefault,
+  smartTriageEnabled,
 } from './stores/index.js';
 
 export {
@@ -103,7 +107,7 @@ export {
   relativeTimeTick,
 } from './stores/index.js';
 
-// ── Offline queue ───────────────────────────────────────────────
+// ΓöÇΓöÇ Offline queue ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   enqueueMutation,
   dequeuePending,
@@ -114,7 +118,7 @@ export {
 
 export type { QueuedMutation } from './offline/index.js';
 
-// ── Components ──────────────────────────────────────────────────
+// ΓöÇΓöÇ Components ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   Button,
   Spinner,
@@ -132,7 +136,7 @@ export {
   ServerConfig,
 } from './components/index.js';
 
-// ── Utils ───────────────────────────────────────────────────────
+// ΓöÇΓöÇ Utils ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export {
   getLabelStyle,
   buildLabelTree,
@@ -191,3 +195,59 @@ export {
   parseTimeToMinutes,
   type WorkingHoursConfig,
 } from './utils/workingHours.js';
+export { findDuplicateGroups, normalizeContactName } from './utils/merge.js';
+export { isNewsletter } from './utils/newsletters.js';
+export { setUnreadBadge } from './utils/badge.js';
+export {
+  senderDomain,
+  isDomainAllowed,
+  allowSenderDomain,
+  blockRemoteImages,
+} from './utils/trackingProtection.js';
+export {
+  parseKestrelDeepLink,
+  buildThreadDeepLink,
+  buildEventDeepLink,
+  type KestrelDeepLink,
+} from './utils/deepLinks.js';
+export {
+  firstTimeSenders,
+  approveSender,
+  loadScreened,
+  type ScreenedSender,
+} from './utils/screener.js';
+export {
+  resolveEffectiveTheme,
+  applyTheme,
+  initTheme,
+  type ThemeMode,
+} from './utils/theme.js';
+export {
+  stagePopoutDraft,
+  takePopoutDraft,
+  popoutDraftNonce,
+  buildPopoutUrl,
+  openComposePopout,
+  type PopoutDraft,
+} from './utils/popout.js';
+export { categorizeEmail, type EmailCategory } from './utils/categorize.js';
+export {
+  parseNaturalEvent,
+  shiftTime,
+  type ParsedEvent,
+} from './utils/nlpEvent.js';
+export { plainText } from './utils/html.js';
+export { mergeDuplicateEvents, type MergedEvent } from './utils/duplicates.js';
+export {
+  buildDailyBriefing,
+  shouldShowBriefing,
+  markBriefingShown,
+  type DailyBriefing,
+} from './utils/briefing.js';
+export { focusDayColumn, focusEventInColumn } from './utils/gridNav.js';
+export {
+  triageCandidates,
+  shouldRunTriage,
+  markTriageRun,
+} from './utils/triage.js';
+export { findConflicts, nextFreeSlot, type Schedulable, type FreeSlot } from './utils/conflicts.js';

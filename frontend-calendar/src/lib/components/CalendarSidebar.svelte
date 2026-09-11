@@ -1,5 +1,6 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
+  import { PomodoroWidget } from '@kestrel/shared/components';
   import { 
     Plus, ChevronLeft, ChevronRight, Settings, Eye, EyeOff, Check, ChevronDown,
     CalendarDays, Calendar as CalendarIcon, Clock, AlignLeft
@@ -382,7 +383,8 @@
   </div>
 
   <!-- Settings Footer -->
-  <div class="pt-3 border-t border-[var(--color-border-hairline)] flex items-center justify-between text-xs text-[var(--color-text-secondary)] shrink-0 bg-[var(--color-canvas-card)]">
+  <div class="pt-3 border-t border-[var(--color-border-hairline)] shrink-0 bg-[var(--color-canvas-card)] space-y-2">
+    <PomodoroWidget />
     <button class="flex items-center gap-2 hover:text-white transition-colors cursor-pointer w-full text-left font-mono">
       <Settings class="w-4 h-4" />
       <span>Settings</span>

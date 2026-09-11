@@ -26,6 +26,18 @@ export function getSyncState(accountId: string): SyncState {
   return syncStates[accountId];
 }
 
+/** Accounts currently showing a sync error. */
+export function getSyncErrors(): { accountId: string; error: string }[] {
+  return Object.entries(syncStates)
+    .filter(([, s]) => !!s.error)
+    .map(([accountId, s]) => ({ accountId, error: s.error as string }));
+}
+
+export function dismissSyncError(accountId: string) {
+  const state = syncStates[accountId];
+  if (state) state.error = null;
+}
+
 export function getGlobalSyncState() {
   return {
     get isSyncing() {
