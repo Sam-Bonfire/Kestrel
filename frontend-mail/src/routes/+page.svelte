@@ -1,19 +1,60 @@
 <script lang="ts">
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ThreadList from '$lib/components/ThreadList.svelte';
+  import ScreenerQueue from '$lib/components/ScreenerQueue.svelte';
+  import { firstTimeSenders, approveSender, loadScreened } from '@kestrel/shared';
   import CenterPeek from '$lib/components/CenterPeek.svelte';
   import ComposeModal from '$lib/components/ComposeModal.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
-  import { AppShell, ReauthBanner, UndoToast } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault } from '@kestrel/shared/stores';
+  import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
+  import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
+  import { triageCandidates, shouldRunTriage, markTriageRun, smartTriageEnabled } from '@kestrel/shared';
   import { get } from 'svelte/store';
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
+  import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
+  import { inboxCategory } from '$lib/utils/inboxCategory';
   import { onMount, untrack, onDestroy } from 'svelte';
+  import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
+
+  function announcePomodoroPhase(phase: string) {
+    const body = phase === 'work' ? 'Focus session complete — time for a break.' : 'Break over — back to focus.';
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-notification')
+        .then(({ sendNotification }) => sendNotification({ title: 'Pomodoro', body }))
+        .catch(() => {});
+    } else {
+      console.info('[Pomodoro]', body);
+    }
+  }
+  import { buildDailyBriefing, shouldShowBriefing, markBriefingShown } from '@kestrel/shared';
+
+  // Morning briefing: unread digest, once per day after inbox loads.
+  let briefingDone = $state(false);
+  $effect(() => {
+    if (!briefingDone && authState.isAuthenticated && !isLoading) {
+      briefingDone = true;
+      deliverMailBriefing();
+    }
+  });
+  function deliverMailBriefing() {
+    if (!shouldShowBriefing()) return;
+    const unread = allEmails.filter((e) => e.isUnread && !e.isTrash && !e.isSpam).length;
+    const briefing = buildDailyBriefing({ events: [], unreadCount: unread });
+    markBriefingShown();
+    if ((window as any).__TAURI_INTERNALS__) {
+      import('@tauri-apps/plugin-notification')
+        .then(({ sendNotification }) => sendNotification({ title: briefing.title, body: briefing.body }))
+        .catch(() => {});
+    } else {
+      console.info('[Briefing]', briefing.title, briefing.body);
+    }
+  }
 
   async function replayOutbox() {
     if (!navigator.onLine) return;
@@ -118,6 +159,25 @@
 
   // ── App state ───────────────────────────────────────────────────
   let currentView      = $state('inbox');
+
+  // ── Recent activity trail ─────────────────────────────────────────
+  // $effect (not per-handler pushes): currentView also changes from keyboard
+  // shortcuts, so a single effect covers every change site.
+  $effect(() => {
+    pushBreadcrumb(currentView);
+  });
+
+  // Split-pane reader: docked panel keeps the list visible.
+  let readerDocked = $state(
+    typeof localStorage !== 'undefined' && localStorage.getItem('kestrel:mail:reader_docked') === 'true'
+  );
+  $effect(() => {
+    try {
+      localStorage.setItem('kestrel:mail:reader_docked', String(readerDocked));
+    } catch {
+      // Non-fatal
+    }
+  });
   let searchQuery      = $state('');
   let selectedThreadId = $state<string | null>(null);
   let previousSelectedThreadId = $state<string | null>(null);
@@ -143,6 +203,22 @@
   let allEmails = $state<any[]>([]);
   let searchResults = $state<any[] | null>(null);
   let isLoading = $state(true);
+
+  // Single choke point for split-inbox categorization (backend sends no category).
+  function classifyEmail(raw: any): EmailCategory {
+    let labels: string[] = [];
+    try {
+      labels = Array.isArray(raw.labels) ? raw.labels : raw.labels ? JSON.parse(raw.labels) : [];
+    } catch {
+      labels = [];
+    }
+    return categorizeEmail({
+      senderEmail: raw.sender_email ?? raw.senderEmail ?? '',
+      subject: raw.subject ?? '',
+      snippet: raw.snippet ?? raw.body ?? '',
+      labels,
+    });
+  }
 
   $effect(() => {
     if (authState.isInitialized && !authState.isAuthenticated) {
@@ -170,7 +246,7 @@
             isSpam: false,
             hasAttachment: m.has_attachments,
             labels: m.labels ? JSON.parse(m.labels) : [],
-            category: 'Primary'
+            category: classifyEmail(m)
           }));
           isLoading = false;
         }).catch(err => {
@@ -209,11 +285,11 @@
                   isTrash: false,
                   isDraft: false,
                   isSpam: false,
-                  hasAttachment: m.has_attachments,
-                  labels: m.labels ? JSON.parse(m.labels) : [],
-                  category: 'Primary'
-                }));
-              });
+              hasAttachment: m.has_attachments,
+              labels: m.labels ? JSON.parse(m.labels) : [],
+              category: classifyEmail(m)
+            }));
+          });
               
               // Trigger Tauri native notification (Task 35)
               if (data.type === 'new_mail') {
@@ -278,12 +354,64 @@
     counts['all-mail'] = getCountStr(e => e.isUnread && !e.isTrash);
     counts['spam'] = getCountStr(e => e.isUnread && e.isSpam);
     counts['trash'] = getCountStr(e => e.isUnread && e.isTrash);
+    counts['screener'] = screenerQueue.length;
 
     allLabels.forEach((lbl: string) => {
       counts[`label-${lbl}`] = getCountStr(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase()));
     });
 
     return counts;
+  });
+
+  // ── First-time sender screener ────────────────────────────────────
+  let screened = $state(loadScreened());
+  let screenerQueue = $derived(
+    firstTimeSenders(
+      allEmails.filter((e) => activeAccountId === 'all' || e.accountId === activeAccountId),
+      screened,
+      activeAccountId
+    )
+  );
+
+  function allowSender(email: string) {
+    screened = approveSender(email, screened, activeAccountId);
+  }
+
+  async function blockScreenedSender(email: string) {
+    // Approve only after the block succeeds, so a failed request
+    // leaves the sender in the queue instead of losing them.
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.blockSender(email);
+      screened = approveSender(email, screened, activeAccountId);
+    } catch (e) {
+      console.error('Failed to block sender', e);
+    }
+  }
+
+  // ── Smart triage: archive stale low-value mail once a day ─────────
+  let triageDone = $state(false);
+  $effect(() => {
+    if (!triageDone && authState.isAuthenticated && !isLoading && $smartTriageEnabled && shouldRunTriage()) {
+      triageDone = true;
+      const idSet = new Set(triageCandidates(allEmails.map((e) => ({ ...e, snippet: e.body ?? '' }))));
+      markTriageRun();
+      if (idSet.size === 0) return;
+      const ids = [...idSet];
+      allEmails = allEmails.map((e) => (idSet.has(e.id) ? { ...e, isArchived: true } : e));
+      triggerUndoAction({
+        title: `Smart triage archived ${ids.length} old message${ids.length === 1 ? '' : 's'}`,
+        timeoutMs: 15000,
+        onCommit: async () => {
+          const { bulkAction } = await import('@kestrel/shared/api');
+          await bulkAction(ids, 'archive', true).catch((err) => console.error('Triage archive failed:', err));
+        },
+        onUndo: () => {
+          allEmails = allEmails.map((e) => (idSet.has(e.id) ? { ...e, isArchived: false } : e));
+        },
+        type: 'info',
+      });
+    }
   });
 
   // ── Filtered thread list ─────────────────────────────────────────
@@ -304,6 +432,9 @@
         if (currentView.startsWith('label-')) {
           const lbl = currentView.replace('label-', '');
           return e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase());
+        }
+        if (currentView.startsWith('category-')) {
+          return inboxCategory(e) === currentView.replace('category-', '');
         }
         return true;
       })
@@ -342,7 +473,7 @@
       isReplyLater: false,
           hasAttachment: false,
           labels: [],
-          category: 'Primary'
+          category: classifyEmail(e)
         }))
       : threads
   );
@@ -775,9 +906,26 @@
 
   // ── Keyboard shortcuts ───────────────────────────────────────────
   import { isTyping } from '$lib/utils/keyboard';
+  import { parseKestrelDeepLink } from '@kestrel/shared';
 
   onMount(() => {
     initAuth();
+    setPomodoroCompleteHandler(announcePomodoroPhase);
+
+    // Pop-out compose window: hydrate from the staged draft.
+    const nonce = popoutDraftNonce();
+    if (nonce) {
+      const draft = takePopoutDraft(nonce);
+      if (draft) {
+        composeInitialTo = draft.to;
+        composeInitialSubject = draft.subject;
+        composeInitialBody = draft.body;
+        isComposeOpen = true;
+      } else {
+        // Storage partitions can isolate pop-out windows; never open silently empty.
+        console.error('[popout] staged draft missing for nonce', nonce);
+      }
+    }
     
     // Deep Link Listener for OAuth Callbacks
     if ((window as any).__TAURI_INTERNALS__) {
@@ -789,6 +937,15 @@
               // We'd want to focus the accounts tab if we had one here, but isSettingsOpen exposes the shared SettingsModal.
               // We can also trigger a re-fetch of accounts here.
               // The simplest way to signal the settings modal to load accounts is toggling it open.
+            }
+            const link = parseKestrelDeepLink(url);
+            if (link?.app === 'mail' && link.kind === 'thread') {
+              // Select directly; fall back to all-mail only when the thread
+              // isn't in the loaded list. The selected-thread effect below
+              // loads the full body and marks it read.
+              if (!allEmails.some((e) => e.id === link.id)) currentView = 'all-mail';
+              selectedThreadId = link.id;
+              isMobileSidebarOpen = false;
             }
           }
         });
@@ -830,6 +987,7 @@
 
 <AppShell bind:isMobileSidebarOpen>
   <ReauthBanner />
+  <SyncErrorBanner />
   {#snippet sidebar()}
     <Sidebar
       {currentView}
@@ -858,9 +1016,20 @@
       </div>
     {/if}
     <!-- Mail panel: full width thread list, no reader pane -->
+    <Breadcrumbs />
+    {#if currentView === 'screener'}
+      <ScreenerQueue
+        senders={screenerQueue}
+        onAllow={allowSender}
+        onBlock={blockScreenedSender}
+        onOpen={(id) => { selectedThreadId = id; }}
+      />
+    {:else}
     <ThreadList
       threads={finalThreads}
       {currentView}
+      {readerDocked}
+      onToggleDock={() => { readerDocked = !readerDocked; }}
       {selectedThreadId}
       {allLabels}
       onSelectThread={(id) => {
@@ -926,6 +1095,7 @@
         allEmails = allEmails.filter(e => e.id !== id);
       }}
     />
+    {/if}
     
     <!-- Mobile FAB for Compose -->
     <button
@@ -952,9 +1122,10 @@
   </div>
 
   <!-- Center peek modal overlay -->
-  {#if activeEmail}
+    {#if activeEmail}
     <CenterPeek
       email={activeEmail}
+      docked={readerDocked}
       initialReplyMode={initialReplyMode}
       onClose={() => { selectedThreadId = null; initialReplyMode = null; }}
       onNavigate={navigatePeek}
@@ -987,13 +1158,18 @@
       onMoveTo={moveTo}
       onSendReply={handleSendReply}
           onPopOut={(type: string, recipients: string[], body: string) => {
-            composeInitialTo = recipients;
-            let baseSubject = activeEmail?.subject || '';
-            composeInitialSubject = baseSubject.toLowerCase().startsWith('re:') || baseSubject.toLowerCase().startsWith('fwd:')
+            const baseSubject = activeEmail?.subject || '';
+            const subject = baseSubject.toLowerCase().startsWith('re:') || baseSubject.toLowerCase().startsWith('fwd:')
               ? baseSubject
               : (type === 'forward' ? `Fwd: ${baseSubject}` : `Re: ${baseSubject}`);
-            composeInitialBody = body;
-            isComposeOpen = true;
+            openComposePopout({ to: recipients, subject, body }).catch((e) => {
+              // Fall back to the in-app composer when the pop-out fails.
+              console.error('Pop-out failed, using in-app composer', e);
+              composeInitialTo = recipients;
+              composeInitialSubject = subject;
+              composeInitialBody = body;
+              isComposeOpen = true;
+            });
           }}
       allLabels={allLabels}
       onReportSpam={reportSpam}
@@ -1052,6 +1228,7 @@
         };
         allEmails = [newMsg, ...allEmails];
         isComposeOpen = false;
+        if (popoutDraftNonce()) window.close();
         return;
       }
 
@@ -1059,6 +1236,7 @@
         const api = await import('@kestrel/shared/api');
         await api.sendMessage(draftData as any);
         isComposeOpen = false;
+        if (popoutDraftNonce()) window.close();
       } catch (err) {
         console.error('Failed to send message:', err);
         // If network error, fallback to outbox
@@ -1094,6 +1272,7 @@
         };
         allEmails = [newMsg, ...allEmails];
         isComposeOpen = false;
+        if (popoutDraftNonce()) window.close();
       }
     }}
   />

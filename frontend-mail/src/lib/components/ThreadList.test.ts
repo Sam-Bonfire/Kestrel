@@ -4,7 +4,7 @@ import ThreadList from './ThreadList.svelte';
 import { mailStore } from '../stores/mailStore.svelte.js';
 
 vi.mock('@kestrel/shared', () => ({
-  mailDenseMode: { subscribe: (fn: any) => { fn(false); return () => {}; } },
+  mailDensity: { subscribe: (fn: any) => { fn('comfortable'); return () => {}; } },
   labelCustomizations: { subscribe: (fn: any) => { fn({}); return () => {}; } },
   getLabelStyle: vi.fn(),
   Dropdown: vi.fn()
@@ -115,5 +115,24 @@ describe('ThreadList', () => {
     await fireEvent.keyDown(window, { key: 'u' });
 
     expect(mailStore.unreadFilterOnly).toBe(true);
+  });
+
+  it('toggles the split-pane reader from the toolbar', async () => {
+    let docked = false;
+    const { getByRole, rerender } = render(ThreadList, {
+      props: {
+        threads: mockThreads,
+        currentView: 'inbox',
+        readerDocked: docked,
+        onToggleDock: () => { docked = !docked; }
+      }
+    });
+
+    const toggle = getByRole('button', { name: 'Toggle split-pane reader' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    await fireEvent.click(toggle);
+    expect(docked).toBe(true);
+    await rerender({ threads: mockThreads, currentView: 'inbox', readerDocked: docked });
+    expect(getByRole('button', { name: 'Toggle split-pane reader' }).getAttribute('aria-pressed')).toBe('true');
   });
 });

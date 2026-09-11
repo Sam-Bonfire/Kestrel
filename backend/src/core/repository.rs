@@ -140,6 +140,12 @@ pub trait ContactRepository: Send + Sync {
         loser_email: &str,
     ) -> Result<bool, sqlx::Error>;
     async fn is_merged(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error>;
+    async fn set_notes(
+        &self,
+        account_id: Uuid,
+        email: &str,
+        notes: &str,
+    ) -> Result<bool, sqlx::Error>;
 }
 
 #[async_trait]

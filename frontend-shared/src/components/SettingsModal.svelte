@@ -186,6 +186,46 @@
       mergeBusy = false;
     }
   }
+
+  // --- Contacts import/export State ---
+  let importAccountId = $state('');
+  let importResult: string | null = $state(null);
+  let importBusy = $state(false);
+
+  async function exportContactsFile() {
+    try {
+      const { exportContactsBlob } = await import('@kestrel/shared/api');
+      const blob = await exportContactsBlob(importAccountId || undefined);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kestrel-contacts.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      importResult = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function importContactsFile(file: File | undefined) {
+    if (!file || !importAccountId) {
+      importResult = 'Pick an account first, then choose a .csv or .vcf file.';
+      return;
+    }
+    importBusy = true;
+    importResult = null;
+    try {
+      const content = await file.text();
+      const format = file.name.toLowerCase().endsWith('.vcf') ? 'vcard' : 'csv';
+      const { importContacts } = await import('@kestrel/shared/api');
+      const res = await importContacts(importAccountId, format as 'csv' | 'vcard', content);
+      importResult = `Imported ${res.imported} contact${res.imported === 1 ? '' : 's'}.`;
+    } catch (e) {
+      importResult = e instanceof Error ? e.message : String(e);
+    } finally {
+      importBusy = false;
+    }
+  }
 </script>
 
 {#if isOpen}
@@ -354,6 +394,50 @@
                     </button>
                   </div>
                 {/each}
+              </div>
+
+              <h3 class="text-white font-medium mt-8 mb-3">Contacts Import / Export</h3>
+              <div class="space-y-3 p-3 rounded-lg border border-[var(--color-border-hairline)] bg-[var(--color-canvas-base)]">
+                <label class="block text-xs text-[var(--color-text-secondary)]" for="contacts-account">Account</label>
+                <select
+                  id="contacts-account"
+                  bind:value={importAccountId}
+                  class="w-full bg-[#121212] border border-[var(--color-border-hairline)] rounded-md text-sm text-white px-2 py-1.5 outline-none cursor-pointer"
+                >
+                  <option value="">Select account…</option>
+                  {#each accounts as account}
+                    <option value={account.id}>{account.display_name} ({account.provider})</option>
+                  {/each}
+                </select>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onclick={exportContactsFile}
+                    title={importAccountId ? 'Download this account as CSV' : 'Download all contacts as CSV'}
+                    class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white transition-colors cursor-pointer"
+                  >
+                    Export CSV
+                  </button>
+                  <label class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white transition-colors cursor-pointer">
+                    Import .csv / .vcf
+                    <input
+                      type="file"
+                      accept=".csv,.vcf,text/csv,text/vcard"
+                      class="hidden"
+                      onchange={(e) => {
+                        const el = e.currentTarget as HTMLInputElement;
+                        importContactsFile(el.files?.[0]);
+                        el.value = '';
+                      }}
+                    />
+                  </label>
+                  {#if importBusy}
+                    <span class="text-xs text-[var(--color-text-secondary)]">Importing…</span>
+                  {/if}
+                </div>
+                {#if importResult}
+                  <p class="text-xs text-[var(--color-text-secondary)]">{importResult}</p>
+                {/if}
               </div>
             {/if}
 

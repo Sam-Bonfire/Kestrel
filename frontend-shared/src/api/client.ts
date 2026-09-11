@@ -442,6 +442,54 @@ export async function listContacts(
   return request<Contact[]>('GET', `/contacts${query ? `?${query}` : ''}`, { token });
 }
 
+export async function exportContactsBlob(accountId?: string, token?: string): Promise<Blob> {
+  const params = new URLSearchParams();
+  if (accountId) params.set('account_id', accountId);
+  const query = params.toString();
+  const res = await fetch(`${getApiBase()}/contacts/export${query ? `?${query}` : ''}`, {
+    headers: buildHeaders(token),
+    credentials: 'include',
+  });
+  if (!res.ok) throw new ApiError(res.status, `Export failed: ${res.statusText}`);
+  return res.blob();
+}
+
+export async function importContacts(
+  accountId: string,
+  format: 'csv' | 'vcard',
+  content: string,
+  token?: string,
+): Promise<{ imported: number; skipped: number }> {
+  return request<{ imported: number; skipped: number }>('POST', '/contacts/import', {
+    token,
+    body: { account_id: accountId, format, content },
+  });
+}
+
+// ── Contacts endpoints ─────────────────────────────────────────
+
+export async function searchContacts(
+  q: string,
+  limit?: number,
+  token?: string,
+): Promise<Contact[]> {
+  const params = new URLSearchParams({ q });
+  if (limit != null) params.set('limit', String(limit));
+  return request<Contact[]>('GET', `/contacts/search?${params.toString()}`, { token });
+}
+
+export async function updateContactNotes(
+  accountId: string,
+  email: string,
+  notes: string,
+  token?: string,
+): Promise<void> {
+  return request<void>('POST', '/contacts/notes', {
+    token,
+    body: { account_id: accountId, email, notes },
+  });
+}
+
 export async function getRawEmlBlob(messageId: string, token?: string): Promise<Blob> {
   const activeToken = token || authState.token;
   const headers: Record<string, string> = {};
@@ -570,8 +618,8 @@ export function createSyncStream(token?: string): EventSource {
   return new EventSource(url.toString(), { withCredentials: true });
 }
 
-export async function triggerSync(token?: string): Promise<void> {
-  return request<void>('POST', '/sync/trigger', { token });
+export async function triggerSync(accountId?: string, token?: string): Promise<void> {
+  return request<void>('POST', '/sync/trigger', { token, body: { account_id: accountId ?? null } });
 }
 
 // ── Calendar endpoints ──────────────────────────────────────────

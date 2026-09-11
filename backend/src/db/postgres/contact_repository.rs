@@ -19,11 +19,12 @@ impl PostgresContactRepository {
 impl ContactRepository for PostgresContactRepository {
     async fn upsert(&self, contact: &Contact) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO contacts (id, account_id, name, email, avatar_url, last_contacted_at, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "INSERT INTO contacts (id, account_id, name, email, avatar_url, notes, last_contacted_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (account_id, email) DO UPDATE SET
              name = COALESCE(EXCLUDED.name, contacts.name),
              avatar_url = COALESCE(EXCLUDED.avatar_url, contacts.avatar_url),
+             notes = COALESCE(EXCLUDED.notes, contacts.notes),
              last_contacted_at = GREATEST(contacts.last_contacted_at, EXCLUDED.last_contacted_at)",
         )
         .bind(contact.id.0)
@@ -31,6 +32,7 @@ impl ContactRepository for PostgresContactRepository {
         .bind(&contact.name)
         .bind(&contact.email)
         .bind(&contact.avatar_url)
+        .bind(&contact.notes)
         .bind(contact.last_contacted_at)
         .bind(contact.created_at)
         .execute(&self.pool)
@@ -82,6 +84,31 @@ impl ContactRepository for PostgresContactRepository {
         Ok(found.is_some())
     }
 
+    async fn set_notes(
+        &self,
+        account_id: Uuid,
+        email: &str,
+        notes: &str,
+    ) -> Result<bool, sqlx::Error> {
+        // Upsert: notes must be savable even before any sync has seen the sender.
+        let now = chrono::Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO contacts (id, account_id, email, notes, last_contacted_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (account_id, email) DO UPDATE SET notes = EXCLUDED.notes",
+        )
+        .bind(Uuid::new_v4())
+        .bind(account_id)
+        .bind(email)
+        .bind(notes)
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(true)
+    }
+
     async fn search(
         &self,
         account_ids: &[Uuid],
@@ -94,7 +121,8 @@ impl ContactRepository for PostgresContactRepository {
 
         let query_str = format!("{}%", query);
 
-        let sql = "SELECT id, account_id, name, email, avatar_url, last_contacted_at, created_at
+        let sql =
+            "SELECT id, account_id, name, email, avatar_url, notes, last_contacted_at, created_at
              FROM contacts
              WHERE account_id = ANY($1) AND (email ILIKE $2 OR name ILIKE $2)
              ORDER BY last_contacted_at DESC
