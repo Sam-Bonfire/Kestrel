@@ -3,6 +3,7 @@ use specta_typescript::Typescript;
 use std::path::Path;
 
 use backend::api::auth::*;
+use backend::api::availability::*;
 use backend::api::calendars::*;
 use backend::api::contacts::*;
 use backend::api::messages::*;
@@ -64,7 +65,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<EventPollWithVotes>()
         .register::<PollVote>()
         .register::<CreatePollRequest>()
-        .register::<VoteRequest>();
+        .register::<VoteRequest>()
+        // Availability models
+        .register::<FreebusyRequest>()
+        .register::<BusyBlockDto>();
 
     let out_dir = Path::new("../frontend-shared/src/api/generated");
     std::fs::create_dir_all(out_dir)?;

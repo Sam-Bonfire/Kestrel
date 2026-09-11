@@ -31,6 +31,7 @@ import {
   voteEventPoll,
   getVacation,
   setVacation,
+  queryFreebusy,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -498,6 +499,26 @@ describe('API Client & Contract Validation', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ enabled: true, subject: null, bodyText: 'Away', startTime: 1, endTime: 2 }),
+        })
+      );
+    });
+  });
+
+  describe('team availability', () => {
+    it('posts emails and range scoped to an account', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+
+      const res = await queryFreebusy('acc-1', ['a@b.com'], 100, 200);
+      expect(res).toEqual([]);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/accounts/acc-1/freebusy`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ emails: ['a@b.com'], start_time: 100, end_time: 200 }),
         })
       );
     });

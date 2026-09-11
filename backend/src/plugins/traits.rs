@@ -177,6 +177,23 @@ pub trait CalendarProvider: Send + Sync {
 
     /// Soft-delete an event on the provider.
     async fn delete_event(&self, auth_token: &str, external_id: &str) -> Result<(), PluginError>;
+
+    /// Query free/busy blocks for emails within a UTC timestamp range.
+    async fn query_freebusy(
+        &self,
+        auth_token: &str,
+        emails: &[String],
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<BusyBlock>, PluginError>;
+}
+
+/// One person's busy block. Times are unix seconds (UTC).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BusyBlock {
+    pub email: String,
+    pub start_time: i64,
+    pub end_time: i64,
 }
 
 // ─────────────────────────────────────────────

@@ -934,6 +934,17 @@ impl backend::plugins::traits::CalendarProvider for NetworkFailProvider {
     ) -> Result<(), backend::plugins::traits::PluginError> {
         Ok(())
     }
+
+    async fn query_freebusy(
+        &self,
+        _auth_token: &str,
+        _emails: &[String],
+        _start_time: i64,
+        _end_time: i64,
+    ) -> Result<Vec<backend::plugins::traits::BusyBlock>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
+    }
 }
 
 #[async_trait::async_trait]
@@ -1191,6 +1202,17 @@ impl backend::plugins::traits::CalendarProvider for ScriptedProvider {
         _external_id: &str,
     ) -> Result<(), backend::plugins::traits::PluginError> {
         Ok(())
+    }
+
+    async fn query_freebusy(
+        &self,
+        _auth_token: &str,
+        _emails: &[String],
+        _start_time: i64,
+        _end_time: i64,
+    ) -> Result<Vec<backend::plugins::traits::BusyBlock>, backend::plugins::traits::PluginError>
+    {
+        Ok(vec![])
     }
 }
 

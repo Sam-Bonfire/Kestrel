@@ -7,6 +7,7 @@ use tower_http::trace::TraceLayer;
 
 use super::accounts;
 use super::auth;
+use super::availability;
 use super::calendars;
 use super::contacts;
 use super::health::health_check;
@@ -173,6 +174,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/v1/events/:id/polls/:poll_id/vote",
             post(polls::vote_poll),
+        )
+        .route(
+            "/api/v1/accounts/:id/freebusy",
+            post(availability::query_freebusy),
         )
         .route(
             "/api/settings",

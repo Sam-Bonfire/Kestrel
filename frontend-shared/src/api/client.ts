@@ -572,6 +572,27 @@ export async function voteEventPoll(
   });
 }
 
+// ── Team availability ──────────────────────────────────────────
+
+export interface BusyBlock {
+  email: string;
+  start_time: number;
+  end_time: number;
+}
+
+export async function queryFreebusy(
+  accountId: string,
+  emails: string[],
+  startTime: number,
+  endTime: number,
+  token?: string,
+): Promise<BusyBlock[]> {
+  return request<BusyBlock[]>('POST', `/accounts/${accountId}/freebusy`, {
+    token,
+    body: { emails, start_time: startTime, end_time: endTime },
+  });
+}
+
 export async function getRawEmlBlob(messageId: string, token?: string): Promise<Blob> {
   const activeToken = token || authState.token;
   const headers: Record<string, string> = {};

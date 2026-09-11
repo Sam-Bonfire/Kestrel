@@ -23,7 +23,7 @@ impl exports::kestrel::provider::provider_branding::Guest for GmailPlugin {
 
 use kestrel::provider::http_client::{HttpRequest, request};
 use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload, MessagePayload, VacationSettings};
-use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload};
+use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload, BusyBlock};
 
 fn get_header<'a>(headers: &'a [Value], name: &str) -> Option<&'a str> {
     headers.iter().find(|h| {
@@ -442,6 +442,20 @@ fn parse_gmail_event(item: &Value) -> Option<EventPayload> {
     })
 }
 
+fn freebusy_rfc3339(secs: i64) -> String {
+    // WIT freebusy times are unix seconds.
+    chrono::DateTime::from_timestamp(secs, 0)
+        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_default()
+}
+
+fn freebusy_parse_time(value: &serde_json::Value) -> Option<i64> {
+    value
+        .as_str()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.timestamp())
+}
+
 impl CalendarGuest for GmailPlugin {
     fn fetch_calendars(auth_token: String) -> Result<Vec<CalendarPayload>, String> {
         let req = HttpRequest {
@@ -564,6 +578,47 @@ impl CalendarGuest for GmailPlugin {
         };
         let res = request(&req)?;
         if res.status == 204 || res.status == 200 || res.status == 404 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+    }
+
+    fn query_freebusy(
+        auth_token: String,
+        emails: Vec<String>,
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<BusyBlock>, String> {
+        let items: Vec<Value> = emails.iter().map(|e| json!({ "id": e })).collect();
+        let body = json!({
+            "timeMin": freebusy_rfc3339(start_time),
+            "timeMax": freebusy_rfc3339(end_time),
+            "items": items,
+        });
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: "https://www.googleapis.com/calendar/v3/freeBusy".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            body: Some(serde_json::to_vec(&body).unwrap()),
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to query freebusy: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse freebusy")?;
+        let mut blocks = Vec::new();
+        if let Some(calendars) = json["calendars"].as_object() {
+            for (email, cal) in calendars {
+                if let Some(busy) = cal["busy"].as_array() {
+                    for b in busy {
+                        if let (Some(start), Some(end)) = (freebusy_parse_time(&b["start"]), freebusy_parse_time(&b["end"])) {
+                            blocks.push(BusyBlock { email: email.clone(), start_time: start, end_time: end });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(blocks)
     }
 }
 
