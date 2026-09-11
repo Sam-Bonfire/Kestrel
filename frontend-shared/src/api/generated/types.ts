@@ -57,6 +57,7 @@ export type Contact = {
 	name: string | null,
 	email: string,
 	avatar_url: string | null,
+	notes: string | null,
 	last_contacted_at: number | null,
 	created_at: number | null,
 };

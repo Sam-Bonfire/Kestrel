@@ -1,9 +1,9 @@
 mod common;
 
-use backend::core::models::{Account, CalendarEvent, Contact, User};
+use backend::core::models::{Account, CalendarEvent, Contact, HistoricalRevision, User};
 use backend::core::repository::{
     AccountRepository, CalendarRepository, ContactRepository, EventPollRepository, EventRepository,
-    MessageRepository, UserPreferencesRepository, UserRepository,
+    HistoricalRevisionRepository, MessageRepository, UserPreferencesRepository, UserRepository,
 };
 use backend::core::types::DbUuid;
 use backend::db::sqlite::account_repository::SqliteAccountRepository;
@@ -12,6 +12,7 @@ use backend::db::sqlite::contact_repository::SqliteContactRepository;
 use backend::db::sqlite::event_repository::SqliteEventRepository;
 use backend::db::sqlite::message_repository::SqliteMessageRepository;
 use backend::db::sqlite::poll_repository::SqlitePollRepository;
+use backend::db::sqlite::revision_repository::SqliteRevisionRepository;
 use backend::db::sqlite::user_preferences_repository::SqliteUserPreferencesRepository;
 use backend::db::sqlite::user_repository::SqliteUserRepository;
 use common::{
@@ -353,6 +354,7 @@ async fn test_contact_repository_upsert_and_search() {
         name: Some("Alice Smith".to_string()),
         email: "alice.smith@example.com".to_string(),
         avatar_url: None,
+        notes: None,
         last_contacted_at: now,
         created_at: now,
     };
@@ -362,6 +364,7 @@ async fn test_contact_repository_upsert_and_search() {
         name: Some("Bob Johnson".to_string()),
         email: "bob.j@example.com".to_string(),
         avatar_url: None,
+        notes: None,
         last_contacted_at: now,
         created_at: now,
     };
@@ -426,6 +429,130 @@ async fn test_event_poll_roundtrip() {
 }
 
 #[tokio::test]
+async fn test_contact_merge_tombstone() {
+    let pool = setup_test_db().await;
+    let sqlite_pool = get_sqlite_pool(&pool);
+    let repo = SqliteContactRepository::new(sqlite_pool);
+
+    let user = seed_user(&pool, "merge_user@kestrel.dev").await;
+    let account = seed_account(&pool, user.id.0, "gmail", "Personal").await;
+
+    let now = chrono::Utc::now().timestamp();
+    for email in ["keep@example.com", "lose@example.com"] {
+        repo.upsert(&Contact {
+            id: DbUuid::from(Uuid::new_v4()),
+            account_id: DbUuid::from(account.id.0),
+            name: Some("Same Person".to_string()),
+            email: email.to_string(),
+            avatar_url: None,
+            notes: None,
+            last_contacted_at: now,
+            created_at: now,
+        })
+        .await
+        .expect("upsert failed");
+    }
+
+    assert!(
+        !repo
+            .is_merged(account.id.0, "lose@example.com")
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.record_merge(account.id.0, "keep@example.com", "lose@example.com")
+            .await
+            .expect("record_merge failed")
+    );
+    assert!(
+        repo.is_merged(account.id.0, "lose@example.com")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .is_merged(account.id.0, "keep@example.com")
+            .await
+            .unwrap()
+    );
+
+    // Loser row is gone, keeper remains.
+    let remaining = repo.search(&[account.id.0], "keep", 10).await.unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].email, "keep@example.com");
+    let gone = repo.search(&[account.id.0], "lose", 10).await.unwrap();
+    assert!(gone.is_empty());
+}
+
+#[tokio::test]
+async fn test_contact_notes_roundtrip() {
+    let pool = setup_test_db().await;
+    let sqlite_pool = get_sqlite_pool(&pool);
+    let repo = SqliteContactRepository::new(sqlite_pool);
+
+    let user = seed_user(&pool, "notes_user@kestrel.dev").await;
+    let account = seed_account(&pool, user.id.0, "gmail", "Personal").await;
+
+    let now = chrono::Utc::now().timestamp();
+    repo.upsert(&backend::core::models::Contact {
+        id: DbUuid::from(Uuid::new_v4()),
+        account_id: DbUuid::from(account.id.0),
+        name: Some("Noted Person".to_string()),
+        email: "noted@example.com".to_string(),
+        avatar_url: None,
+        notes: None,
+        last_contacted_at: now,
+        created_at: now,
+    })
+    .await
+    .expect("upsert failed");
+
+    assert!(
+        repo.set_notes(account.id.0, "noted@example.com", "VIP, prefers mornings")
+            .await
+            .expect("set_notes failed")
+    );
+
+    let found = repo
+        .search(&[account.id.0], "noted@", 10)
+        .await
+        .expect("search failed");
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].notes.as_deref(), Some("VIP, prefers mornings"));
+
+    // Sync upserts with empty notes must not clobber saved notes.
+    repo.upsert(&backend::core::models::Contact {
+        id: DbUuid::from(Uuid::new_v4()),
+        account_id: DbUuid::from(account.id.0),
+        name: None,
+        email: "noted@example.com".to_string(),
+        avatar_url: None,
+        notes: None,
+        last_contacted_at: now,
+        created_at: now,
+    })
+    .await
+    .expect("re-upsert failed");
+    let kept = repo
+        .search(&[account.id.0], "noted@", 10)
+        .await
+        .expect("search failed");
+    assert_eq!(kept[0].notes.as_deref(), Some("VIP, prefers mornings"));
+
+    assert!(
+        repo.set_notes(account.id.0, "ghost@example.com", "x")
+            .await
+            .expect("set_notes failed")
+    );
+    let created = repo
+        .search(&[account.id.0], "ghost@", 10)
+        .await
+        .expect("search failed");
+    assert_eq!(created.len(), 1);
+    assert_eq!(created[0].notes.as_deref(), Some("x"));
+}
+
+#[tokio::test]
 async fn test_user_preferences_repository() {
     let pool = setup_test_db().await;
     let sqlite_pool = get_sqlite_pool(&pool);
@@ -455,4 +582,78 @@ async fn test_user_preferences_repository() {
     assert!(fetched.is_some());
     let prefs = fetched.unwrap();
     assert_eq!(prefs.preferences_json, prefs_json);
+}
+
+#[tokio::test]
+async fn test_revision_create_and_find_by_id() {
+    let pool = setup_test_db().await;
+    let repo = SqliteRevisionRepository::new(get_sqlite_pool(&pool));
+    let now = chrono::Utc::now().timestamp();
+    let resource_id = Uuid::new_v4();
+    let revision = HistoricalRevision {
+        id: DbUuid::from(Uuid::new_v4()),
+        resource_type: "message".to_string(),
+        resource_id: DbUuid::from(resource_id),
+        serialized_payload: r#"{"subject":"hello"}"#.to_string(),
+        revision_number: 1,
+        created_at: now,
+    };
+    repo.create(&revision)
+        .await
+        .expect("revision create failed");
+    let fetched = repo
+        .find_by_id(revision.id.0)
+        .await
+        .expect("revision find failed")
+        .expect("revision missing");
+    assert_eq!(fetched.id.0, revision.id.0);
+    assert_eq!(fetched.resource_type, "message");
+    assert_eq!(fetched.resource_id.0, resource_id);
+    assert_eq!(fetched.serialized_payload, revision.serialized_payload);
+    assert_eq!(fetched.revision_number, 1);
+    assert!(repo.find_by_id(Uuid::new_v4()).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_revision_latest_number_increments_per_resource() {
+    let pool = setup_test_db().await;
+    let repo = SqliteRevisionRepository::new(get_sqlite_pool(&pool));
+    let now = chrono::Utc::now().timestamp();
+    let resource_id = Uuid::new_v4();
+    assert_eq!(
+        repo.get_latest_revision_number("message", resource_id)
+            .await
+            .unwrap(),
+        0
+    );
+    for n in 1..=2 {
+        repo.create(&HistoricalRevision {
+            id: DbUuid::from(Uuid::new_v4()),
+            resource_type: "message".to_string(),
+            resource_id: DbUuid::from(resource_id),
+            serialized_payload: format!(r#"{{"v":{n}}}"#),
+            revision_number: n,
+            created_at: now,
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            repo.get_latest_revision_number("message", resource_id)
+                .await
+                .unwrap(),
+            n
+        );
+    }
+    assert_eq!(
+        repo.get_latest_revision_number("message", Uuid::new_v4())
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        repo.get_latest_revision_number("calendar_event", resource_id)
+            .await
+            .unwrap(),
+        0
+    );
 }

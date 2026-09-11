@@ -19,11 +19,12 @@ impl PostgresContactRepository {
 impl ContactRepository for PostgresContactRepository {
     async fn upsert(&self, contact: &Contact) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO contacts (id, account_id, name, email, avatar_url, last_contacted_at, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "INSERT INTO contacts (id, account_id, name, email, avatar_url, notes, last_contacted_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (account_id, email) DO UPDATE SET
              name = COALESCE(EXCLUDED.name, contacts.name),
              avatar_url = COALESCE(EXCLUDED.avatar_url, contacts.avatar_url),
+             notes = COALESCE(EXCLUDED.notes, contacts.notes),
              last_contacted_at = GREATEST(contacts.last_contacted_at, EXCLUDED.last_contacted_at)",
         )
         .bind(contact.id.0)
@@ -31,12 +32,81 @@ impl ContactRepository for PostgresContactRepository {
         .bind(&contact.name)
         .bind(&contact.email)
         .bind(&contact.avatar_url)
+        .bind(&contact.notes)
         .bind(contact.last_contacted_at)
         .bind(contact.created_at)
         .execute(&self.pool)
         .await?;
 
         Ok(())
+    }
+
+    async fn delete(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM contacts WHERE account_id = $1 AND email = $2")
+            .bind(account_id)
+            .bind(email)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn record_merge(
+        &self,
+        account_id: Uuid,
+        keep_email: &str,
+        loser_email: &str,
+    ) -> Result<bool, sqlx::Error> {
+        if keep_email.eq_ignore_ascii_case(loser_email) {
+            return self.delete(account_id, loser_email).await;
+        }
+        sqlx::query(
+            "INSERT INTO merged_contacts (account_id, email, merged_into) VALUES ($1, $2, $3)
+             ON CONFLICT (account_id, email) DO UPDATE SET merged_into = EXCLUDED.merged_into",
+        )
+        .bind(account_id)
+        .bind(loser_email)
+        .bind(keep_email)
+        .execute(&self.pool)
+        .await?;
+        self.delete(account_id, loser_email).await
+    }
+
+    async fn is_merged(&self, account_id: Uuid, email: &str) -> Result<bool, sqlx::Error> {
+        let found: Option<String> = sqlx::query_scalar(
+            "SELECT email FROM merged_contacts WHERE account_id = $1 AND email = $2",
+        )
+        .bind(account_id)
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(found.is_some())
+    }
+
+    async fn set_notes(
+        &self,
+        account_id: Uuid,
+        email: &str,
+        notes: &str,
+    ) -> Result<bool, sqlx::Error> {
+        // Upsert: notes must be savable even before any sync has seen the sender.
+        let now = chrono::Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO contacts (id, account_id, email, notes, last_contacted_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (account_id, email) DO UPDATE SET notes = EXCLUDED.notes",
+        )
+        .bind(Uuid::new_v4())
+        .bind(account_id)
+        .bind(email)
+        .bind(notes)
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(true)
     }
 
     async fn search(
@@ -51,7 +121,8 @@ impl ContactRepository for PostgresContactRepository {
 
         let query_str = format!("{}%", query);
 
-        let sql = "SELECT id, account_id, name, email, avatar_url, last_contacted_at, created_at
+        let sql =
+            "SELECT id, account_id, name, email, avatar_url, notes, last_contacted_at, created_at
              FROM contacts
              WHERE account_id = ANY($1) AND (email ILIKE $2 OR name ILIKE $2)
              ORDER BY last_contacted_at DESC

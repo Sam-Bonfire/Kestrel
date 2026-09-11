@@ -132,6 +132,100 @@
       loginWithProvider(providerId);
     });
   }
+
+  // --- Contact merge/deduplication State ---
+  import { findDuplicateGroups } from '../utils/merge.js';
+  let mergeAccountId = $state('');
+  let mergeGroups: { key: string; members: { name?: string | null; email: string }[] }[] = $state([]);
+  let mergeKeep: Record<string, string> = $state({});
+  let mergeBusy = $state(false);
+  let mergeResult: string | null = $state(null);
+
+  async function scanDuplicates() {
+    mergeBusy = true;
+    mergeResult = null;
+    try {
+      const { listContacts } = await import('@kestrel/shared/api');
+      const contacts = await listContacts(mergeAccountId || undefined);
+      mergeGroups = findDuplicateGroups(contacts);
+      mergeKeep = Object.fromEntries(mergeGroups.map((g) => [g.key, g.members[0].email]));
+      if (mergeGroups.length === 0) mergeResult = 'No duplicates found.';
+    } catch (e) {
+      mergeResult = e instanceof Error ? e.message : String(e);
+    } finally {
+      mergeBusy = false;
+    }
+  }
+
+  async function mergeGroup(key: string) {
+    const group = mergeGroups.find((g) => g.key === key);
+    if (!group || !mergeAccountId) return;
+    const keep = mergeKeep[key];
+    mergeBusy = true;
+    try {
+      const { deleteContact } = await import('@kestrel/shared/api');
+      let removed = 0;
+      const failed: string[] = [];
+      for (const m of group.members) {
+        if (m.email === keep) continue;
+        try {
+          await deleteContact(mergeAccountId, m.email, keep);
+          removed++;
+        } catch (e) {
+          failed.push(m.email);
+        }
+      }
+      mergeGroups = mergeGroups.filter((g) => g.key !== key);
+      mergeResult =
+        failed.length === 0
+          ? `Merged "${key}": kept ${keep}, removed ${removed}.`
+          : `Merged "${key}": removed ${removed}, failed: ${failed.join(', ')}.`;
+    } catch (e) {
+      mergeResult = e instanceof Error ? e.message : String(e);
+    } finally {
+      mergeBusy = false;
+    }
+  }
+
+  // --- Contacts import/export State ---
+  let importAccountId = $state('');
+  let importResult: string | null = $state(null);
+  let importBusy = $state(false);
+
+  async function exportContactsFile() {
+    try {
+      const { exportContactsBlob } = await import('@kestrel/shared/api');
+      const blob = await exportContactsBlob(importAccountId || undefined);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kestrel-contacts.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      importResult = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function importContactsFile(file: File | undefined) {
+    if (!file || !importAccountId) {
+      importResult = 'Pick an account first, then choose a .csv or .vcf file.';
+      return;
+    }
+    importBusy = true;
+    importResult = null;
+    try {
+      const content = await file.text();
+      const format = file.name.toLowerCase().endsWith('.vcf') ? 'vcard' : 'csv';
+      const { importContacts } = await import('@kestrel/shared/api');
+      const res = await importContacts(importAccountId, format as 'csv' | 'vcard', content);
+      importResult = `Imported ${res.imported} contact${res.imported === 1 ? '' : 's'}.`;
+    } catch (e) {
+      importResult = e instanceof Error ? e.message : String(e);
+    } finally {
+      importBusy = false;
+    }
+  }
 </script>
 
 {#if isOpen}
@@ -244,6 +338,105 @@
                 {/each}
                 {#if providers.length === 0}
                   <div class="text-sm text-[var(--color-text-secondary)]">No plugins loaded.</div>
+                {/if}
+              </div>
+
+              <h3 class="text-white font-medium mt-8 mb-3">Merge Duplicates</h3>
+              <div class="space-y-3 p-3 rounded-lg border border-[var(--color-border-hairline)] bg-[var(--color-canvas-base)]">
+                <p class="text-xs text-[var(--color-text-secondary)]">Same name, different emails. Keep one entry per group.</p>
+                <div class="flex items-center gap-2">
+                  <select
+                    bind:value={mergeAccountId}
+                    aria-label="Account for duplicate scan"
+                    class="flex-1 bg-[#121212] border border-[var(--color-border-hairline)] rounded-md text-sm text-white px-2 py-1.5 outline-none cursor-pointer"
+                  >
+                    <option value="">Select account…</option>
+                    {#each accounts as account}
+                      <option value={account.id}>{account.display_name} ({account.provider})</option>
+                    {/each}
+                  </select>
+                  <button
+                    type="button"
+                    onclick={scanDuplicates}
+                    disabled={!mergeAccountId || mergeBusy}
+                    class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {mergeBusy ? 'Working…' : 'Scan'}
+                  </button>
+                </div>
+                {#if mergeResult}
+                  <p class="text-xs text-[var(--color-text-secondary)]">{mergeResult}</p>
+                {/if}
+                {#each mergeGroups as group (group.key)}
+                  <div class="p-2 rounded-md border border-white/5 space-y-1.5">
+                    <div class="text-xs font-semibold text-white capitalize">{group.key}</div>
+                    {#each group.members as member}
+                      <label class="flex items-center gap-2 text-xs text-[var(--color-text-secondary)] cursor-pointer">
+                        <input
+                          type="radio"
+                          name="keep-{group.key}"
+                          value={member.email}
+                          checked={mergeKeep[group.key] === member.email}
+                          onchange={() => { mergeKeep[group.key] = member.email; }}
+                          class="accent-blue-500 cursor-pointer"
+                        />
+                        <span>{member.name || '(no name)'}</span>
+                        <span class="font-mono">&lt;{member.email}&gt;</span>
+                      </label>
+                    {/each}
+                    <button
+                      type="button"
+                      onclick={() => mergeGroup(group.key)}
+                      disabled={mergeBusy}
+                      class="px-3 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-xs text-red-300 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      Merge (keep selected)
+                    </button>
+                  </div>
+                {/each}
+              </div>
+
+              <h3 class="text-white font-medium mt-8 mb-3">Contacts Import / Export</h3>
+              <div class="space-y-3 p-3 rounded-lg border border-[var(--color-border-hairline)] bg-[var(--color-canvas-base)]">
+                <label class="block text-xs text-[var(--color-text-secondary)]" for="contacts-account">Account</label>
+                <select
+                  id="contacts-account"
+                  bind:value={importAccountId}
+                  class="w-full bg-[#121212] border border-[var(--color-border-hairline)] rounded-md text-sm text-white px-2 py-1.5 outline-none cursor-pointer"
+                >
+                  <option value="">Select account…</option>
+                  {#each accounts as account}
+                    <option value={account.id}>{account.display_name} ({account.provider})</option>
+                  {/each}
+                </select>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onclick={exportContactsFile}
+                    title={importAccountId ? 'Download this account as CSV' : 'Download all contacts as CSV'}
+                    class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white transition-colors cursor-pointer"
+                  >
+                    Export CSV
+                  </button>
+                  <label class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white transition-colors cursor-pointer">
+                    Import .csv / .vcf
+                    <input
+                      type="file"
+                      accept=".csv,.vcf,text/csv,text/vcard"
+                      class="hidden"
+                      onchange={(e) => {
+                        const el = e.currentTarget as HTMLInputElement;
+                        importContactsFile(el.files?.[0]);
+                        el.value = '';
+                      }}
+                    />
+                  </label>
+                  {#if importBusy}
+                    <span class="text-xs text-[var(--color-text-secondary)]">Importing…</span>
+                  {/if}
+                </div>
+                {#if importResult}
+                  <p class="text-xs text-[var(--color-text-secondary)]">{importResult}</p>
                 {/if}
               </div>
             {/if}

@@ -3,6 +3,9 @@
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { detectConferenceLink } from '@kestrel/shared';
+  import { builtInEventTemplates, applyEventTemplate, type EventTemplate } from '@kestrel/shared/stores';
+  import { RichTextEditor } from '@kestrel/shared/components';
+  import type { Schedulable, FreeSlot } from '@kestrel/shared';
   import { openUrl } from '@tauri-apps/plugin-opener';
 
   export interface EventDetail {
@@ -30,6 +33,8 @@
     isDocked = false,
     isMobileOrTablet = false,
     accounts = [],
+    conflicts = [],
+    suggestedSlot = null,
     onClose = () => {},
     onSave = (eventData: any) => {},
     onDelete = () => {}
@@ -39,6 +44,8 @@
     isDocked?: boolean;
     isMobileOrTablet?: boolean;
     accounts?: any[];
+    conflicts?: Schedulable[];
+    suggestedSlot?: FreeSlot | null;
     onClose?: () => void;
     onSave?: (eventData: any) => void;
     onDelete?: () => void;
@@ -222,6 +229,27 @@
     onClose();
   }
 
+  function applyTemplate(template: EventTemplate) {
+    const applied = applyEventTemplate(template, startTime);
+    if (!title.trim()) title = applied.title;
+    endTime = applied.endTime;
+    category = applied.category;
+    color = applied.color;
+    if (!description.trim() && applied.description) description = applied.description;
+    if (applied.spansNextDay) {
+      const d = new Date(date + 'T12:00:00');
+      d.setDate(d.getDate() + 1);
+      date = d.toISOString().split('T')[0];
+    }
+  }
+
+  function resolveToSuggestedSlot() {
+    if (!suggestedSlot) return;
+    startTime = suggestedSlot.startTime;
+    endTime = suggestedSlot.endTime;
+    handleSave(false);
+  }
+
   function updateRsvp(newStatus: string) {
 
     if (!event || !event.id) return;
@@ -282,6 +310,22 @@
 
     <!-- Scrollable Organized Center Peek Body -->
     <div class="px-5 py-4 space-y-4 flex-1 overflow-y-auto">
+      {#if conflicts.length > 0}
+        <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2" role="alert">
+          <div class="text-xs font-semibold text-amber-200">
+            Overlaps {conflicts.length === 1 ? '1 event' : `${conflicts.length} events`}: {conflicts.map((c) => c.title || 'Untitled').slice(0, 3).join(', ')}
+          </div>
+          {#if suggestedSlot}
+            <button
+              type="button"
+              onclick={resolveToSuggestedSlot}
+              class="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 text-[11px] font-medium transition-colors cursor-pointer"
+            >
+              Move to {suggestedSlot.startTime}–{suggestedSlot.endTime}
+            </button>
+          {/if}
+        </div>
+      {/if}
       <!-- Title (Inline Editable) -->
       <div>
         <input
@@ -292,6 +336,21 @@
           class="w-full bg-transparent border-none outline-none text-base font-bold text-white leading-snug hover:bg-white/5 p-1 -m-1 rounded transition-colors placeholder:text-neutral-500"
         />
       </div>
+
+      {#if !event?.id}
+        <div class="flex flex-wrap gap-1.5" role="group" aria-label="Event templates">
+          {#each builtInEventTemplates as template}
+            <button
+              type="button"
+              onclick={() => applyTemplate(template)}
+              title="Apply {template.name} ({template.durationMins}m)"
+              class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/25 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+            >
+              {template.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
 
       <!-- Planned Execution Date / Time Block (Inline Editable) -->
       <div class="space-y-2.5 bg-neutral-900/50 p-3 rounded-xl border border-neutral-800/40">
@@ -475,13 +534,9 @@
           <AlignLeft class="w-3.5 h-3.5 text-neutral-500/60" />
           <span>Notes & Description</span>
         </div>
-        <textarea
-          placeholder="Add notes or description..."
-          bind:value={description}
-          oninput={() => { if (event?.id) handleSave(false); }}
-          rows="3"
-          class="w-full text-xs text-neutral-300 leading-relaxed bg-neutral-900/30 rounded-xl p-3 max-h-36 overflow-y-auto whitespace-pre-line border border-neutral-800/30 outline-none hover:border-neutral-700 transition-colors placeholder:text-neutral-500 resize-none"
-        ></textarea>
+        <div oninput={() => { if (event?.id) handleSave(false); }}>
+          <RichTextEditor bind:value={description} placeholder="Add notes or description..." />
+        </div>
       </div>
 
       <!-- Priority & Calendar Attributes -->

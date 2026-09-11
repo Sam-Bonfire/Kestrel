@@ -19,6 +19,13 @@ import {
   getSettings,
   updateSettings,
   searchMessages,
+  triggerSync,
+  deleteContact,
+  listContacts,
+  searchContacts,
+  updateContactNotes,
+  exportContactsBlob,
+  importContacts,
   listEventPolls,
   createEventPoll,
   voteEventPoll,
@@ -270,6 +277,143 @@ describe('API Client & Contract Validation', () => {
       const res = await checkServerHealth('https://offline.server.com');
       expect(res.ok).toBe(false);
       expect(res.error).toBe('Connection refused');
+    });
+  });
+
+  describe('triggerSync', () => {
+    it('posts the account id for per-account retry', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', message: 'synced' }),
+      });
+
+      await triggerSync('acc-123');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/sync/trigger`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ account_id: 'acc-123' }),
+        })
+      );
+    });
+
+    it('posts null account id for global sync', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', message: 'synced' }),
+      });
+
+      await triggerSync();
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/sync/trigger`,
+        expect.objectContaining({
+          body: JSON.stringify({ account_id: null }),
+        })
+      );
+    });
+  });
+
+  describe('contact notes', () => {
+    it('searchContacts queries by q with limit', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+
+      await searchContacts('alice@example.com', 5);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts/search?q=alice%40example.com&limit=5'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('updateContactNotes posts account, email and notes', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      });
+
+      await updateContactNotes('acc-1', 'a@b.com', 'VIP');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/contacts/notes`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ account_id: 'acc-1', email: 'a@b.com', notes: 'VIP' }),
+        })
+      );
+    });
+  });
+
+  describe('contact merge', () => {
+    it('lists scoped or all contacts', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+
+      await listContacts('acc-1');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts?account_id=acc-1'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('deletes by account and email', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      });
+
+      await deleteContact('acc-1', 'a@b.com', 'keep@b.com');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/contacts`,
+        expect.objectContaining({
+          method: 'DELETE',
+          body: JSON.stringify({ account_id: 'acc-1', email: 'a@b.com', keep_email: 'keep@b.com' }),
+        })
+      );
+    });
+  });
+
+  describe('contacts import/export', () => {
+    it('exports scoped or global CSV', async () => {
+      const blob = new Blob(['name,email']);
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, blob: async () => blob });
+
+      await exportContactsBlob('acc-1');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts/export?account_id=acc-1'),
+        expect.objectContaining({ credentials: 'include' })
+      );
+      await exportContactsBlob();
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/contacts/export'),
+        expect.anything()
+      );
+    });
+
+    it('imports with format and content', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ imported: 2, skipped: 0 }),
+      });
+
+      const res = await importContacts('acc-1', 'csv', 'name,email\na@b.com');
+      expect(res).toEqual({ imported: 2, skipped: 0 });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/contacts/import`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ account_id: 'acc-1', format: 'csv', content: 'name,email\na@b.com' }),
+        })
+      );
     });
   });
 
