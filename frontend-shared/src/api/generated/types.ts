@@ -349,6 +349,22 @@ export type UpdateEventRequest = {
 	status: string | null,
 };
 
+export type VacationDto = {
+	enabled: boolean,
+	subject: string | null,
+	bodyText: string,
+	startTime: number | null,
+	endTime: number | null,
+};
+
+export type VacationUpdate = {
+	enabled: boolean,
+	subject: string | null,
+	bodyText: string,
+	startTime: number | null,
+	endTime: number | null,
+};
+
 export type VoteRequest = {
 	voter_email: string,
 	option_index: number,

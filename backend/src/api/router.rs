@@ -18,6 +18,7 @@ use super::revisions;
 use super::search;
 use super::settings;
 use super::sync;
+use super::vacation;
 use super::webhooks;
 use crate::api::sync::SyncEvent;
 use crate::plugins::manager::PluginManager;
@@ -145,6 +146,10 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/api/v1/contacts/export", get(contacts::export_contacts))
         .route("/api/v1/contacts/import", post(contacts::import_contacts))
+        .route(
+            "/api/v1/accounts/:id/vacation",
+            get(vacation::get_vacation).put(vacation::set_vacation),
+        )
         .route("/api/v1/calendars", get(calendars::list_calendars))
         .route("/api/v1/calendars/:id", get(calendars::get_calendar))
         .route(

@@ -874,6 +874,28 @@ impl backend::plugins::traits::MailProvider for NetworkFailProvider {
             "connection timed out after 30s",
         ))
     }
+
+    async fn get_vacation(
+        &self,
+        _auth_token: &str,
+    ) -> Result<backend::plugins::traits::VacationSettings, backend::plugins::traits::PluginError>
+    {
+        Ok(backend::plugins::traits::VacationSettings {
+            enabled: false,
+            subject: None,
+            body_text: String::new(),
+            start_time: None,
+            end_time: None,
+        })
+    }
+
+    async fn set_vacation(
+        &self,
+        _auth_token: &str,
+        _settings: backend::plugins::traits::VacationSettings,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -1108,6 +1130,28 @@ impl backend::plugins::traits::MailProvider for ScriptedProvider {
                 "connection timed out",
             ));
         }
+        Ok(())
+    }
+
+    async fn get_vacation(
+        &self,
+        _auth_token: &str,
+    ) -> Result<backend::plugins::traits::VacationSettings, backend::plugins::traits::PluginError>
+    {
+        Ok(backend::plugins::traits::VacationSettings {
+            enabled: false,
+            subject: None,
+            body_text: String::new(),
+            start_time: None,
+            end_time: None,
+        })
+    }
+
+    async fn set_vacation(
+        &self,
+        _auth_token: &str,
+        _settings: backend::plugins::traits::VacationSettings,
+    ) -> Result<(), backend::plugins::traits::PluginError> {
         Ok(())
     }
 }

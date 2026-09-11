@@ -16,4 +16,5 @@ pub mod search;
 pub mod settings;
 pub mod sync;
 pub mod token_worker;
+pub mod vacation;
 pub mod webhooks;

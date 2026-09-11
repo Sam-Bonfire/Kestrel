@@ -29,6 +29,8 @@ import {
   listEventPolls,
   createEventPoll,
   voteEventPoll,
+  getVacation,
+  setVacation,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -462,6 +464,40 @@ describe('API Client & Contract Validation', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ voter_email: 'a@b.com', option_index: 0 }),
+        })
+      );
+    });
+  });
+
+  describe('vacation auto-responder', () => {
+    it('normalizes the provider payload', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ enabled: true, subject: 'OOO', bodyText: 'Away', startTime: 1, endTime: 2 }),
+      });
+
+      const res = await getVacation('acc-1');
+      expect(res).toEqual({ enabled: true, subject: 'OOO', bodyText: 'Away', startTime: 1, endTime: 2 });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/accounts/acc-1/vacation`,
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('puts camelCase settings', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      });
+
+      await setVacation('acc-1', { enabled: true, subject: null, bodyText: 'Away', startTime: 1, endTime: 2 });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE}/accounts/acc-1/vacation`,
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ enabled: true, subject: null, bodyText: 'Away', startTime: 1, endTime: 2 }),
         })
       );
     });

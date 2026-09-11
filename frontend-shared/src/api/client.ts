@@ -420,6 +420,44 @@ export async function blockSender(
   });
 }
 
+// ── Vacation auto-responder ────────────────────────────────────
+
+export interface VacationSettings {
+  enabled: boolean;
+  subject: string | null;
+  bodyText: string;
+  startTime: number | null;
+  endTime: number | null;
+}
+
+export async function getVacation(accountId: string, token?: string): Promise<VacationSettings> {
+  const raw = await request<Record<string, unknown>>('GET', `/accounts/${accountId}/vacation`, { token });
+  return {
+    enabled: raw.enabled === true,
+    subject: typeof raw.subject === 'string' ? raw.subject : null,
+    bodyText: typeof raw.bodyText === 'string' ? raw.bodyText : '',
+    startTime: typeof raw.startTime === 'number' ? raw.startTime : null,
+    endTime: typeof raw.endTime === 'number' ? raw.endTime : null,
+  };
+}
+
+export async function setVacation(
+  accountId: string,
+  settings: VacationSettings,
+  token?: string,
+): Promise<void> {
+  return request<void>('PUT', `/accounts/${accountId}/vacation`, {
+    token,
+    body: {
+      enabled: settings.enabled,
+      subject: settings.subject,
+      bodyText: settings.bodyText,
+      startTime: settings.startTime,
+      endTime: settings.endTime,
+    },
+  });
+}
+
 export async function deleteContact(
   accountId: string,
   email: string,
