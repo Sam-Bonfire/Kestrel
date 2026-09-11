@@ -36,8 +36,8 @@
     Plus
   } from 'lucide-svelte';
   import RichTextSignature from './RichTextSignature.svelte';
+  import { PomodoroWidget } from '@kestrel/shared/components';
   import {
-    mailDenseMode,
     mailDefaultLandingView,
     mailSignature,
     labelCustomizations,
@@ -102,6 +102,7 @@
     { id: 'spam',     label: 'Spam',     icon: AlertTriangle, color: 'text-orange-400' },
     { id: 'trash',    label: 'Trash',    icon: Trash2,        color: 'text-red-400'    },
     { id: 'feed',     label: 'Feed',     icon: Newspaper,     color: 'text-teal-400'   },
+    { id: 'screener', label: 'Screener', icon: UserCheck,     color: 'text-emerald-400'},
   ] as const;
 
   // Icons map for dynamic rendering
@@ -465,7 +466,8 @@
   </div>
 
   <!-- Settings Footer -->
-  <div class="p-3 bg-[var(--color-canvas-base)] flex flex-col gap-1 text-[var(--color-text-secondary)] border-t border-[var(--color-border-hairline)] shrink-0">
+  <div class="p-3 bg-[var(--color-canvas-base)] flex flex-col gap-2 text-[var(--color-text-secondary)] border-t border-[var(--color-border-hairline)] shrink-0">
+    <PomodoroWidget />
     <button 
       onclick={onOpenMailSettings}
       class="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-[var(--color-canvas-hover)]/60 transition-colors text-left cursor-pointer font-mono"

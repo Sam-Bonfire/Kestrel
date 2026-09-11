@@ -140,6 +140,7 @@ pub struct Contact {
     pub name: Option<String>,
     pub email: String,
     pub avatar_url: Option<String>,
+    pub notes: Option<String>,
     #[specta(type = f64)]
     pub last_contacted_at: i64,
     #[specta(type = f64)]
