@@ -418,6 +418,21 @@ None.
 
 ---
 
+## DEC-023: Playwright Offline E2E Suite for Built Frontends
+
+- **Category:** Testing
+- **Status:** Approved
+- **Date:** 2026-09-09
+- **Author:** Factory session
+- **Decision:** UI end-to-end coverage uses Playwright against `vite preview` builds of both apps with no backend (offline smoke: auth gates, validation, error banners). Backend-backed flows stay in hurl/cargo suites. Runner via `mise run test:e2e`, CI job in staging.
+- **Reason:** No browser or server needed beyond static builds; deterministic offline assertions caught two real auth bugs on day one.
+- **Alternatives Considered:** Tauri WebDriver (needs GUI runners), backend-backed Playwright flows (flaky without OAuth mocks).
+- **Consequences:** New `e2e/` workspace, Playwright browsers in CI cache. Backend-backed UI flows remain future work.
+- **Affected Components:** e2e/, mise.toml, staging workflow.
+- **User Approval:** Approved via factory run (2026-09-09)
+
+---
+
 # Change Log
 
 | Date | Change | Reason | Changed By | Affected Decisions |

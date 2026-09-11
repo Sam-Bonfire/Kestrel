@@ -23,8 +23,12 @@
     try {
       await register(email, password);
       // Auto-login after successful registration
-      await login(email, password);
-      window.location.href = '/';
+      const res = await login(email, password);
+      if (!res.success) {
+        errorMsg = res.error || 'Account created, but sign in failed. Please sign in manually.';
+      } else {
+        window.location.href = '/';
+      }
     } catch (e: any) {
       errorMsg = e?.message || 'Registration failed. Please try again.';
     } finally {
