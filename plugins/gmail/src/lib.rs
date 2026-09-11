@@ -22,7 +22,7 @@ impl exports::kestrel::provider::provider_branding::Guest for GmailPlugin {
 }
 
 use kestrel::provider::http_client::{HttpRequest, request};
-use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload, MessagePayload};
+use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload, MessagePayload, VacationSettings};
 use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload, BusyBlock};
 
 fn get_header<'a>(headers: &'a [Value], name: &str) -> Option<&'a str> {
@@ -274,6 +274,54 @@ impl MailGuest for GmailPlugin {
         
         let res = request(&req)?;
         if res.status == 200 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+    }
+
+    fn get_vacation(auth_token: String) -> Result<VacationSettings, String> {
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/vacation".to_string(),
+            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            body: None,
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to read vacation settings: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse vacation settings")?;
+        Ok(VacationSettings {
+            enabled: json["enableAutoReply"].as_bool().unwrap_or(false),
+            subject: json["responseSubject"].as_str().map(|s| s.to_string()),
+            body_text: json["responseBodyPlainText"].as_str().unwrap_or_default().to_string(),
+            start_time: json["startTime"].as_str().and_then(|s| s.parse::<i64>().ok()),
+            end_time: json["endTime"].as_str().and_then(|s| s.parse::<i64>().ok()),
+        })
+    }
+
+    fn set_vacation(auth_token: String, settings: VacationSettings) -> Result<(), String> {
+        let mut body = json!({
+            "enableAutoReply": settings.enabled,
+            "responseBodyPlainText": settings.body_text,
+        });
+        if let Some(subject) = settings.subject {
+            body["responseSubject"] = json!(subject);
+        }
+        if let Some(start) = settings.start_time {
+            body["startTime"] = json!(start.to_string());
+        }
+        if let Some(end) = settings.end_time {
+            body["endTime"] = json!(end.to_string());
+        }
+        let req = HttpRequest {
+            method: "PUT".to_string(),
+            url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/vacation".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            body: Some(serde_json::to_vec(&body).unwrap()),
+        };
+        let res = request(&req)?;
+        if res.status == 200 { Ok(()) } else { Err(format!("Failed to save vacation settings: HTTP {}", res.status)) }
     }
 }
 

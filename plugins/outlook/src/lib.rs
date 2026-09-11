@@ -22,7 +22,8 @@ impl exports::kestrel::provider::provider_branding::Guest for OutlookPlugin {
 }
 
 use kestrel::provider::http_client::{HttpRequest, request};
-use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, MessageBody, SendMessagePayload};
+use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, 
+MessageBody, SendMessagePayload, VacationSettings};
 use exports::kestrel::provider::mail_provider::MessagePayload;
 use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload, BusyBlock};
 
@@ -88,6 +89,14 @@ fn graph_schedule_to_secs(value: &serde_json::Value) -> Option<i64> {
         .and_then(|d| d.as_str())
         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
         .map(|dt| dt.timestamp())
+}
+
+fn graph_to_millis(value: &serde_json::Value) -> Option<i64> {
+    value
+        .get("dateTime")
+        .and_then(|d| d.as_str())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.timestamp_millis())
 }
 
 impl MailGuest for OutlookPlugin {
@@ -247,6 +256,61 @@ impl MailGuest for OutlookPlugin {
         
         let res = request(&req)?;
         if res.status == 202 || res.status == 200 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+    }
+
+    fn get_vacation(auth_token: String) -> Result<VacationSettings, String> {
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: "https://graph.microsoft.com/v1.0/me/mailboxSettings?$select=automaticRepliesSetting".to_string(),
+            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            body: None,
+        };
+        let res = request(&req)?;
+        if res.status != 200 {
+            return Err(format!("Failed to read vacation settings: HTTP {}", res.status));
+        }
+        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse vacation settings")?;
+        let auto = &json["automaticRepliesSetting"];
+        let status = auto["status"].as_str().unwrap_or("disabled");
+        Ok(VacationSettings {
+            enabled: status != "disabled",
+            subject: None,
+            body_text: auto["internalReplyMessage"].as_str().unwrap_or_default().to_string(),
+            start_time: graph_to_millis(&auto["scheduledStartDateTime"]),
+            end_time: graph_to_millis(&auto["scheduledEndDateTime"]),
+        })
+    }
+
+    fn set_vacation(auth_token: String, settings: VacationSettings) -> Result<(), String> {
+        let status = if !settings.enabled {
+            "disabled"
+        } else if settings.start_time.is_some() || settings.end_time.is_some() {
+            "scheduled"
+        } else {
+            "alwaysEnabled"
+        };
+        let mut auto = serde_json::json!({
+            "status": status,
+            "externalReplyMessage": settings.body_text,
+            "internalReplyMessage": settings.body_text,
+        });
+        if let Some(start) = settings.start_time {
+            auto["scheduledStartDateTime"] = serde_json::json!({ "dateTime": millis_to_graph(start), "timeZone": "UTC" });
+        }
+        if let Some(end) = settings.end_time {
+            auto["scheduledEndDateTime"] = serde_json::json!({ "dateTime": millis_to_graph(end), "timeZone": "UTC" });
+        }
+        let req = HttpRequest {
+            method: "PATCH".to_string(),
+            url: "https://graph.microsoft.com/v1.0/me/mailboxSettings".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                ("Content-Type".to_string(), "application/json".to_string()),
+            ],
+            body: Some(serde_json::to_vec(&serde_json::json!({ "automaticRepliesSetting": auto })).unwrap()),
+        };
+        let res = request(&req)?;
+        if res.status == 200 { Ok(()) } else { Err(format!("Failed to save vacation settings: HTTP {}", res.status)) }
     }
 }
 

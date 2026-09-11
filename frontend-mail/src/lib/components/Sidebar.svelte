@@ -6,6 +6,7 @@
     FileText,
     Github,
     Mail,
+    Newspaper,
     AlertTriangle,
     Trash2,
     Settings,
@@ -35,8 +36,8 @@
     Plus
   } from 'lucide-svelte';
   import RichTextSignature from './RichTextSignature.svelte';
+  import { PomodoroWidget } from '@kestrel/shared/components';
   import {
-    mailDenseMode,
     mailDefaultLandingView,
     mailSignature,
     labelCustomizations,
@@ -69,7 +70,12 @@
     inboxCount = 0 as string | number,
     unreadCount = 0 as string | number,
     viewCounts = {} as Record<string, string | number>,
-    onOpenMailSettings = () => {}
+    onOpenMailSettings = () => {},
+    customViews = [] as { id: string; name: string }[],
+    activeCustomViewId = null as string | null,
+    onSelectCustomView = (id: string) => {},
+    onDeleteCustomView = (id: string) => {},
+    onSaveCustomView = (name: string) => {}
   } = $props<{
     currentView?: string;
     onSelectView?: (view: string) => void;
@@ -85,7 +91,21 @@
     unreadCount?: string | number;
     viewCounts?: Record<string, string | number>;
     onOpenMailSettings?: () => void;
+    customViews?: { id: string; name: string }[];
+    activeCustomViewId?: string | null;
+    onSelectCustomView?: (id: string) => void;
+    onDeleteCustomView?: (id: string) => void;
+    onSaveCustomView?: (name: string) => void;
   }>();
+
+  let newViewName = $state('');
+
+  function handleSaveView() {
+    if (newViewName.trim()) {
+      onSaveCustomView(newViewName);
+      newViewName = '';
+    }
+  }
 
   // Preset folders
   const folders = [
@@ -100,6 +120,8 @@
     { id: 'all-mail', label: 'All Mail', icon: Mail,          color: 'text-pink-400'   },
     { id: 'spam',     label: 'Spam',     icon: AlertTriangle, color: 'text-orange-400' },
     { id: 'trash',    label: 'Trash',    icon: Trash2,        color: 'text-red-400'    },
+    { id: 'feed',     label: 'Feed',     icon: Newspaper,     color: 'text-teal-400'   },
+    { id: 'screener', label: 'Screener', icon: UserCheck,     color: 'text-emerald-400'},
   ] as const;
 
   // Icons map for dynamic rendering
@@ -397,6 +419,52 @@
             </div>
           {/if}
         </div>
+
+        <!-- Custom Views -->
+        <div class="mt-3">
+          <div class="px-2.5 py-1 text-[10px] font-mono tracking-widest text-[var(--color-text-secondary)]/60 uppercase">
+            Custom Views
+          </div>
+          <div class="space-y-0.5 mt-1">
+            {#each customViews as view (view.id)}
+              <div class="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out {activeCustomViewId === view.id ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]/60'}">
+                <button
+                  onclick={() => onSelectCustomView(view.id)}
+                  aria-current={activeCustomViewId === view.id}
+                  class="flex-1 text-left truncate cursor-pointer"
+                >
+                  {view.name}
+                </button>
+                <button
+                  onclick={() => onDeleteCustomView(view.id)}
+                  title="Delete view"
+                  aria-label="Delete view {view.name}"
+                  class="p-1 rounded opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 hover:bg-red-500/20 text-neutral-500 hover:text-red-400 transition-all cursor-pointer"
+                >
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+            {/each}
+            <div class="flex items-center gap-1.5 px-1 pt-1">
+              <input
+                type="text"
+                bind:value={newViewName}
+                placeholder="Save current as…"
+                aria-label="New custom view name"
+                onkeydown={(e) => { if (e.key === 'Enter') handleSaveView(); }}
+                class="flex-1 min-w-0 bg-transparent border border-[var(--color-border-hairline)]/50 rounded-md px-2 py-1 text-[11px] text-white outline-none placeholder:text-[var(--color-text-secondary)]/40 focus:border-white/20"
+              />
+              <button
+                onclick={handleSaveView}
+                title="Save current filters as a view"
+                aria-label="Save current filters as a view"
+                class="p-1.5 rounded-md hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer"
+              >
+                <Plus class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -463,7 +531,8 @@
   </div>
 
   <!-- Settings Footer -->
-  <div class="p-3 bg-[var(--color-canvas-base)] flex flex-col gap-1 text-[var(--color-text-secondary)] border-t border-[var(--color-border-hairline)] shrink-0">
+  <div class="p-3 bg-[var(--color-canvas-base)] flex flex-col gap-2 text-[var(--color-text-secondary)] border-t border-[var(--color-border-hairline)] shrink-0">
+    <PomodoroWidget />
     <button 
       onclick={onOpenMailSettings}
       class="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-[var(--color-canvas-hover)]/60 transition-colors text-left cursor-pointer font-mono"

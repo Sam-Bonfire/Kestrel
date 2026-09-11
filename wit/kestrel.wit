@@ -68,6 +68,21 @@ interface mail-provider {
 
     /// Soft-delete a message on the provider (moves to Trash).
     delete-message: func(auth-token: string, external-id: string) -> result<_, string>;
+
+    /// Out-of-office auto-responder settings. Times are unix millis (UTC).
+    record vacation-settings {
+        enabled: bool,
+        subject: option<string>,
+        body-text: string,
+        start-time: option<s64>,
+        end-time: option<s64>,
+    }
+
+    /// Read the provider's auto-responder configuration.
+    get-vacation: func(auth-token: string) -> result<vacation-settings, string>;
+
+    /// Write the provider's auto-responder configuration.
+    set-vacation: func(auth-token: string, settings: vacation-settings) -> result<_, string>;
 }
 
 // ─────────────────────────────────────────────

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare, Pencil, Trash2 } from 'lucide-svelte';
-  import { detectConferenceLink, isWorkingDay, parseTimeToMinutes, DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
+  import { detectConferenceLink, isWorkingDay,
+parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focusDayColumn, focusEventInColumn, type WorkingHoursConfig } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
   import EventHoverPopover from './EventHoverPopover.svelte';
 
@@ -64,6 +65,25 @@
 
   // Right-click context menu state
   let eventMenu = $state<{ x: number; y: number; event: CalendarEvent } | null>(null);
+
+  // Merged chips carry duplicateIds; mutations fan out to the whole group
+  // and navigation strips merge metadata back to the raw event shape.
+  function groupIds(ev: any): string[] {
+    return [ev.id, ...((ev.duplicateIds ?? []) as string[])];
+  }
+
+  function stripMergeMeta(ev: any): CalendarEvent {
+    const { duplicateCount: _dc, duplicateIds: _di, ...orig } = ev;
+    return orig as CalendarEvent;
+  }
+
+  function deleteEventGroup(ev: any) {
+    for (const id of groupIds(ev)) onEventDelete(id);
+  }
+
+  function updateEventGroup(ev: any, updates: any) {
+    for (const id of groupIds(ev)) onEventUpdate(id, updates);
+  }
 
   function openEventMenu(ev: CalendarEvent, e: MouseEvent) {
     e.preventDefault();
@@ -260,6 +280,7 @@
   let suppressNextClick = $state(false);
   let dragMove = $state<{
     id: string;
+    ids: string[];
     active: boolean;
     dateStr: string;
     previewStartTime: string;
@@ -268,6 +289,38 @@
     leftPct: number;
     color: string;
   } | null>(null);
+
+  // ── Keyboard grid navigation ────────────────────────────────────
+  // Arrow keys move between day columns (Left/Right) and events within a
+  // day (Up/Down); Enter activates; Home/End jump to first/last event.
+  function handleDayColumnKeydown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable]')) return;
+    const column = e.currentTarget as HTMLElement;
+    const grid = column.closest('[data-day-grid]');
+    let handled = false;
+    switch (e.key) {
+      case 'ArrowLeft':
+        handled = grid ? focusDayColumn(grid, -1) : false;
+        break;
+      case 'ArrowRight':
+        handled = grid ? focusDayColumn(grid, 1) : false;
+        break;
+      case 'ArrowUp':
+        handled = focusEventInColumn(column, -1);
+        break;
+      case 'ArrowDown':
+        handled = focusEventInColumn(column, 1);
+        break;
+      case 'Home':
+        handled = focusEventInColumn(column, 'first');
+        break;
+      case 'End':
+        handled = focusEventInColumn(column, 'last');
+        break;
+    }
+    if (handled) e.preventDefault();
+  }
 
   // Convert a Y coordinate (relative to the timeline body) into HH:MM,
   // snapped to 15-minute increments and clamped to 23:59.
@@ -347,6 +400,7 @@
   // ── Drag-to-resize state & helpers ──────────────────────────────
   let resizing = $state<{
     id: string;
+    ids: string[];
     startY: number;
     originalStartMins: number;
     originalEndMins: number;
@@ -363,6 +417,7 @@
     const [eh, em] = ev.endTime.split(':').map(Number);
     resizing = {
       id: ev.id,
+      ids: groupIds(ev),
       startY: e.clientY, // use raw ClientY to calculate deltas accurately
       originalStartMins: sh * 60 + sm,
       originalEndMins: eh * 60 + em,
@@ -395,16 +450,14 @@
     updateResize(e);
 
     if (resizing.edge === 'bottom' && resizePreviewEnd && resizePreviewEnd !== resizing.originalEndMins.toString()) {
-      const id = resizing.id;
       const newEnd = resizePreviewEnd;
       // Keep the new end clamped to the same day (never beyond 23:59)
       const [h, m] = newEnd.split(':').map(Number);
       const capped = h > 23 ? '23:59' : newEnd;
-      onEventUpdate(id, { endTime: capped });
+      for (const gid of resizing.ids) onEventUpdate(gid, { endTime: capped });
     } else if (resizing.edge === 'top' && resizePreviewStart && resizePreviewStart !== resizing.originalStartMins.toString()) {
-      const id = resizing.id;
       const newStart = resizePreviewStart;
-      onEventUpdate(id, { startTime: newStart });
+      for (const gid of resizing.ids) onEventUpdate(gid, { startTime: newStart });
     }
 
     resizing = null;
@@ -507,7 +560,7 @@
                   {/if}
                 </div>
                 {#if ev.description}
-                  <p class="text-[11px] text-[var(--color-text-secondary)]/80 line-clamp-2 pt-1">{ev.description}</p>
+                  <p class="text-[11px] text-[var(--color-text-secondary)]/80 line-clamp-2 pt-1">{plainText(ev.description)}</p>
                 {/if}
               </div>
             </button>
@@ -542,20 +595,21 @@
           </div>
 
           <div class="flex-1 space-y-1 overflow-y-auto pr-0.5">
-            {#each getEventsForDate(dateStr) as ev}
+            {#each mergeDuplicateEvents(getEventsForDate(dateStr)) as ev}
               <button
                 in:scale={{ duration: 200, start: 0.95 }}
                 onclick={(e) => {
+                  e.stopPropagation();
                   hoveredEvent = null;
                   hoverAnchorElement = null;
-                  onEventClick(ev, e);
+                  onEventClick(stripMergeMeta(ev), e);
                 }}
                 oncontextmenu={(e) => openEventMenu(ev, e)}
                 onpointerenter={(e) => handlePointerEnter(e, ev)}
                 onpointerleave={handlePointerLeave}
                 class="w-full px-2 py-0.5 rounded text-[10px] text-left font-medium truncate shadow-sm cursor-pointer transition-all hover:scale-[1.03] hover:shadow-lg hover:z-20 {(COLOR_CLASSES[ev.color] || COLOR_CLASSES.blue).bg} {ev.id === selectedEventId ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-10' : 'border-transparent'}"
               >
-                {ev.title}
+                {ev.title}{#if ev.duplicateCount > 1} ×{ev.duplicateCount}{/if}
               </button>
             {/each}
           </div>
@@ -605,8 +659,8 @@
         {/each}
       </div>
 
-      <!-- Time blocks columns -->
-      <div class="relative min-h-[1440px] grid" 
+        <!-- Time blocks columns -->
+        <div class="relative min-h-[1440px] grid" data-day-grid role="group" aria-label="Calendar week grid"
            style="grid-template-columns: {gutterWidth}px repeat({visibleDates().length}, minmax(0, 1fr));">
         
         <!-- Y-Axis Hours list labels -->
@@ -632,9 +686,10 @@
         <!-- Columns for each day -->
         {#each visibleDates() as date}
           {@const dateStr = toISODateString(date)}
-          {@const dayEvents = getEventsForDate(dateStr)}
+          {@const dayEvents = mergeDuplicateEvents(getEventsForDate(dateStr))}
           {@const layoutInfo = getTimedEventsLayout(dayEvents)}
-          <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors cursor-cell select-none"
+          <div class="border-r border-[var(--color-border-hairline)]/30 last:border-r-0 relative hover:bg-[var(--color-canvas-hover)]/5 transition-colors cursor-cell select-none focus-visible:outline-2 focus-visible:outline-white"
+               data-day-col={dateStr}
                ondragover={(e) => {
                  e.preventDefault();
                  e.dataTransfer!.dropEffect = 'move';
@@ -698,11 +753,9 @@
                    const cappedEndMin = newEndHour > 23 ? 59 : newEndMinute;
                    const newEndTime = `${cappedEndHour.toString().padStart(2, '0')}:${cappedEndMin.toString().padStart(2, '0')}`;
                    
-                   onEventUpdate(id, {
-                     date: dateStr,
-                     startTime: newStartTime,
-                     endTime: newEndTime
-                   });
+                    for (const gid of dragMove?.ids ?? [id]) {
+                      onEventUpdate(gid, { date: dateStr, startTime: newStartTime, endTime: newEndTime });
+                    }
                  }
                  dragMove = null;
                }}
@@ -741,7 +794,12 @@
                }}
                role="button"
                tabindex="0"
-               onkeydown={(e) => { if (e.key === 'Enter') onEmptySlotClick?.(dateStr, '09:00'); }}
+               onkeydown={(e) => {
+                 if (e.key === 'Enter' || e.key === ' ') {
+                   if (e.key === ' ') e.preventDefault();
+                   onEmptySlotClick?.(dateStr, '09:00');
+                 } else handleDayColumnKeydown(e);
+               }}
           >
             <!-- Working hours shading overlay (1px per minute, 60px per hour) -->
             {#if workingHours.enabled && !isWorkingDay(date, workingHours)}
@@ -812,6 +870,7 @@
                   const layout = layoutInfo.get(ev.id);
                   dragMove = {
                     id: ev.id,
+                    ids: groupIds(ev),
                     active: true,
                     dateStr,
                     previewStartTime: ev.startTime,
@@ -834,18 +893,20 @@
                   e.stopPropagation();
                   hoveredEvent = null;
                   hoverAnchorElement = null;
-                  onEventClick(ev, e);
+                  onEventClick(stripMergeMeta(ev), e);
                 }}
                 oncontextmenu={(e) => openEventMenu(ev, e)}
                 onpointerenter={(e) => handlePointerEnter(e, ev)}
                 onpointerleave={handlePointerLeave}
                 data-event-card
-                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-grab overflow-hidden active:cursor-grabbing select-none
+                class="absolute p-2 rounded-lg text-xs text-left font-medium border shadow-md transition-all hover:scale-[1.03] hover:shadow-lg cursor-grab overflow-hidden active:cursor-grabbing select-none focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none
                   {colStyle.bg} {colStyle.border} {isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#131313] z-50' : 'hover:z-50 z-10'}
                   {dragMove?.id === ev.id ? 'opacity-30' : ''}"
                 style="top: {displayTop}px; height: {displayHeight}px; left: {leftPct}%; width: calc({widthPct}% - 4px);"
               >
-                <div class="font-bold truncate text-white leading-tight pointer-events-none">{ev.title}</div>
+                <div class="font-bold truncate text-white leading-tight pointer-events-none">
+                  {ev.title}{#if ev.duplicateCount > 1}<span class="ml-1 opacity-70 font-mono" title="Synced from {ev.duplicateCount} sources">×{ev.duplicateCount}</span>{/if}
+                </div>
                 <div class="text-[10px] opacity-75 font-mono mt-0.5 pointer-events-none">
                   {resizing?.id === ev.id ? (resizePreviewStart ?? ev.startTime) : ev.startTime} - {resizing?.id === ev.id ? (resizePreviewEnd ?? ev.endTime) : ev.endTime}
                 </div>
@@ -924,7 +985,7 @@
       <span>Edit event</span>
     </button>
     <button
-      onclick={() => { const id = eventMenu!.event.id; eventMenu = null; onEventDelete(id); }}
+          onclick={() => { if (eventMenu) { const ev = eventMenu.event; eventMenu = null; deleteEventGroup(ev); } }}
       class="w-full text-left px-3.5 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-2 cursor-pointer"
       role="menuitem"
     >

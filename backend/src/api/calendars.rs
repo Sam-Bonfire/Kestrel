@@ -303,7 +303,7 @@ pub async fn get_event(
     }))
 }
 
-async fn find_event_from_db(
+pub(crate) async fn find_event_from_db(
     state: &AppState,
     event_id: Uuid,
 ) -> Result<Option<CalendarEvent>, KestrelError> {
@@ -786,7 +786,7 @@ async fn verify_calendar_ownership(
     Ok(())
 }
 
-async fn verify_event_ownership(
+pub(crate) async fn verify_event_ownership(
     state: &AppState,
     user_id: Uuid,
     event: &CalendarEvent,

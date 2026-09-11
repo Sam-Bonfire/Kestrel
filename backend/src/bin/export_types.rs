@@ -7,7 +7,9 @@ use backend::api::availability::*;
 use backend::api::calendars::*;
 use backend::api::contacts::*;
 use backend::api::messages::*;
+use backend::api::polls::*;
 use backend::api::search::*;
+use backend::api::vacation::*;
 use backend::core::models::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,6 +57,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<SearchResult>()
         .register::<SearchResponse>()
         .register::<SearchQuery>()
+        // Vacation models
+        .register::<VacationDto>()
+        .register::<VacationUpdate>()
+        // Event poll models
+        .register::<EventPoll>()
+        .register::<EventPollWithVotes>()
+        .register::<PollVote>()
+        .register::<CreatePollRequest>()
+        .register::<VoteRequest>()
         // Availability models
         .register::<FreebusyRequest>()
         .register::<BusyBlockDto>();
