@@ -1,0 +1,18 @@
+[changelog]
+header = "# Changelog\n\n"
+body = "{% for group, commits in commits | group_by(attribute='group') %}\n## {{ group | striptags | trim | upper_first }}\n{% for commit in commits %}\n- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end='') }})\n{% endfor %}\n{% endfor %}\n"
+footer = ""
+trim_header = true
+trim_footer = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "v*"
+skip_tags = ""
+ignore_tags = ""
+topo_order = false
+sort_commits = "oldest"
