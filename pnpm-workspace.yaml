@@ -5,4 +5,4 @@ packages:
   - 'e2e'
 allowBuilds:
   esbuild: true
-  svelte-preprocess: set this to true or false
+  svelte-preprocess: true
