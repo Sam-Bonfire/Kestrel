@@ -600,7 +600,7 @@ jobs:
 
       - name: Upload trace artifacts
         if: failure()
-        uses: actions/upload-artifact@v8
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-traces
           path: e2e/test-results/
