@@ -81,7 +81,7 @@ kestrel/
 This project is in **active early development (v0.1.0)**. 
 
 > [!NOTE]
-> The core UI for both the Mail and Calendar apps is fully functional with a polished dark-theme interface. The backend API layer is complete with dual database support. Currently, real provider integrations are using mock plugins — live sync is coming soon!
+> The core UI for both the Mail and Calendar apps is fully functional with a polished dark-theme interface. The backend API layer is complete with dual database support. Live Gmail/Outlook mail + calendar sync works via real WASM provider plugins; SMTP/API email sending is still mocked — see ROADMAP.md for per-feature status.
 
 ### What works today
 - Full mail client UI (inbox, threading, compose, search, labels, keyboard shortcuts)
@@ -93,7 +93,7 @@ This project is in **active early development (v0.1.0)**.
 
 ### Roadmap
 - [x] Live Gmail/Outlook sync via real WASM provider plugins (mail + calendar)
-- [x] Real SMTP/API email sending (via Gmail/Outlook APIs)
+- [ ] Real SMTP/API email sending (via Gmail/Outlook APIs — currently mocked)
 - [x] Calendar provider sync (Google Calendar, Outlook Calendar)
 - [ ] Push notifications via FCM/APNs
 - [ ] Tauri auto-update mechanism
@@ -157,7 +157,7 @@ The backend can be configured using a `.env` file or native environment variable
 
 ## 🚢 CI/CD
 
-Kestrel employs a two-branch strategy for robust releases:
+Kestrel employs a two-branch strategy for robust releases (work in Jujutsu: `jj new dev`, push bookmarks via `jj git push`):
 - **`dev` branch**: This is the integration gate. All PRs targeting `dev` must pass CI, which includes backend tests, frontend builds, Docker image building, and compilation for all target platforms (Windows, macOS, Linux, Android, iOS).
 - **`main` branch**: This is the release branch. Merging `dev` into `main` automatically triggers a GitHub Release with tags and uploads all platform artifacts.
 
