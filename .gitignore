@@ -25,6 +25,7 @@ plugins/**/*.log
 .env.*
 !.env.example
 secrets/
+*.key
 
 # IDE settings
 .idea/
