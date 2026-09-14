@@ -213,7 +213,7 @@ Audit fields: Include `created_at` and `updated_at` (unix epoch integer) on stat
 
 Component size: Max 200 lines preferred for individual Svelte files; split logic into helper modules if too large
 
-Hooks: Keep reactivity clean using Svelte's reactive declarations (`$:`) and custom stores
+Hooks: Keep reactivity clean using Svelte 5 `$state()` runes and custom stores (legacy `$:` declarations are deprecated)
 
 Styling: Strictly TailwindCSS v4 classes; use CSS custom properties for theme colors
 
@@ -255,7 +255,7 @@ Background jobs: Tokio interval timers running synchronization tasks in backgrou
 
 # Testing Standards
 
-Minimum coverage: 70%+ for core domain sync modules and authentication validation
+Minimum coverage: 70%+ for core domain sync modules and authentication validation (target — no automated gate enforces this yet)
 
 Unit tests: Mock-less unit tests for parser utilities, calendar calculations, and date parsing
 
@@ -313,7 +313,7 @@ Dependency updates: Cargo audit and npm audit checks run periodically
 
 # Performance Standards
 
-Performance budgets: Axum server memory usage under 200MB (including WASM plugins runtimes); Tauri client under 40MB RAM
+Performance budgets (targets — no measurement harness yet): Axum server memory usage under 200MB (including WASM plugins runtimes); Tauri client under 40MB RAM
 
 Caching: Cache active inbox messages (last 30 days) and active month events locally in memory/SQLite
 
@@ -338,15 +338,11 @@ Version Control Tool: Standardize on Jujutsu (`jj`).
 Commit Message conventions: Use the conventional commit formatting syntax when describing changes in Jujutsu revisions. The message must strictly conform to:
 ```
 type(scope): Title summarizing the change in imperative mood
-
-Detailed explanation of the commit's context, reasoning, and technical decisions.
 ```
+A detailed body explaining context, reasoning, and technical decisions is encouraged for non-trivial changes.
 Example:
 ```
 feat(db): Add sqlite dual-migration framework
-
-Configure the startup migrations directory router to automatically resolve
-connection engine dialects and verify queries at compile time.
 ```
 
 Working Copy usage: Avoid creating manual branch refs. Utilize Jujutsu's implicit automatic commits and revision stacks (`jj new`, `jj squash`, `jj rebase`) to keep local changes clean and traceable.

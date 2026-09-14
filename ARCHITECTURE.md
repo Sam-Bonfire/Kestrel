@@ -94,7 +94,7 @@ Logging: `tracing` / `tracing-subscriber` (Rust)
 
 # Architectural Style
 
-Primary Pattern: Clean Architecture / Hexagonal Architecture with Dynamic WASM Plugins
+Primary Pattern: Clean Architecture / Hexagonal Architecture with WASM Plugins (baked into the binary for v1; dynamic loading deferred to post-v1 — see decision at line 509)
 
 Explain why this pattern was selected:
 To decouple remote integration engines (Gmail, Outlook, Yahoo, Notion) entirely from the core application. By compiling integrations to sandboxed WebAssembly (WASI) plugins loaded dynamically at runtime, community integrations can be added seamlessly without recompiling or altering the main Rust server codebase.

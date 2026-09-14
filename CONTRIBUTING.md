@@ -36,7 +36,7 @@ Kestrel is a monorepo containing both the backend and multiple frontend applicat
 | `backend/` | Rust-based backend API and WASM plugin runtime |
 | `frontend-mail/` | Svelte & Tauri frontend for the Mail application |
 | `frontend-calendar/` | Svelte & Tauri frontend for the Calendar application |
-| `packages/shared/` | Shared TypeScript library (must be built before running frontends) |
+| `frontend-shared/` | Shared TypeScript library (must be built before running frontends) |
 
 ## Development Workflow
 
@@ -78,16 +78,18 @@ pnpm dev
 - **Backend:** `cargo test --manifest-path backend/Cargo.toml`
 - **Frontend Build Check:** `pnpm --filter frontend-mail build`
 
-## Branch Strategy
+## Branch Strategy (Jujutsu / jj)
 
-- **Feature branches** branch from and create PRs against `dev`.
+- Start work from `dev` with `jj new dev`; push bookmarks with `jj git push` and open PRs against `dev`.
 - **`dev`** is the main integration branch. All CI checks must pass here.
 - **`main`** is the release branch. We use a manual PR from `dev` to `main` which triggers auto-tagging and releasing.
 
-**Branch Naming Convention:**
-- `feature/description`
+**Bookmark Naming Convention:**
+- `feat/description`
 - `fix/description`
 - `docs/description`
+- `chore/description`
+- `refactor/description`
 
 ## Code Style
 
@@ -143,4 +145,4 @@ Kestrel's version is tracked across multiple files. **If you are preparing a rel
 - `frontend-calendar/src-tauri/Cargo.toml`
 - `backend/Cargo.toml`
 
-Our release pipeline validates this consistency. Bump all 5 files before merging a release PR to `main`.
+Our release pipeline does not validate this automatically yet. Bump all 5 files before merging a release PR to `main`.

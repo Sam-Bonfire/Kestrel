@@ -310,29 +310,29 @@ Client devices query the Axum server over the public/private URL.
 
 | Method | Endpoint | Description | Payload / Response |
 | --- | --- | --- | --- |
-| **POST** | `/api/auth/register` | Registers a new user | `{ "username": "...", "password": "..." }` |
-| **POST** | `/api/auth/token` | Username+password login; returns bearer token | `{ "username": "...", "password": "..." }` → `{ "token": "..." }` |
-| **GET** | `/api/auth/login?provider=x` | Initiates OAuth flow for provider account connection | Redirect to provider consent screen |
-| **GET** | `/api/auth/callback` | OAuth redirect landing; stores token; redirects to `kestrel://` deep link | Redirect response |
-| **GET** | `/api/messages` | Paginated thread headers + snippets (no body) | `?account_id=&cursor=&limit=50&folder=inbox` |
-| **GET** | `/api/messages/:id` | Full message body (fetched on-demand) | JSON payload |
-| **POST** | `/api/messages/:id/archive` | Archive message locally + queue upstream sync | Empty |
-| **POST** | `/api/messages/:id/read` | Mark read/unread locally + queue upstream sync | `?status=true/false` |
-| **POST** | `/api/messages/:id/trash` | Soft-delete locally; plugin syncs deletion upstream | Empty |
-| **GET** | `/api/search` | FTS5 full-text search across message headers/snippets | `?q=term&account_id=` |
-| **GET** | `/api/calendars` | All synced calendars | JSON list |
-| **GET** | `/api/events` | Events within UTC timestamp range | `?start=&end=&calendar_id=` |
-| **POST** | `/api/events` | Create a calendar event (with optional attendees) | JSON payload |
-| **PATCH** | `/api/events/:id` | Update a calendar event | JSON payload |
-| **DELETE** | `/api/events/:id` | Soft-delete event; plugin syncs upstream | Empty |
-| **GET** | `/api/search/events` | FTS5 search on calendar event titles/descriptions | `?q=term` |
-| **GET** | `/api/messages/:id/attachments/:filename/redirect` | Redirect to provider CDN URL for attachment download | 302 Redirect |
-| **GET** | `/api/sync/stream` | SSE stream for real-time sync notifications to client | SSE stream |
-| **POST** | `/api/sync/trigger` | Trigger an immediate sync cycle for the authenticated user | Empty → 202 Accepted |
-| **GET** | `/api/providers` | List loaded providers with branding metadata | JSON array |
-| **DELETE** | `/api/accounts/:id` | Disconnect an account — revokes tokens and wipes cached data | Empty |
+| **POST** | `/api/v1/auth/register` | Registers a new user | `{ "username": "...", "password": "..." }` |
+| **POST** | `/api/v1/auth/token` | Username+password login; returns bearer token | `{ "username": "...", "password": "..." }` → `{ "token": "..." }` |
+| **GET** | `/api/v1/auth/login?provider=x` | Initiates OAuth flow for provider account connection | Redirect to provider consent screen |
+| **GET** | `/api/v1/auth/callback` | OAuth redirect landing; stores token; redirects to `kestrel://` deep link | Redirect response |
+| **GET** | `/api/v1/messages` | Paginated thread headers + snippets (no body) | `?account_id=&cursor=&limit=50&folder=inbox` |
+| **GET** | `/api/v1/messages/{id}` | Full message body (fetched on-demand) | JSON payload |
+| **POST** | `/api/v1/messages/{id}/archive` | Archive message locally + queue upstream sync | Empty |
+| **POST** | `/api/v1/messages/{id}/read` | Mark read/unread locally + queue upstream sync | `?status=true/false` |
+| **POST** | `/api/v1/messages/{id}/trash` | Soft-delete locally; plugin syncs deletion upstream | Empty |
+| **GET** | `/api/v1/search` | FTS5 full-text search across message headers/snippets | `?q=term&account_id=` |
+| **GET** | `/api/v1/calendars` | All synced calendars | JSON list |
+| **GET** | `/api/v1/events` | Events within UTC timestamp range | `?start=&end=&calendar_id=` |
+| **POST** | `/api/v1/events` | Create a calendar event (with optional attendees) | JSON payload |
+| **PATCH** | `/api/v1/events/{id}` | Update a calendar event | JSON payload |
+| **DELETE** | `/api/v1/events/{id}` | Soft-delete event; plugin syncs upstream | Empty |
+| **GET** | `/api/v1/search/events` | FTS5 search on calendar event titles/descriptions | `?q=term` |
+| **GET** | `/api/v1/messages/{id}/attachments/{filename}/redirect` | Redirect to provider CDN URL for attachment download | 302 Redirect |
+| **GET** | `/api/v1/sync/stream` | SSE stream for real-time sync notifications to client | SSE stream |
+| **POST** | `/api/v1/sync/trigger` | Trigger an immediate sync cycle for the authenticated user | Empty → 202 Accepted |
+| **GET** | `/api/v1/providers` | List loaded providers with branding metadata | JSON array |
+| **DELETE** | `/api/v1/accounts/{id}` | Disconnect an account — revokes tokens and wipes cached data | Empty |
 
-> **Outbound mail** is sent directly by the Tauri client via the provider API. There is no `/api/messages/send` backend endpoint.
+> **Outbound mail** is sent directly by the Tauri client via the provider API. There is no `/api/v1/messages/send` backend endpoint.
 
 ---
 

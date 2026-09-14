@@ -314,7 +314,7 @@ All tasks map directly to the **Kestrel** Project in the Notion database.
 | File | Purpose |
 |------|---------|
 | `Cargo.toml` | Workspace root |
-| `mise.toml` | Tool versions: rust=stable, node=22, pnpm, jujutsu; RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-gnu; PATH for UCRT64 |
+| `mise.toml` | Tool versions: rust=stable, node=22, pnpm, jujutsu, cargo-component, cargo-watch, sqlx-cli, cargo-sweep, hurl |
 | `docker-compose.yml` | Docker compose with healthcheck |
 | `test_api.sh` | Runtime test script for all endpoints |
 | `ARCHITECTURE.md` | Architecture documentation |
