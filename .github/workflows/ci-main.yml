@@ -104,6 +104,7 @@ jobs:
           mise run setup
           cargo fmt --manifest-path backend/Cargo.toml -- --check
           cargo clippy --manifest-path backend/Cargo.toml -- -D warnings
+          set -o pipefail
           cargo test --manifest-path backend/Cargo.toml 2>&1 | tee backend/test-results.log
 
       - name: Run Shared Contract Tests
@@ -115,6 +116,15 @@ jobs:
       - name: Build release binary for Docker validation
         id: build_backend
         run: mise run build:backend
+
+      - name: Run Hurl API suites against live backend
+        id: hurl_tests
+        run: |
+          ./backend/target/release/kestrel-server &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/api/v1/health && break; sleep 1; done
+          mise run test:hurl
+          kill $SERVER_PID
 
       - name: Verify Dockerfile Build
         id: docker_build

@@ -9,6 +9,11 @@ node = "22"
 pnpm = "latest"
 jujutsu = "latest"
 "cargo:cargo-component" = "latest"
+"cargo:cargo-watch" = "latest"
+"cargo:sqlx-cli" = "latest"
+"cargo:cargo-sweep" = "latest"
+hurl = "latest"
+# NOTE: test:hurl needs a live backend on :8080. Docker required for compose/CI builds.
 
 [tasks.init]
 description = "First-time project setup (installs tools + all dependencies)"
@@ -27,7 +32,7 @@ run = "cargo run --bin export_types"
 [tasks."dev:backend"]
 description = "Start the Axum daemon in development mode"
 dir = "backend"
-run = 'cargo watch -x "run --bin kestrel-server"'
+run = "cargo watch -x 'run --bin kestrel-server'"
 
 [tasks."dev:frontend-mail"]
 description = "Start the Kestrel Mail Tauri dev server"
@@ -94,8 +99,13 @@ description = "Execute intent-based Hurl API suites against live backend"
 run = "hurl --variable base_url=http://localhost:8080 backend/tests/hurl/*.hurl"
 
 [tasks.test]
-description = "Run all automated tests (backend + frontend)"
+description = "Run fast automated tests (backend + frontend)"
 depends = ["test:backend", "test:frontend"]
+run = "echo \"==> All test suites passed!\""
+
+[tasks."test:all"]
+description = "Run full suite: backend + frontend + hurl (needs live backend on :8080) + e2e"
+depends = ["test:backend", "test:frontend", "test:hurl", "test:e2e"]
 run = "echo \"==> All test suites passed!\""
 
 [tasks."test:e2e"]
@@ -111,12 +121,14 @@ description = "Install Playwright browsers for the E2E suite"
 run = "pnpm --filter @kestrel/e2e exec playwright install --with-deps chromium"
 
 [tasks."db:migrate"]
-description = "Run SQLx migrations locally"
+description = "Run SQLx migrations locally (requires DATABASE_URL + sqlx-cli)"
 dir = "backend"
-run = "cargo sqlx migrate run"
+run = "sqlx migrate run"
 
+# NOTE: mise `depends` runs sequentially and dev:backend never exits,
+# so run each dev:* task in its own terminal (no concurrent runner yet).
 [tasks."dev"]
-description = "Start all services (backend + mail + calendar) concurrently"
+description = "Start all services - run dev:backend, dev:frontend-mail, dev:frontend-calendar in separate terminals"
 depends = ["dev:backend", "dev:frontend-mail", "dev:frontend-calendar"]
 
 [tasks."dev:mail"]
@@ -198,9 +210,11 @@ run = [
     "cargo clean --manifest-path frontend-mail/src-tauri/Cargo.toml",
     "cargo clean --manifest-path frontend-calendar/src-tauri/Cargo.toml",
     "echo \"==> Cleaning Node artifacts...\"",
-    "rm -rf frontend-mail/.svelte-kit frontend-mail/build",
-    "rm -rf frontend-calendar/.svelte-kit frontend-calendar/build",
-    "rm -rf frontend-shared/dist",
+    "node -e \"require('fs').rmSync('frontend-mail/.svelte-kit', { recursive: true, force: true })\"",
+    "node -e \"require('fs').rmSync('frontend-mail/build', { recursive: true, force: true })\"",
+    "node -e \"require('fs').rmSync('frontend-calendar/.svelte-kit', { recursive: true, force: true })\"",
+    "node -e \"require('fs').rmSync('frontend-calendar/build', { recursive: true, force: true })\"",
+    "node -e \"require('fs').rmSync('frontend-shared/dist', { recursive: true, force: true })\"",
     "echo \"==> Clean complete.\""
 ]
 

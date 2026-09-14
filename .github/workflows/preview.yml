@@ -101,6 +101,7 @@ jobs:
           mise run setup
           cargo fmt --manifest-path backend/Cargo.toml -- --check
           cargo clippy --manifest-path backend/Cargo.toml -- -D warnings
+          set -o pipefail
           cargo test --manifest-path backend/Cargo.toml 2>&1 | tee backend/test-results.log
 
       - name: Run Shared Contract Tests

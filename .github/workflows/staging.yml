@@ -59,6 +59,7 @@ jobs:
           mise run setup
           cargo fmt --manifest-path backend/Cargo.toml -- --check
           cargo clippy --manifest-path backend/Cargo.toml -- -D warnings
+          set -o pipefail
           cargo test --manifest-path backend/Cargo.toml 2>&1 | tee backend/test-results.log
 
       - name: Run Shared Contract Tests
@@ -109,8 +110,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: target/
-          key: cargo-target-${{ runner.os }}-mail-${{ matrix.os || 'linux' }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-target-${{ runner.os }}-mail-${{ matrix.os || 'linux' }}-
+          key: cargo-target-${{ runner.os }}-mail-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-mail-
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -156,8 +157,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: target/
-          key: cargo-target-${{ runner.os }}-calendar-${{ matrix.os || 'linux' }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-target-${{ runner.os }}-calendar-${{ matrix.os || 'linux' }}-
+          key: cargo-target-${{ runner.os }}-calendar-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-calendar-
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
@@ -285,8 +286,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: target/
-          key: cargo-target-${{ runner.os }}-mail-${{ matrix.os || 'linux' }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-target-${{ runner.os }}-mail-${{ matrix.os || 'linux' }}-
+          key: cargo-target-${{ runner.os }}-mail-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-mail-${{ matrix.os }}-
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -430,8 +431,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: target/
-          key: cargo-target-${{ runner.os }}-calendar-${{ matrix.os || 'linux' }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-target-${{ runner.os }}-calendar-${{ matrix.os || 'linux' }}-
+          key: cargo-target-${{ runner.os }}-calendar-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-calendar-${{ matrix.os }}-
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
