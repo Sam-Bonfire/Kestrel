@@ -198,6 +198,9 @@ pub fn create_router(state: AppState) -> Router {
         .merge(auth_public)
         .merge(webhooks)
         .merge(protected)
+        // Landing page (portfolio + downloads) served by the backend itself.
+        // Fallback only fires on unmatched routes, so /api/* behavior is unchanged.
+        .merge(super::landing::landing_fallback())
         // Request logging with X-Request-Id
         .layer(middleware::from_fn_with_state(
             state.clone(),

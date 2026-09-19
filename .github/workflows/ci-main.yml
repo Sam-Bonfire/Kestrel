@@ -24,6 +24,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       mail: ${{ steps.filter.outputs.mail }}
       calendar: ${{ steps.filter.outputs.calendar }}
+      landing: ${{ steps.filter.outputs.landing }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -51,6 +52,17 @@ jobs:
               - 'frontend-shared/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/**'
+              - 'mise.toml'
+            landing:
+              - 'frontend-landing/**'
+              - 'frontend-shared/**'
+              - 'backend/src/api/landing.rs'
+              - 'backend/src/api/router.rs'
+              - 'backend/src/api/mod.rs'
               - 'pnpm-workspace.yaml'
               - 'package.json'
               - 'pnpm-lock.yaml'
@@ -254,3 +266,42 @@ jobs:
           echo "| Check | Target | Status | Result |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           echo "| Calendar Linters, Clippy & Build | \`frontend-calendar/\` | ${{ steps.calendar_checks.outcome == 'success' && '✅ Passed' || '❌ Failed' }} | ${{ steps.calendar_checks.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  validate-landing:
+    name: Validate Landing
+    needs: changes
+    if: needs.changes.outputs.landing == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache pnpm
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.local/share/pnpm/store
+            ~/AppData/Local/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
+        with:
+          install: true
+          cache: true
+
+      - name: Run Landing Checks
+        id: landing_checks
+        run: |
+          mise run setup
+          mise run check:landing
+
+      - name: Generate Landing Summary
+        if: always()
+        run: |
+          echo "### Main Branch Landing Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Target | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Landing Build | \`frontend-landing/\` | ${{ steps.landing_checks.outcome == 'success' && '✅ Passed' || '❌ Failed' }} | ${{ steps.landing_checks.outcome }} |" >> $GITHUB_STEP_SUMMARY

@@ -10,6 +10,7 @@
       "default": "./src/index.ts"
     },
     "./components": "./src/components/index.js",
+    "./components/*": "./src/components/*",
     "./tokens": "./src/tokens/index.js",
     "./api": "./src/api/index.js",
     "./stores": "./src/stores/index.js",
