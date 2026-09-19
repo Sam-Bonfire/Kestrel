@@ -284,7 +284,7 @@
     </div>
   </header>
 
-  <section class="block" id="problem">
+  <section class="block band" id="problem">
     <div class="sec-index">The problem</div>
     <h2>Your email lives on someone else&rsquo;s computer.</h2>
     <div class="problem-grid">
@@ -340,7 +340,7 @@
     </div>
   </section>
 
-  <section class="block" id="calendar">
+  <section class="block band" id="calendar">
     <div class="sec-index">Kestrel Calendar</div>
     <h2>Run the day from one view.</h2>
     <p class="sec-sub">
@@ -377,7 +377,7 @@
     </table>
   </section>
 
-  <section class="block" id="selfhost">
+  <section class="block band" id="selfhost">
     <div class="sec-index">Self-hosting</div>
     <h2>Yours in three steps.</h2>
     <p class="sec-sub">No accounts, no subscriptions, no data leaving your network unless you say so.</p>
@@ -434,7 +434,7 @@ docker compose up -d</div>
     <div class="code">docker pull {site.dockerImage}</div>
   </section>
 
-  <section class="block" id="faq">
+  <section class="block band" id="faq">
     <div class="sec-index">FAQ</div>
     <h2>Questions, answered.</h2>
     <div class="faq">
