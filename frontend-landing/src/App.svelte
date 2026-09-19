@@ -288,17 +288,9 @@
     <div class="sec-index">The problem</div>
     <h2>Your email lives on someone else&rsquo;s computer.</h2>
     <div class="problem-grid">
-      <p>
-        Every message you have ever sent sits on servers you don&rsquo;t control, scanned to sell
-        ads, held hostage by subscriptions, and one outage away from unreachable. Meanwhile the
-        clients themselves eat your mornings: click-heavy triage in one tab, scheduling ping-pong
-        in another, and no way to work when the network drops.
-      </p>
-      <p>
-        Switching feels risky — new address, lost history, another setup weekend. So the inbox
-        keeps growing, the calendar keeps filling, and the unease about who reads your mail never
-        quite goes away.
-      </p>
+      <p><b>Your mail is someone else&rsquo;s product.</b> Every message sits on servers you don&rsquo;t control, scanned to sell ads and one outage away from unreachable.</p>
+      <p><b>Switching feels like a second job.</b> New address, lost history, a setup weekend — so the inbox keeps growing and the unease about who reads it never leaves.</p>
+      <p><b>The clients eat your mornings.</b> Click-heavy triage in one tab, scheduling ping-pong in another, and nothing works when the network drops.</p>
     </div>
   </section>
 

@@ -9,11 +9,13 @@
 @source '../../frontend-calendar/src/**/*.{svelte,ts,js}';
 @source '../../frontend-shared/src/**/*.{svelte,ts}';
 
-/* The apps are full-height shells; the landing page scrolls. */
+/* The apps are full-height Tauri shells (overflow hidden, overscroll none);
+   the landing page must scroll normally. */
 html,
 body {
   overflow: auto;
   height: auto;
+  overscroll-behavior: auto;
 }
 
 :root {
@@ -92,7 +94,7 @@ a { color: inherit; }
 .theme-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
 
 /* Hero */
-.hero { padding: 112px 0 72px; }
+.hero { padding: 76px 0 64px; }
 .eyebrow {
   font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--text-secondary); border: 1px solid var(--border); background: var(--canvas-card);
@@ -107,8 +109,8 @@ a { color: inherit; }
 .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .ghost-link { font-size: 0.88rem; font-weight: 600; color: var(--text-secondary); text-decoration: none; padding: 0.5rem 0.25rem; }
 .ghost-link:hover { color: var(--text-primary); }
-.trust-line { font-family: var(--mono); font-size: 0.7rem; color: var(--text-secondary); margin: 22px 0 0; }
-.hero-shot { margin-top: 48px; }
+.trust-line { font-family: var(--mono); font-size: 0.7rem; color: var(--text-secondary); margin: 20px 0 0; }
+.hero-shot { margin-top: 36px; }
 .status-inline { display: inline-flex; align-items: center; gap: 7px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
 .dot.on { background: #34d399; }
@@ -190,6 +192,7 @@ section.block > h2, .final > h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); lette
 /* Problem */
 .problem-grid { display: grid; gap: 16px; max-width: 42rem; margin-top: 20px; }
 .problem-grid p { margin: 0; color: var(--text-secondary); font-size: 1rem; line-height: 1.7; }
+.problem-grid p b { color: var(--text-primary); }
 
 /* Calendar proof line */
 .cal-proof { display: flex; gap: 12px; align-items: center; margin-top: 24px; font-size: 0.86rem; color: var(--text-secondary); }
