@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>Kestrel — Private Mail + Calendar</title>
     <script>
+      document.documentElement.classList.add('js');
       try {
         var t = localStorage.getItem('kestrel-theme');
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;

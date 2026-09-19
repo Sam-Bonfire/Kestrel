@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '@kestrel/shared/components/Button.svelte';
-  import LabelPill from '@kestrel/shared/components/LabelPill.svelte';
   import ProviderBadge from '@kestrel/shared/components/ProviderBadge.svelte';
+  import ThreadList from 'frontend-mail/src/lib/components/ThreadList.svelte';
+  import WeekGrid from 'frontend-calendar/src/lib/components/WeekGrid.svelte';
   import { site, platforms } from './site.js';
 
   let serverOnline: boolean | null = $state(null);
@@ -10,6 +11,7 @@
     typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light'
       ? 'light'
       : 'dark';
+  let previewTab: 'mail' | 'calendar' = $state('mail');
 
   function toggleTheme(): void {
     theme = theme === 'light' ? 'dark' : 'light';
@@ -30,9 +32,8 @@
       .then((r) => (serverOnline = r.ok))
       .catch(() => (serverOnline = false));
 
-    // Scroll-reveal for major blocks. Skipped when reduced motion is preferred (CSS).
     const els = document.querySelectorAll(
-      '.shot, .demo, .dl, .arch, .final, .stat, .stack-item, .faq details, .feat-list li, .code',
+      '.shot, .demo, .dl, .arch, .final, .stat, .faq details, .feat-list li, .code, .compare',
     );
     if ('IntersectionObserver' in window) {
       const io = new IntersectionObserver(
@@ -53,55 +54,75 @@
     }
   });
 
-  // --- Kestrel Mail data ---
-  interface ThreadSample {
-    initials: string;
-    sender: string;
-    subject: string;
-    tag: string;
-    snippet: string;
-    provider: string;
-    date: string;
+  // --- Real ThreadList data (same shape the Mail app uses) ---
+  const threads = [
+    {
+      id: 't1',
+      sender: 'CI Pipeline',
+      senderEmail: 'ci@example.com',
+      subject: 'Release v0.1.0 — all platforms green',
+      snippet: 'Windows, Linux, macOS, Android and iOS builds passed. Docker image pushed.',
+      date: '09:41',
+      isUnread: true,
+      isStarred: false,
+      hasAttachment: false,
+      labels: ['devops'],
+    },
+    {
+      id: 't2',
+      sender: 'Ana Ruiz',
+      senderEmail: 'ana@example.com',
+      subject: 'Q3 budget review — your sign-off needed',
+      snippet: 'Three open threads carry cost decisions. Sheet attached, deadline Friday.',
+      date: '08:15',
+      isUnread: true,
+      isStarred: true,
+      hasAttachment: true,
+      labels: ['finance'],
+    },
+    {
+      id: 't3',
+      sender: 'Ops',
+      senderEmail: 'ops@example.com',
+      subject: 'Maintenance window confirmed for Saturday',
+      snippet: 'Sync pauses 02:00–02:30 UTC. The outbox holds all sends automatically.',
+      date: 'Tue',
+      isUnread: false,
+      isStarred: false,
+      hasAttachment: false,
+      labels: ['urgent'],
+    },
+  ];
+
+  // --- Real WeekGrid data (same shape the Calendar app uses) ---
+  function dayStr(offset: number): string {
+    const d = new Date();
+    const dow = (d.getDay() + 6) % 7; // Monday = 0
+    d.setDate(d.getDate() - dow + offset);
+    return d.toISOString().slice(0, 10);
   }
 
-  const threads: ThreadSample[] = [
-    {
-      initials: 'CI',
-      sender: 'CI Pipeline',
-      subject: 'Release v0.1.0 — all platforms green',
-      tag: 'devops',
-      snippet: 'Windows, Linux, macOS, Android and iOS builds passed. Docker image pushed.',
-      provider: 'gmail',
-      date: '09:41',
-    },
-    {
-      initials: 'AR',
-      sender: 'Ana Ruiz',
-      subject: 'Q3 budget review — your sign-off needed',
-      tag: 'finance',
-      snippet: 'Three open threads carry cost decisions. Sheet attached, deadline Friday.',
-      provider: 'outlook',
-      date: '08:15',
-    },
-    {
-      initials: 'OP',
-      sender: 'Ops',
-      subject: 'Maintenance window confirmed for Saturday',
-      tag: 'urgent',
-      snippet: 'Sync pauses 02:00–02:30 UTC. The outbox holds all sends automatically.',
-      provider: 'gmail',
-      date: 'Tue',
-    },
+  const calEvents = [
+    { id: 'e1', title: 'Sprint planning', date: dayStr(0), startTime: '10:00', endTime: '10:30', color: 'blue', calendarId: 'work' },
+    { id: 'e2', title: 'Standup', date: dayStr(1), startTime: '09:30', endTime: '09:45', color: 'rose', calendarId: 'work' },
+    { id: 'e3', title: 'Design review', date: dayStr(1), startTime: '14:00', endTime: '15:00', color: 'purple', calendarId: 'work' },
+    { id: 'e4', title: '1:1 with Ana', date: dayStr(2), startTime: '11:00', endTime: '11:30', color: 'green', calendarId: 'work' },
+    { id: 'e5', title: 'Release cut', date: dayStr(4), startTime: '15:00', endTime: '15:30', color: 'amber', calendarId: 'work' },
+  ] as { id: string; title: string; date: string; startTime: string; endTime: string; color: string; calendarId: string }[];
+
+  const mailBenefits = [
+    { title: 'Clear the inbox in minutes', body: 'Move with j/k, archive with e, snooze with s. Triage becomes a ten-second loop instead of a morning lost to clicking.' },
+    { title: 'Threads stay together', body: 'Conversations, labels, and cross-provider search narrow thousands of threads to the few that need you.' },
+    { title: 'Never lose a send', body: 'The offline outbox queues drafts and replays them on reconnect. Bad network, zero lost mail.' },
   ];
 
-  const mailFeatures = [
-    { title: 'Keyboard-first triage', body: 'Move with j/k, archive with e, snooze with s. A cheat sheet lives one keypress away.' },
-    { title: 'Threads + labels', body: 'Conversations stay together. Cross-provider labels and search narrow thousands of threads to the few that matter.' },
-    { title: 'Offline outbox', body: 'Sends queue locally and replay on reconnect. No lost drafts on bad networks.' },
-    { title: 'Provider badges', body: 'Gmail and Outlook accounts side by side, always marked — you always know where a thread lives.' },
+  const calBenefits = [
+    { title: 'Vote on times, skip the thread', body: 'Scheduling polls collect votes and lock the winner — no five-message chains to find thirty minutes.' },
+    { title: 'See availability first', body: 'Free/busy overlays across Google and Outlook calendars before any invite goes out.' },
+    { title: 'Meetings linked to mail', body: 'Every event traces back to the thread that caused it. The recap files itself.' },
   ];
 
-  // --- Interactive triage demo (Mail) ---
+  // --- Interactive triage demo (Mail's real loop, sample data) ---
   interface DemoThread {
     id: number;
     from: string;
@@ -155,53 +176,30 @@
     else if (e.key === 's') act('snoozed');
   }
 
-  // --- Kestrel Calendar data ---
-  interface DaySchedule {
-    d: string;
-    items: { time: string; title: string; sub: string }[];
-  }
-
-  const week: DaySchedule[] = [
-    { d: 'Mon', items: [{ time: '10:00 – 10:30', title: 'Sprint planning', sub: 'Engineering · video link attached' }] },
-    {
-      d: 'Tue',
-      items: [
-        { time: '09:30 – 09:45', title: 'Standup', sub: 'Engineering · video link attached' },
-        { time: '14:00 – 15:00', title: 'Design review', sub: '4 attendees · recap filed to thread' },
-        { time: '16:30 – 17:00', title: 'Release sign-off', sub: 'Go / no-go for the weekend cut' },
-      ],
-    },
-    { d: 'Wed', items: [{ time: '11:00 – 11:30', title: '1:1 with Ana', sub: 'Budget thread linked' }] },
-    { d: 'Thu', items: [] },
-    { d: 'Fri', items: [{ time: '15:00 – 15:30', title: 'Release cut', sub: 'Poll closed · time won by vote' }] },
-  ];
-
-  let selectedDay: number = $state(1);
-
-  const calFeatures = [
-    { title: 'Week, day, month', body: 'Three views over the same data. Drag to reschedule; everything stays in sync with providers.' },
-    { title: 'Scheduling polls', body: 'Propose times, collect votes, lock the winner — no five-message threads to find thirty minutes.' },
-    { title: 'Team availability', body: 'Free/busy overlays across Google and Outlook calendars before any invite goes out.' },
-    { title: 'Events linked to mail', body: 'Every meeting traces back to the thread that caused it. The recap files itself.' },
-  ];
-
-  const sharedPoints = [
-    { k: 'One backend', v: 'Rust + Axum serves both apps, the API, and this page' },
-    { k: 'One component library', v: 'Shared Svelte primitives keep both apps consistent' },
-    { k: 'One deploy', v: 'Single Docker image · SQLite included · runs on a NAS' },
+  const compareRows = [
+    { k: 'Where your mail lives', us: 'Your server', them: 'Their cloud' },
+    { k: 'Ads and tracking', us: 'None — no ad business', them: 'Scanned and monetized' },
+    { k: 'What it costs', us: 'Free to self-host', them: 'Free with ads, or a subscription' },
+    { k: 'If you want to leave', us: 'Export everything, anytime', them: 'Takeout mazes and lock-in' },
+    { k: 'Works offline', us: 'Full outbox + cache', them: 'Partial, when it feels like it' },
+    { k: 'Keyboard triage', us: 'Built in from day one', them: 'Click, click, click' },
   ];
 
   const faqs = [
     {
-      q: 'What do I need to self-host?',
-      a: 'Docker and one open port. Copy the example env file, run compose up, and point the apps at your server URL. SQLite is the default — PostgreSQL is supported for larger setups.',
+      q: 'What do I need to run it?',
+      a: 'Docker and one open port. Copy the example env file, run compose up, and point the apps at your server URL. SQLite is built in — PostgreSQL is supported for larger setups. If you can run one container, you can run Kestrel.',
     },
     {
-      q: 'Which email and calendar providers are supported?',
-      a: 'Gmail and Outlook via sandboxed WASM provider plugins. Each account is connected once and shared by both Mail and Calendar.',
+      q: 'Do I have to give up Gmail or Outlook?',
+      a: 'No. Kestrel syncs your existing Gmail and Outlook accounts through sandboxed provider plugins. Your addresses stay the same — only where the mail lives changes.',
     },
     {
-      q: 'Do the apps work offline?',
+      q: 'What happens to my mail if I stop using Kestrel?',
+      a: 'Nothing bad. Your mail still exists at your providers, and anything Kestrel stored can be exported. There is no lock-in because there is nothing to lock you into — the code is open source and the data is yours.',
+    },
+    {
+      q: 'Does it work offline?',
       a: 'Yes. Mail caches threads and queues sends in a local outbox with automatic retry. Calendar keeps your schedule readable and replays changes when the connection returns.',
     },
     {
@@ -227,9 +225,8 @@
       Kestrel
     </a>
     <div class="nav-links">
-      <a href="#mail">Mail</a>
-      <a href="#calendar">Calendar</a>
-      <a href="#selfhost">Self-host</a>
+      <a href="#product">Product</a>
+      <a href="#why">Why Kestrel</a>
       <a href="#download">Download</a>
       <a href="#faq">FAQ</a>
     </div>
@@ -237,87 +234,91 @@
       <button class="theme-btn" onclick={toggleTheme} aria-label="Toggle color theme">
         {theme === 'light' ? '◑' : '◐'}
       </button>
-      <Button variant="secondary" size="sm" onclick={() => go(site.github)}>GitHub</Button>
-      <Button variant="primary" size="sm" onclick={() => go('#download')}>Get Kestrel</Button>
+      <a class="nav-github" href={site.github}>GitHub</a>
+      <Button variant="primary" size="sm" onclick={() => go('#download')}>Download Kestrel</Button>
     </div>
   </div>
 </nav>
 
 <div class="wrap" id="top">
   <header class="hero">
-    <span class="eyebrow">Self-hosted · Two apps, one server</span>
-    <h1>Email and calendar, minus the cloud.</h1>
+    <span class="eyebrow">Self-hosted mail + calendar</span>
+    <h1>Email and calendar that live on your server.</h1>
     <p class="sub">
-      Kestrel is a private mail and calendar suite that runs on your hardware. Two focused
-      apps — Mail for triage, Calendar for scheduling — sharing one backend and one sync engine.
+      Kestrel is a mail and calendar suite for people who want Gmail and Outlook power without
+      handing their data to Google and Microsoft. One Docker image on your hardware, two fast
+      apps everywhere else.
     </p>
     <div class="hero-cta">
-      <Button variant="primary" onclick={() => go('#download')}>Download the apps</Button>
-      <Button variant="secondary" onclick={() => go('#mail')}>Explore the apps</Button>
+      <Button variant="primary" onclick={() => go('#download')}>Download Kestrel</Button>
+      <a class="ghost-link" href="#product">See how it works ↓</a>
     </div>
-    <div class="hero-facts">
-      <span>Rust backend</span>
-      <span>6 platforms</span>
-      <span>Offline-first</span>
-      <span class="status-inline">
-        <span class="dot" class:on={serverOnline === true}></span>
-        {serverOnline === null ? 'checking server…' : serverOnline ? 'server online' : 'offline preview'}
-      </span>
+    <p class="trust-line">Free to self-host · No account · No credit card · Open source</p>
+
+    <div class="shot hero-shot" id="product">
+      <div class="shot-tabs" role="tablist" aria-label="Product preview">
+        <button role="tab" aria-selected={previewTab === 'mail'} class:active={previewTab === 'mail'} onclick={() => (previewTab = 'mail')}>
+          Kestrel Mail — live thread list
+        </button>
+        <button role="tab" aria-selected={previewTab === 'calendar'} class:active={previewTab === 'calendar'} onclick={() => (previewTab = 'calendar')}>
+          Kestrel Calendar — live week view
+        </button>
+      </div>
+      <div class="frame" class:narrow={previewTab === 'mail'}>
+        {#if previewTab === 'mail'}
+          <ThreadList threads={threads} currentView="inbox" />
+        {:else}
+          <WeekGrid events={calEvents} viewMode="week" />
+        {/if}
+      </div>
+      <div class="showcase-note">
+        Not a mockup — the actual ThreadList and WeekGrid components from the apps, running with sample data.
+      </div>
     </div>
+
     <div class="stats">
-      <div class="stat"><b>2</b><span>focused apps, not one bloated suite</span></div>
+      <div class="stat"><b>2</b><span>apps — Mail for triage, Calendar for scheduling</span></div>
       <div class="stat"><b>6</b><span>platforms, from Linux to iOS</span></div>
       <div class="stat"><b>2</b><span>providers synced — Gmail + Outlook</span></div>
-      <div class="stat"><b>1</b><span>Docker image to self-host it all</span></div>
+      <div class="stat"><b>1</b><span>Docker image to run it all</span></div>
     </div>
   </header>
 
-  <!-- ============ KESTREL MAIL ============ -->
+  <section class="block" id="problem">
+    <div class="sec-index">The problem</div>
+    <h2>Your email lives on someone else&rsquo;s computer.</h2>
+    <div class="problem-grid">
+      <p>
+        Every message you have ever sent sits on servers you don&rsquo;t control, scanned to sell
+        ads, held hostage by subscriptions, and one outage away from unreachable. Meanwhile the
+        clients themselves eat your mornings: click-heavy triage in one tab, scheduling ping-pong
+        in another, and no way to work when the network drops.
+      </p>
+      <p>
+        Switching feels risky — new address, lost history, another setup weekend. So the inbox
+        keeps growing, the calendar keeps filling, and the unease about who reads your mail never
+        quite goes away.
+      </p>
+    </div>
+  </section>
+
   <section class="block" id="mail">
     <div class="sec-index">Kestrel Mail</div>
     <h2>Reach inbox zero before standup.</h2>
     <p class="sec-sub">
-      A keyboard-driven mail client for Gmail and Outlook. Triage in minutes, then close it —
-      the outbox and sync handle the rest.
+      A keyboard-driven client for your existing Gmail and Outlook accounts. Same addresses,
+      same history — triage in minutes, then close it.
     </p>
-    <div class="app-grid">
-      <div class="shot">
-        <div class="shot-bar"><span class="mono-dim">kestrel mail — inbox</span></div>
-        {#each threads as t}
-          <div class="thread">
-            <div class="initials">{t.initials}</div>
-            <div class="thread-body">
-              <div class="thread-subject">
-                {t.subject}
-                <LabelPill tag={t.tag} />
-              </div>
-              <div class="thread-snippet">{t.sender} — {t.snippet}</div>
-            </div>
-            <div class="thread-side">
-              <ProviderBadge provider={t.provider} />
-              <span class="thread-date">{t.date}</span>
-            </div>
-          </div>
-        {/each}
-        <div class="showcase-note">Rendered with Mail&rsquo;s own shared components (@kestrel/shared)</div>
-      </div>
-      <div>
-        <ul class="feat-list">
-          {#each mailFeatures as f}
-            <li><b>{f.title}</b><span>{f.body}</span></li>
-          {/each}
-        </ul>
-        <div class="hero-cta" style="margin-top: 18px;">
-          <Button variant="primary" onclick={() => go(site.mailDownload)}>Download Mail ↓</Button>
-        </div>
-      </div>
-    </div>
-
+    <ul class="feat-list">
+      {#each mailBenefits as f}
+        <li><b>{f.title}</b><span>{f.body}</span></li>
+      {/each}
+    </ul>
     <div class="demo">
       <div class="demo-title">Try Mail&rsquo;s triage loop</div>
       <p class="demo-sub">
-        Select with <span class="kbd">j</span>/<span class="kbd">k</span>, archive with
-        <span class="kbd">e</span>, snooze with <span class="kbd">s</span> — or use the buttons.
+        The real loop, sample data. Select with <span class="kbd">j</span>/<span class="kbd">k</span>,
+        archive with <span class="kbd">e</span>, snooze with <span class="kbd">s</span> — or use the buttons.
       </p>
       <div class="demo-counts">
         <span>Inbox <b>{inboxCount}</b></span>
@@ -342,73 +343,46 @@
         <button class="kbd-btn" onclick={() => act('snoozed')}><span class="kbd">s</span> snooze</button>
       </div>
     </div>
+    <div class="hero-cta" style="margin-top: 22px;">
+      <Button variant="secondary" onclick={() => go(site.mailDownload)}>Download Kestrel Mail ↓</Button>
+    </div>
   </section>
 
-  <!-- ============ KESTREL CALENDAR ============ -->
   <section class="block" id="calendar">
     <div class="sec-index">Kestrel Calendar</div>
     <h2>Run the day from one view.</h2>
     <p class="sec-sub">
-      A week-first calendar with polls and availability built in. Pick a day below — the agenda
-      on the right is live.
+      A week-first calendar over the same accounts Mail syncs. The live week view above is the
+      app itself — here is what it does for you.
     </p>
-    <div class="app-grid">
-      <div>
-        <ul class="feat-list">
-          {#each calFeatures as f}
-            <li><b>{f.title}</b><span>{f.body}</span></li>
-          {/each}
-        </ul>
-        <div class="hero-cta" style="margin-top: 18px;">
-          <Button variant="primary" onclick={() => go(site.calendarDownload)}>Download Calendar ↓</Button>
-        </div>
-      </div>
-      <div class="shot">
-        <div class="shot-bar"><span class="mono-dim">kestrel calendar — september · click a day</span></div>
-        <div class="cal-strip">
-          {#each week as day, i}
-            <button class="cal-day" class:today={day.d === 'Tue'} class:selected={i === selectedDay} onclick={() => (selectedDay = i)}>
-              <b>{day.d}</b>
-              <span class="cal-count">{day.items.length === 0 ? 'free' : `${day.items.length} event${day.items.length > 1 ? 's' : ''}`}</span>
-            </button>
-          {/each}
-        </div>
-        <div class="agenda">
-          {#if week[selectedDay].items.length === 0}
-            <div class="demo-empty">Nothing scheduled — a free {week[selectedDay].d}.</div>
-          {:else}
-            {#each week[selectedDay].items as e}
-              <div class="evt">
-                <span class="evt-time">{e.time}</span>
-                <div>
-                  <div class="evt-title">{e.title}</div>
-                  <div class="evt-sub">{e.sub}</div>
-                </div>
-              </div>
-            {/each}
-          {/if}
-        </div>
-        <div class="showcase-note">
-          <ProviderBadge provider="outlook" />
-          <span style="margin-left: 8px;">synced calendars stay in step with Mail&rsquo;s accounts</span>
-        </div>
-      </div>
+    <ul class="feat-list">
+      {#each calBenefits as f}
+        <li><b>{f.title}</b><span>{f.body}</span></li>
+      {/each}
+    </ul>
+    <div class="cal-proof">
+      <ProviderBadge provider="outlook" />
+      <span>Synced calendars stay in step with Mail&rsquo;s accounts — connect once, use both.</span>
+    </div>
+    <div class="hero-cta" style="margin-top: 22px;">
+      <Button variant="secondary" onclick={() => go(site.calendarDownload)}>Download Kestrel Calendar ↓</Button>
     </div>
   </section>
 
-  <!-- ============ SHARED PLATFORM ============ -->
-  <section class="block" id="platform">
-    <div class="sec-index">Shared platform</div>
-    <h2>Two apps, zero duplication.</h2>
-    <p class="sec-sub">Mail and Calendar are separate clients on top of one backend, one sync engine, and one UI library.</p>
-    <dl class="stack">
-      {#each sharedPoints as f}
-        <div class="stack-item">
-          <dt>{f.k}</dt>
-          <dd>{f.v}</dd>
-        </div>
-      {/each}
-    </dl>
+  <section class="block" id="why">
+    <div class="sec-index">Why Kestrel</div>
+    <h2>Keep your providers. Lose the leash.</h2>
+    <p class="sec-sub">Kestrel doesn&rsquo;t ask you to move your mail — it changes where your mail lives and who can read it.</p>
+    <table class="compare">
+      <thead>
+        <tr><th></th><th>Kestrel</th><th>Gmail / Outlook web</th></tr>
+      </thead>
+      <tbody>
+        {#each compareRows as r}
+          <tr><td>{r.k}</td><td class="us">{r.us}</td><td>{r.them}</td></tr>
+        {/each}
+      </tbody>
+    </table>
   </section>
 
   <section class="block" id="selfhost">
@@ -426,6 +400,11 @@
 docker compose up -d</div>
     <p class="sec-sub" style="margin-top: 12px;">
       Expose it with a Cloudflare Tunnel for public access or keep it on Tailscale for private use.
+      This page is served by that same backend — no separate hosting.
+      <span class="status-inline" style="margin-left: 8px;">
+        <span class="dot" class:on={serverOnline === true}></span>
+        {serverOnline === null ? 'checking…' : serverOnline ? 'this server is online' : 'offline preview'}
+      </span>
     </p>
   </section>
 
@@ -433,8 +412,8 @@ docker compose up -d</div>
     <div class="sec-index">Download</div>
     <h2>Get the latest builds.</h2>
     <p class="sec-sub">
-      Mail and Calendar ship as separate installers in every tagged release. This page is served
-      by a Kestrel backend — pick your app below.
+      Mail and Calendar ship as separate installers in every tagged release. Pick your app —
+      the links open the latest release.
     </p>
     <div class="dl">
       {#each platforms as p}
@@ -481,8 +460,8 @@ docker compose up -d</div>
     <p class="sec-sub">Free to self-host. Install both apps in under five minutes.</p>
     <div class="hero-cta" style="justify-content: center;">
       <Button variant="primary" onclick={() => go('#download')}>Download Kestrel</Button>
-      <Button variant="secondary" onclick={() => go(site.github)}>Browse the source</Button>
     </div>
+    <p class="trust-line" style="text-align: center;">Free to self-host · No account · No credit card · Open source</p>
   </section>
 </div>
 
