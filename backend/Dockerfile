@@ -1,3 +1,29 @@
+# --- Landing Stage (portfolio + download page served by the backend) ---
+FROM node:22-bookworm-slim AS landing
+
+RUN corepack enable
+
+WORKDIR /app
+
+# Install workspace deps for the landing page and its shared library
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY frontend-shared/package.json frontend-shared/package.json
+COPY frontend-landing/package.json frontend-landing/package.json
+COPY frontend-mail/package.json frontend-mail/package.json
+COPY frontend-calendar/package.json frontend-calendar/package.json
+RUN pnpm install --filter frontend-landing...
+COPY frontend-shared/ frontend-shared/
+COPY frontend-landing/ frontend-landing/
+COPY frontend-mail/ frontend-mail/
+COPY frontend-calendar/ frontend-calendar/
+
+COPY frontend-shared/ frontend-shared/
+COPY frontend-landing/ frontend-landing/
+# Generate SvelteKit tsconfigs (gitignored) so esbuild can resolve them
+RUN pnpm --filter frontend-mail exec svelte-kit sync
+RUN pnpm --filter frontend-calendar exec svelte-kit sync
+RUN pnpm --filter frontend-landing build
+
 # --- Builder Stage ---
 FROM rust:1.92-slim-bookworm AS builder
 
@@ -25,6 +51,7 @@ RUN cargo chef cook --release --recipe-path recipe.json --bin kestrel-server
 
 # Copy remaining source code and build production binary + WASM plugins
 COPY . .
+COPY --from=landing /app/frontend-landing/dist ./frontend-landing/dist
 RUN cargo build --release --bin kestrel-server
 RUN cargo component build --release --manifest-path plugins/gmail/Cargo.toml
 RUN cargo component build --release --manifest-path plugins/outlook/Cargo.toml

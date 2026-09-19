@@ -5,6 +5,7 @@ pub mod calendars;
 pub mod contacts;
 pub mod health;
 pub mod labels;
+pub mod landing;
 pub mod logging;
 pub mod messages;
 pub mod outbox_worker;

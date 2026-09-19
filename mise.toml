@@ -84,6 +84,26 @@ description = "Build Kestrel Calendar Android APK/AAB using Tauri"
 dir = "frontend-calendar"
 run = "pnpm tauri android build"
 
+[tasks."build:landing"]
+description = "Build the Kestrel landing page (portfolio + downloads) to frontend-landing/dist"
+run = [
+    "pnpm --filter frontend-mail exec svelte-kit sync",
+    "pnpm --filter frontend-calendar exec svelte-kit sync",
+    "pnpm --filter frontend-landing build"
+]
+
+[tasks."dev:landing"]
+description = "Start the landing page Vite dev server"
+dir = "frontend-landing"
+run = [
+    "pnpm --filter frontend-mail exec svelte-kit sync",
+    "pnpm dev"
+]
+
+[tasks."check:landing"]
+description = "Build the landing page (same gate as mail/calendar frontend checks)"
+depends = ["build:landing"]
+
 [tasks."test:backend"]
 description = "Run backend cargo tests"
 dir = "backend"
@@ -199,7 +219,7 @@ run = [
 
 [tasks.check]
 description = "Run all linters, tests, and build checks"
-depends = ["check:backend", "check:frontend-shared", "check:frontend-mail", "check:frontend-calendar"]
+  depends = ["check:backend", "check:frontend-shared", "check:frontend-mail", "check:frontend-calendar", "check:landing"]
 run = "echo \"==> All checks passed!\""
 
 [tasks.clean]

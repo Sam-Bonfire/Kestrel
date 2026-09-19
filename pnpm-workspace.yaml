@@ -2,6 +2,7 @@ packages:
   - 'frontend-shared'
   - 'frontend-mail'
   - 'frontend-calendar'
+  - 'frontend-landing'
   - 'e2e'
 allowBuilds:
   esbuild: true
