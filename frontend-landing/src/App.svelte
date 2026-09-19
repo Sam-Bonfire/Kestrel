@@ -29,6 +29,28 @@
     fetch('/api/health')
       .then((r) => (serverOnline = r.ok))
       .catch(() => (serverOnline = false));
+
+    // Scroll-reveal for major blocks. Skipped when reduced motion is preferred (CSS).
+    const els = document.querySelectorAll(
+      '.shot, .demo, .dl, .arch, .final, .stat, .stack-item, .faq details, .feat-list li, .code',
+    );
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              e.target.classList.add('in');
+              io.unobserve(e.target);
+            }
+          }
+        },
+        { threshold: 0.12 },
+      );
+      els.forEach((el) => {
+        el.classList.add('reveal');
+        io.observe(el);
+      });
+    }
   });
 
   // --- Kestrel Mail data ---
@@ -195,6 +217,9 @@
 
 <svelte:window onkeydown={demoKey} />
 
+<div class="announce">
+  Kestrel v0.1.0 — Mail + Calendar are ready to self-host. <a href="#download">Get the builds →</a>
+</div>
 <nav class="nav">
   <div class="wrap nav-inner">
     <a class="brand" href="#top">
@@ -238,6 +263,12 @@
         <span class="dot" class:on={serverOnline === true}></span>
         {serverOnline === null ? 'checking server…' : serverOnline ? 'server online' : 'offline preview'}
       </span>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>2</b><span>focused apps, not one bloated suite</span></div>
+      <div class="stat"><b>6</b><span>platforms, from Linux to iOS</span></div>
+      <div class="stat"><b>2</b><span>providers synced — Gmail + Outlook</span></div>
+      <div class="stat"><b>1</b><span>Docker image to self-host it all</span></div>
     </div>
   </header>
 
@@ -456,15 +487,33 @@ docker compose up -d</div>
 </div>
 
 <footer>
-  <div class="wrap foot">
-    <span>Kestrel · private mail + calendar</span>
-    <span>
-      <a href={site.github}>GitHub</a>
-      &nbsp;·&nbsp;
-      <a href="mailto:{site.email}">Contact</a>
-      &nbsp;·&nbsp;
-      <a href="/api/health">API status</a>
-      {#if site.buildNotes !== ''}&nbsp;·&nbsp;<a href={site.buildNotes}>Build notes</a>{/if}
-    </span>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top">
+          <img src="/logo.svg" alt="Kestrel logo" width="28" height="28" />
+          Kestrel
+        </a>
+        <p>A private, self-hosted mail and calendar suite. Your data lives on your server — not in someone else&rsquo;s cloud.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Product</h4>
+        <a href="#mail">Kestrel Mail</a>
+        <a href="#calendar">Kestrel Calendar</a>
+        <a href="#download">Download</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div class="foot-col">
+        <h4>Resources</h4>
+        <a href={site.github}>GitHub</a>
+        <a href={site.releaseNotes}>Release notes</a>
+        <a href="/api/health">API status</a>
+        <a href="mailto:{site.email}">Contact</a>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>Kestrel v0.1.0 · served by its own backend</span>
+      {#if site.buildNotes !== ''}<a href={site.buildNotes}>Build notes</a>{/if}
+    </div>
   </div>
 </footer>
