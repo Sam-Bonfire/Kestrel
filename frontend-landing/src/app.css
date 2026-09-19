@@ -116,10 +116,8 @@ a { color: inherit; }
 .dot.on { background: #34d399; }
 
 /* Stats */
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 64px; }
-.stat { border-top: 1px solid var(--border); padding-top: 16px; }
-.stat b { display: block; font-size: 1.9rem; letter-spacing: -0.03em; font-weight: 700; font-variant-numeric: tabular-nums; }
-.stat span { font-size: 0.8rem; color: var(--text-secondary); }
+.stats { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 0.82rem; color: var(--text-secondary); }
+.stats b { color: var(--text-primary); font-variant-numeric: tabular-nums; margin-right: 6px; }
 
 /* Product shot (real app components render inside; frame clips to size) */
 .shot {

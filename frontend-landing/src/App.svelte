@@ -4,6 +4,7 @@
   import ProviderBadge from '@kestrel/shared/components/ProviderBadge.svelte';
   import ThreadList from 'frontend-mail/src/lib/components/ThreadList.svelte';
   import WeekGrid from 'frontend-calendar/src/lib/components/WeekGrid.svelte';
+  import MonthGrid from 'frontend-calendar/src/lib/components/MonthGrid.svelte';
   import { site, platforms } from './site.js';
 
   let serverOnline: boolean | null = $state(null);
@@ -33,7 +34,7 @@
       .catch(() => (serverOnline = false));
 
     const els = document.querySelectorAll(
-      '.shot, .demo, .dl, .arch, .final, .stat, .faq details, .feat-list li, .code, .compare',
+      '.shot, .demo, .dl, .arch, .final, .stats, .faq details, .feat-list li, .code, .compare',
     );
     if ('IntersectionObserver' in window) {
       const io = new IntersectionObserver(
@@ -109,6 +110,13 @@
     { id: 'e4', title: '1:1 with Ana', date: dayStr(2), startTime: '11:00', endTime: '11:30', color: 'green', calendarId: 'work' },
     { id: 'e5', title: 'Release cut', date: dayStr(4), startTime: '15:00', endTime: '15:30', color: 'amber', calendarId: 'work' },
   ] as { id: string; title: string; date: string; startTime: string; endTime: string; color: string; calendarId: string }[];
+
+  const monthColors = ['#0078D4', '#D15B47', '#34d399', '#c084fc', '#E5B722'];
+  const monthEvents = calEvents.map((e, i) => ({
+    ...e,
+    color: monthColors[i % monthColors.length],
+    dayIndex: (i * 2 + 1) % 7,
+  }));
 
   const mailBenefits = [
     { title: 'Clear the inbox in minutes', body: 'Move with j/k, archive with e, snooze with s. Triage becomes a ten-second loop instead of a morning lost to clicking.' },
@@ -245,9 +253,8 @@
     <span class="eyebrow">Self-hosted mail + calendar</span>
     <h1>Email and calendar that live on your server.</h1>
     <p class="sub">
-      Kestrel is a mail and calendar suite for people who want Gmail and Outlook power without
-      handing their data to Google and Microsoft. One Docker image on your hardware, two fast
-      apps everywhere else.
+      Keep Gmail and Outlook power without handing them your data. One Docker image
+      on your hardware, two fast apps everywhere else.
     </p>
     <div class="hero-cta">
       <Button variant="primary" onclick={() => go('#download')}>Download Kestrel</Button>
@@ -277,21 +284,34 @@
     </div>
 
     <div class="stats">
-      <div class="stat"><b>2</b><span>apps — Mail for triage, Calendar for scheduling</span></div>
-      <div class="stat"><b>6</b><span>platforms, from Linux to iOS</span></div>
-      <div class="stat"><b>2</b><span>providers synced — Gmail + Outlook</span></div>
-      <div class="stat"><b>1</b><span>Docker image to run it all</span></div>
+      <span><b>2</b> apps</span>
+      <span><b>6</b> platforms</span>
+      <span><b>2</b> providers synced</span>
+      <span><b>1</b> Docker image</span>
     </div>
   </header>
 
-  <section class="block band" id="problem">
-    <div class="sec-index">The problem</div>
+  <section class="block band" id="why">
+    <div class="sec-index">Why Kestrel</div>
     <h2>Your email lives on someone else&rsquo;s computer.</h2>
     <div class="problem-grid">
       <p><b>Your mail is someone else&rsquo;s product.</b> Every message sits on servers you don&rsquo;t control, scanned to sell ads and one outage away from unreachable.</p>
       <p><b>Switching feels like a second job.</b> New address, lost history, a setup weekend — so the inbox keeps growing and the unease about who reads it never leaves.</p>
       <p><b>The clients eat your mornings.</b> Click-heavy triage in one tab, scheduling ping-pong in another, and nothing works when the network drops.</p>
     </div>
+    <p class="sec-sub" style="margin-top: 28px;">
+      Kestrel doesn&rsquo;t ask you to move your mail — it changes where your mail lives and who can read it. Same providers, same addresses, none of the leash.
+    </p>
+    <table class="compare">
+      <thead>
+        <tr><th></th><th>Kestrel</th><th>Gmail / Outlook web</th></tr>
+      </thead>
+      <tbody>
+        {#each compareRows as r}
+          <tr><td>{r.k}</td><td class="us">{r.us}</td><td>{r.them}</td></tr>
+        {/each}
+      </tbody>
+    </table>
   </section>
 
   <section class="block" id="mail">
@@ -352,6 +372,13 @@
         <li><b>{f.title}</b><span>{f.body}</span></li>
       {/each}
     </ul>
+    <div class="shot" style="margin-top: 28px;">
+      <div class="shot-bar"><span class="mono-dim">kestrel calendar — month view, live component</span></div>
+      <div class="frame">
+        <MonthGrid events={monthEvents} />
+      </div>
+      <div class="showcase-note">The app&rsquo;s own MonthGrid, running with sample data.</div>
+    </div>
     <div class="cal-proof">
       <ProviderBadge provider="outlook" />
       <span>Synced calendars stay in step with Mail&rsquo;s accounts — connect once, use both.</span>
@@ -359,22 +386,6 @@
     <div class="hero-cta" style="margin-top: 22px;">
       <Button variant="secondary" onclick={() => go(site.calendarDownload)}>Download Kestrel Calendar ↓</Button>
     </div>
-  </section>
-
-  <section class="block" id="why">
-    <div class="sec-index">Why Kestrel</div>
-    <h2>Keep your providers. Lose the leash.</h2>
-    <p class="sec-sub">Kestrel doesn&rsquo;t ask you to move your mail — it changes where your mail lives and who can read it.</p>
-    <table class="compare">
-      <thead>
-        <tr><th></th><th>Kestrel</th><th>Gmail / Outlook web</th></tr>
-      </thead>
-      <tbody>
-        {#each compareRows as r}
-          <tr><td>{r.k}</td><td class="us">{r.us}</td><td>{r.them}</td></tr>
-        {/each}
-      </tbody>
-    </table>
   </section>
 
   <section class="block band" id="selfhost">
