@@ -34,7 +34,7 @@
       .catch(() => (serverOnline = false));
 
     const els = document.querySelectorAll(
-      '.shot, .demo, .dl, .arch, .final, .stats, .faq details, .feat-list li, .code, .compare',
+      '.shot, .demo, .dl, .arch, .final, .stats, .faq details, .feat-list li, .code',
     );
     if ('IntersectionObserver' in window) {
       const io = new IntersectionObserver(
@@ -184,15 +184,6 @@
     else if (e.key === 's') act('snoozed');
   }
 
-  const compareRows = [
-    { k: 'Where your mail lives', us: 'Your server', them: 'Their cloud' },
-    { k: 'Ads and tracking', us: 'None — no ad business', them: 'Scanned and monetized' },
-    { k: 'What it costs', us: 'Free to self-host', them: 'Free with ads, or a subscription' },
-    { k: 'If you want to leave', us: 'Export everything, anytime', them: 'Takeout mazes and lock-in' },
-    { k: 'Works offline', us: 'Full outbox + cache', them: 'Partial, when it feels like it' },
-    { k: 'Keyboard triage', us: 'Built in from day one', them: 'Click, click, click' },
-  ];
-
   const faqs = [
     {
       q: 'What do I need to run it?',
@@ -296,22 +287,15 @@
     <h2>Your email lives on someone else&rsquo;s computer.</h2>
     <div class="problem-grid">
       <p><b>Your mail is someone else&rsquo;s product.</b> Every message sits on servers you don&rsquo;t control, scanned to sell ads and one outage away from unreachable.</p>
+      <p class="answer"><span>→ Kestrel:</span> your mail lives on your server. No ads, no tracking, no one reading over your shoulder — the code is open source, so you don&rsquo;t take that on faith.</p>
       <p><b>Switching feels like a second job.</b> New address, lost history, a setup weekend — so the inbox keeps growing and the unease about who reads it never leaves.</p>
+      <p class="answer"><span>→ Kestrel:</span> keep your providers and addresses. Gmail and Outlook sync in, history intact — only where the mail lives changes.</p>
       <p><b>The clients eat your mornings.</b> Click-heavy triage in one tab, scheduling ping-pong in another, and nothing works when the network drops.</p>
+      <p class="answer"><span>→ Kestrel:</span> keyboard triage that clears the inbox in minutes, scheduling polls instead of threads, and an offline outbox that never loses a send.</p>
     </div>
     <p class="sec-sub" style="margin-top: 28px;">
-      Kestrel doesn&rsquo;t ask you to move your mail — it changes where your mail lives and who can read it. Same providers, same addresses, none of the leash.
+      That&rsquo;s the whole pitch. Here&rsquo;s what it looks like in each app.
     </p>
-    <table class="compare">
-      <thead>
-        <tr><th></th><th>Kestrel</th><th>Gmail / Outlook web</th></tr>
-      </thead>
-      <tbody>
-        {#each compareRows as r}
-          <tr><td>{r.k}</td><td class="us">{r.us}</td><td>{r.them}</td></tr>
-        {/each}
-      </tbody>
-    </table>
   </section>
 
   <section class="block" id="mail">
