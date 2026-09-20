@@ -560,6 +560,17 @@ jobs:
       - name: Publish GitHub Release
         run: |
           TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
+          # workflow_run events resolve ref_name to a branch (e.g. "main"),
+          # which previously published releases literally titled "Release main".
+          # Fall back to the newest version tag; refuse anything else.
+          if [[ "$TAG" != v* ]]; then
+            TAG="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          fi
+          if [[ "$TAG" != v* ]]; then
+            echo "Refusing to publish a release without a version tag (got '$TAG'). Pass tag_name or push a v* tag." >&2
+            exit 1
+          fi
+          echo "Publishing release $TAG"
           # Upload files only: the artifact glob can expand to directories
           # (e.g. release-artifacts/app/build), which `gh` rejects with
           # "is a directory" and fails the whole release.
