@@ -560,6 +560,14 @@ jobs:
       - name: Publish GitHub Release
         run: |
           TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
-          gh release create "$TAG" --title "Release $TAG" --notes-file RELEASE_NOTES.md release-artifacts/**/*
+          # Upload files only: the artifact glob can expand to directories
+          # (e.g. release-artifacts/app/build), which `gh` rejects with
+          # "is a directory" and fails the whole release.
+          mapfile -t files < <(find release-artifacts -type f)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No release artifacts found under release-artifacts/" >&2
+            exit 1
+          fi
+          gh release create "$TAG" --title "Release $TAG" --notes-file RELEASE_NOTES.md "${files[@]}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
