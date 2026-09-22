@@ -70,5 +70,11 @@ jobs:
       - name: Push Tag
         run: |
           NEXT_TAG="${{ steps.next_tag.outputs.tag }}"
+          # Fail honestly: a tag on an already-tagged commit is an empty release.
+          EXISTING="$(git tag --points-at HEAD --list 'v*' | tr '\n' ' ')"
+          if [ -n "$EXISTING" ]; then
+            echo "Refusing to tag: HEAD already carries release tag(s): $EXISTING. Merge new changes to main before releasing." >&2
+            exit 1
+          fi
           git tag "$NEXT_TAG"
           git push origin "$NEXT_TAG"

@@ -241,7 +241,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: backend/Dockerfile.ci
+          file: backend/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:${{ steps.docker_tag.outputs.TAG }}
@@ -563,8 +563,10 @@ jobs:
           # workflow_run events resolve ref_name to a branch (e.g. "main"),
           # which previously published releases literally titled "Release main".
           # Fall back to the newest version tag; refuse anything else.
+          # NOTE: version-sorted, not `git describe`: several tags can share one
+          # commit (e.g. an empty re-tag), and describe picks ambiguously.
           if [[ "$TAG" != v* ]]; then
-            TAG="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+            TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
           fi
           if [[ "$TAG" != v* ]]; then
             echo "Refusing to publish a release without a version tag (got '$TAG'). Pass tag_name or push a v* tag." >&2
