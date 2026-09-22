@@ -245,7 +245,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: backend/Dockerfile.ci
+          file: backend/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:staging

@@ -75,6 +75,8 @@ COPY --from=builder /app/target/release/kestrel-server /usr/local/bin/kestrel-se
 # Copy WASM plugins from builder
 COPY --from=builder /app/target/wasm32-wasip1/release/gmail.wasm /app/plugins/gmail.wasm
 COPY --from=builder /app/target/wasm32-wasip1/release/outlook.wasm /app/plugins/outlook.wasm
+# Copy built landing page served by the backend (landing_fallback reads frontend-landing/dist)
+COPY --from=builder /app/frontend-landing/dist /app/frontend-landing/dist
 
 # Expose backend port
 EXPOSE 8080
