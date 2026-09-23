@@ -8,11 +8,24 @@ import type {
   EventDetail,
   SettingsPayload,
   SearchResponse,
+  RegisterRequest,
   RegisterResponse,
+  TokenRequest,
   TokenResponse,
   SendMessageRequest,
   SendMessageResponse,
   BulkActionType,
+  BulkActionParams,
+  BusyBlockDto,
+  FreebusyRequest,
+  VacationDto,
+  VacationUpdate,
+  EventPollWithVotes,
+  CreatePollRequest,
+  VoteRequest,
+  StarParams,
+  LabelParams,
+  MeResponse,
 } from './generated/types.js';
 
 const DEFAULT_SERVER_URL = typeof process !== 'undefined' && process.env?.VITE_API_BASE
@@ -104,9 +117,9 @@ export class ApiError extends Error {
   }
 }
 
-interface RequestOptions extends Omit<RequestInit, 'method' | 'body'> {
+interface RequestOptions<B = unknown> extends Omit<RequestInit, 'method' | 'body'> {
   token?: string;
-  body?: unknown;
+  body?: B;
 }
 
 // ── Internal helpers ─────────────────────────────────────────────
@@ -124,16 +137,16 @@ function buildHeaders(token?: string): HeadersInit {
 
 import { enqueueMutation, dequeuePending, acknowledgeMutation } from '../offline/queue.js';
 
-async function request<T>(
+async function request<T, B = unknown>(
   method: string,
   path: string,
-  opts: RequestOptions = {},
+  opts: RequestOptions<B> = {},
 ): Promise<T> {
   const { token, body, ...init } = opts;
   
   if (typeof navigator !== 'undefined' && navigator.onLine === false && method !== 'GET') {
     enqueueMutation(path, method, body);
-    return undefined as T; // Return early for void operations (or mock for others)
+    return undefined as unknown as T; // Return early for void operations (or mock for others)
   }
 
   try {
@@ -146,22 +159,22 @@ async function request<T>(
     });
 
     if (res.status === 204) {
-      return undefined as T;
+      return undefined as unknown as T;
     }
 
     if (!res.ok) {
       if (res.status === 401) {
         logout();
       }
-      let parsed: any;
+      let parsed: unknown;
       try {
         parsed = await res.json();
       } catch {
         parsed = null;
       }
-      const errMsg = (parsed && typeof parsed === 'object' && ('error' in parsed || 'message' in parsed))
-        ? (parsed.error || parsed.message)
-        : `${method} ${path} failed: ${res.statusText}`;
+      const errObj = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+      const errMsg = (errObj && (typeof errObj.error === 'string' ? errObj.error : typeof errObj.message === 'string' ? errObj.message : null))
+        ?? `${method} ${path} failed: ${res.statusText}`;
       throw new ApiError(
         res.status,
         errMsg,
@@ -170,11 +183,11 @@ async function request<T>(
     }
 
     return res.json() as Promise<T>;
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof TypeError) {
       if (method !== 'GET') {
         enqueueMutation(path, method, body);
-        return undefined as T;
+        return undefined as unknown as T;
       }
       throw new ApiError(0, 'Network error');
     }
@@ -298,27 +311,29 @@ export async function getHealth(): Promise<HealthResponse> {
 }
 
 export async function register(
-  email: string,
+  username: string,
   password: string,
   token?: string,
 ): Promise<RegisterResponse> {
-  return request<RegisterResponse>('POST', '/auth/register', {
+  const body: RegisterRequest = { username, password };
+  return request<RegisterResponse, RegisterRequest>('POST', '/auth/register', {
     token,
-    body: { email, password },
+    body,
   });
 }
 
 export async function createToken(
-  email: string,
+  username: string,
   password: string,
 ): Promise<TokenResponse> {
-  return request<TokenResponse>('POST', '/auth/token', {
-    body: { email, password },
+  const body: TokenRequest = { username, password };
+  return request<TokenResponse, TokenRequest>('POST', '/auth/token', {
+    body,
   });
 }
 
-export async function getMe(): Promise<{ user_id: string }> {
-  return request<{ user_id: string }>('GET', '/auth/me');
+export async function getMe(): Promise<MeResponse> {
+  return request<MeResponse>('GET', '/auth/me');
 }
 
 export async function loginWithProvider(provider: string) {
@@ -443,18 +458,12 @@ export async function getVacation(accountId: string, token?: string): Promise<Va
 
 export async function setVacation(
   accountId: string,
-  settings: VacationSettings,
+  settings: VacationUpdate,
   token?: string,
 ): Promise<void> {
-  return request<void>('PUT', `/accounts/${accountId}/vacation`, {
+  return request<void, VacationUpdate>('PUT', `/accounts/${accountId}/vacation`, {
     token,
-    body: {
-      enabled: settings.enabled,
-      subject: settings.subject,
-      bodyText: settings.bodyText,
-      startTime: settings.startTime,
-      endTime: settings.endTime,
-    },
+    body: settings,
   });
 }
 
@@ -552,10 +561,11 @@ export async function createEventPoll(
   question: string,
   options: string[],
   token?: string,
-): Promise<EventPoll> {
-  return request<EventPoll>('POST', `/events/${eventId}/polls`, {
+): Promise<EventPollWithVotes> {
+  const body: CreatePollRequest = { question, options };
+  return request<EventPollWithVotes, CreatePollRequest>('POST', `/events/${eventId}/polls`, {
     token,
-    body: { question, options },
+    body,
   });
 }
 
@@ -566,9 +576,10 @@ export async function voteEventPoll(
   optionIndex: number,
   token?: string,
 ): Promise<void> {
-  return request<void>('POST', `/events/${eventId}/polls/${pollId}/vote`, {
+  const body: VoteRequest = { voter_email: voterEmail, option_index: optionIndex };
+  return request<void, VoteRequest>('POST', `/events/${eventId}/polls/${pollId}/vote`, {
     token,
-    body: { voter_email: voterEmail, option_index: optionIndex },
+    body,
   });
 }
 
@@ -586,10 +597,11 @@ export async function queryFreebusy(
   startTime: number,
   endTime: number,
   token?: string,
-): Promise<BusyBlock[]> {
-  return request<BusyBlock[]>('POST', `/accounts/${accountId}/freebusy`, {
+): Promise<BusyBlockDto[]> {
+  const body: FreebusyRequest = { emails, start_time: startTime, end_time: endTime };
+  return request<BusyBlockDto[], FreebusyRequest>('POST', `/accounts/${accountId}/freebusy`, {
     token,
-    body: { emails, start_time: startTime, end_time: endTime },
+    body,
   });
 }
 
@@ -617,7 +629,7 @@ export async function sendMessage(
   payload: SendMessageRequest,
   token?: string,
 ): Promise<SendMessageResponse> {
-  return request<SendMessageResponse>('POST', '/messages/send', {
+  return request<SendMessageResponse, SendMessageRequest>('POST', '/messages/send', {
     token,
     body: payload,
   });
@@ -632,30 +644,38 @@ export async function trashMessage(
   });
 }
 
-
 export async function toggleStar(id: string, is_starred: boolean, token?: string): Promise<void> {
-  await request('POST', `/messages/${id}/star`, {
+  const body: StarParams = { is_starred };
+  await request<void, StarParams>('POST', `/messages/${id}/star`, {
     token,
-    body: { is_starred },
+    body,
   });
 }
 
 export async function updateLabels(id: string, labels: string[], token?: string): Promise<void> {
-  await request('POST', `/messages/${id}/labels`, {
+  const body: LabelParams = { labels };
+  await request<void, LabelParams>('POST', `/messages/${id}/labels`, {
     token,
-    body: { labels },
+    body,
   });
 }
 
-export async function bulkAction(message_ids: string[], action: BulkActionType, action_value?: boolean, label?: string, token?: string): Promise<void> {
-  await request('POST', '/messages/bulk', {
+export async function bulkAction(
+  message_ids: string[],
+  action: BulkActionType,
+  action_value?: boolean,
+  label?: string,
+  token?: string,
+): Promise<void> {
+  const body: BulkActionParams = {
+    message_ids,
+    action,
+    action_value: action_value ?? null,
+    label: label ?? null,
+  };
+  await request<void, BulkActionParams>('POST', '/messages/bulk', {
     token,
-    body: {
-      message_ids,
-      action,
-      action_value,
-      label,
-    },
+    body,
   });
 }
 
@@ -783,9 +803,9 @@ export async function deleteEvent(
 }
 
 export const apiClient = {
-  get: (path: string) => request<any>('GET', path.replace('/api/v1', '')),
-  post: (path: string, body?: any) => request<any>('POST', path.replace('/api/v1', ''), { body }),
-  delete: (path: string) => request<any>('DELETE', path.replace('/api/v1', ''))
+  get: <T = unknown>(path: string) => request<T>('GET', path.replace('/api/v1', '')),
+  post: <T = unknown, B = unknown>(path: string, body?: B) => request<T, B>('POST', path.replace('/api/v1', ''), { body }),
+  delete: <T = unknown>(path: string) => request<T>('DELETE', path.replace('/api/v1', '')),
 };
 
 // ── Settings ──────────────────────────────────────────────
