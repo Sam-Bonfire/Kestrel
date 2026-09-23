@@ -25,7 +25,8 @@ RUN pnpm --filter frontend-calendar exec svelte-kit sync
 RUN pnpm --filter frontend-landing build
 
 # --- Builder Stage ---
-FROM rust:1.92-slim-bookworm AS builder
+# Floating 1.x: pinned 1.92 cannot compile specta 2.0.0-rc.25 (needs fmt::from_fn).
+FROM rust:1-slim-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
