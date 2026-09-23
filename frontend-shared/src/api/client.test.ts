@@ -84,7 +84,7 @@ describe('API Client & Contract Validation', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
-          email: 'testuser@kestrel.dev',
+          username: 'testuser@kestrel.dev',
           password: 'SecurePass123!',
         }),
       })
@@ -101,6 +101,16 @@ describe('API Client & Contract Validation', () => {
     const res = await createToken('testuser@kestrel.dev', 'SecurePass123!');
     expect(res.token).toBe('jwt.token.val');
     expect(res.user_id).toBe('usr-12345');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      `${API_BASE}/auth/token`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          username: 'testuser@kestrel.dev',
+          password: 'SecurePass123!',
+        }),
+      })
+    );
   });
 
   it('getMessages constructs query params correctly with filters', async () => {
