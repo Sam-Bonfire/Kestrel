@@ -5,6 +5,19 @@ RUN corepack enable
 
 WORKDIR /app
 
+# Landing page identity (override with --build-arg so forks ship the page
+# with their own repo/image/contact; unset values fall back to placeholders).
+ARG KESTREL_VERSION=''
+ARG KESTREL_REPO=''
+ARG KESTREL_DOCKER_IMAGE=''
+ARG KESTREL_CONTACT_EMAIL=''
+ARG KESTREL_IOS_TESTFLIGHT=''
+ENV KESTREL_VERSION=$KESTREL_VERSION \
+    KESTREL_REPO=$KESTREL_REPO \
+    KESTREL_DOCKER_IMAGE=$KESTREL_DOCKER_IMAGE \
+    KESTREL_CONTACT_EMAIL=$KESTREL_CONTACT_EMAIL \
+    KESTREL_IOS_TESTFLIGHT=$KESTREL_IOS_TESTFLIGHT
+
 # Install workspace deps for the landing page and its shared library
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY frontend-shared/package.json frontend-shared/package.json

@@ -1,15 +1,64 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// Build-time env with fallback (empty string = feature off / derive default).
+function envOr(name: string, fallback: string): string {
+  const v = process.env[name]?.trim();
+  return v ? v : fallback;
+}
+
+// Owner/Repo slug from the local git remote (https or ssh), null when unknown.
+function gitRepoSlug(): string | null {
+  try {
+    const url = execSync('git config --get remote.origin.url', {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const m = url.match(/[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?$/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+// Release tag baked in at build time (KESTREL_VERSION wins, e.g. CI build args).
+// Empty when unknown (e.g. Docker build without git metadata) — the page omits
+// the version instead of printing a stale one.
+function kestrelVersion(): string {
+  const fromEnv = process.env.KESTREL_VERSION?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return execSync('git describe --tags --abbrev=0', {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
 // Static single-page build, emitted to dist/ and served by the Axum backend.
 // $lib points at Kestrel Mail's lib so the real ThreadList can render here.
 export default defineConfig({
   plugins: [tailwindcss(), svelte()],
+  define: {
+    __KESTREL_VERSION__: JSON.stringify(kestrelVersion()),
+    // Site identity: explicit env wins, else the local git remote, else a
+    // generic placeholder. CI passes KESTREL_REPO=${{ github.repository }},
+    // so no owner/name is stored in source.
+    __KESTREL_REPO__: JSON.stringify(envOr('KESTREL_REPO', gitRepoSlug() ?? 'Github-id/Repo')),
+    __KESTREL_DOCKER_IMAGE__: JSON.stringify(envOr('KESTREL_DOCKER_IMAGE', '')),
+    __KESTREL_CONTACT_EMAIL__: JSON.stringify(envOr('KESTREL_CONTACT_EMAIL', '')),
+    __KESTREL_IOS_TESTFLIGHT__: JSON.stringify(envOr('KESTREL_IOS_TESTFLIGHT', '')),
+  },
   resolve: {
     alias: {
       $lib: resolve(root, '../frontend-mail/src/lib'),

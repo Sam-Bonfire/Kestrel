@@ -5,7 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Kestrel — a private, self-hosted mail and calendar suite. Product portfolio and latest downloads."
+      content="Your Gmail and Outlook accounts, synced to a server you own. Kestrel is a private, self-hosted mail and calendar suite — free and open source."
+    />
+    <meta name="theme-color" content="#0a0a0b" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Kestrel — Private Mail + Calendar" />
+    <meta
+      property="og:description"
+      content="Your Gmail and Outlook accounts, synced to a server you own. Self-hosted mail + calendar, free and open source."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Kestrel — Private Mail + Calendar" />
+    <meta
+      name="twitter:description"
+      content="Your Gmail and Outlook accounts, synced to a server you own. Self-hosted mail + calendar, free and open source."
     />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,6 +29,18 @@
       try {
         var t = localStorage.getItem('kestrel-theme');
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+      // Absolute canonical + share image from the deployment origin
+      // (unknown at build time on self-hosted installs).
+      try {
+        var link = document.createElement('link');
+        link.rel = 'canonical';
+        link.href = location.origin + '/';
+        document.head.appendChild(link);
+        var og = document.createElement('meta');
+        og.setAttribute('property', 'og:image');
+        og.content = location.origin + '/logo.svg';
+        document.head.appendChild(og);
       } catch (e) {}
     </script>
   </head>

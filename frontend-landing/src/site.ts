@@ -1,17 +1,26 @@
-// Single edit point for links and release targets.
-// Mail and Calendar ship as separate installers in the same GitHub release;
-// point each at its own asset URL once filenames are final (defaults: latest release page).
+// Single edit point for links and release targets. Every identity value is
+// resolved at build time (explicit KESTREL_* env, else git remote, else a
+// generic placeholder) so forks ship this page with their own links.
+const repo: string = __KESTREL_REPO__;
+const github = `https://github.com/${repo}`;
+const latestRelease = `${github}/releases/latest`;
+
 export const site = {
   name: 'Kestrel',
   tagline: 'Private mail + calendar suite',
-  email: 'hello@example.com',
-  github: 'https://github.com/Sam-Bonfire/Kestrel',
-  mailDownload: 'https://github.com/Sam-Bonfire/Kestrel/releases/latest',
-  calendarDownload: 'https://github.com/Sam-Bonfire/Kestrel/releases/latest',
-  releaseNotes: 'https://github.com/Sam-Bonfire/Kestrel/releases/latest',
-  dockerImage: 'ghcr.io/sam-bonfire/kestrel:latest',
+  repo,
+  github,
+  mailDownload: latestRelease,
+  calendarDownload: latestRelease,
+  releaseNotes: latestRelease,
+  dockerImage:
+    __KESTREL_DOCKER_IMAGE__ !== '' ? __KESTREL_DOCKER_IMAGE__ : `ghcr.io/${repo.toLowerCase()}:latest`,
   buildNotes: '',
-} as const;
+  // Contact email shown in the footer; empty hides the link entirely.
+  contactEmail: __KESTREL_CONTACT_EMAIL__ as string,
+  // TestFlight invite URL once the iOS beta opens; empty renders "invite only".
+  iosTestFlight: __KESTREL_IOS_TESTFLIGHT__ as string,
+};
 
 export interface PlatformBuild {
   os: string;

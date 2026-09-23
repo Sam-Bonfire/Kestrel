@@ -235,6 +235,12 @@ jobs:
         id: docker_tag
         run: |
           TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
+          # workflow_run events resolve ref_name to a branch: fall back to the
+          # newest version tag (same rule as the release step below).
+          if [[ "$TAG" != v* ]]; then
+            git fetch --tags --force
+            TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          fi
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
           
       - name: Build and push production image
@@ -243,6 +249,9 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: true
+          build-args: |
+            KESTREL_VERSION=${{ steps.docker_tag.outputs.TAG }}
+            KESTREL_REPO=${{ github.repository }}
           tags: |
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:${{ steps.docker_tag.outputs.TAG }}
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:latest

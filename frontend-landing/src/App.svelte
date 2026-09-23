@@ -13,6 +13,56 @@
       ? 'light'
       : 'dark';
   let previewTab: 'mail' | 'calendar' = $state('mail');
+  let menuOpen: boolean = $state(false);
+
+  // Release tag baked in at build time; empty when unknown (never a stale version).
+  const version: string = __KESTREL_VERSION__;
+
+  // --- Direct download links, resolved from the latest GitHub release ---
+  // Buttons fall back to the release page until (or unless) the API answers.
+  let dl: Record<string, string> = $state({});
+
+  interface ReleaseAsset {
+    name: string;
+    browser_download_url: string;
+  }
+
+  function pickAsset(assets: ReleaseAsset[], re: RegExp): string | null {
+    return assets.find((a) => re.test(a.name))?.browser_download_url ?? null;
+  }
+
+  function dlUrl(os: string, app: 'mail' | 'cal'): string {
+    const prefix = os === 'Windows' ? 'win' : os === 'Linux' ? 'linux' : null;
+    const fallback = app === 'mail' ? site.mailDownload : site.calendarDownload;
+    if (!prefix) return fallback;
+    return dl[`${prefix}-${app}`] ?? fallback;
+  }
+
+  function resolveDownloads(): void {
+    fetch(`https://api.github.com/repos/${site.repo}/releases/latest`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rel: { assets?: ReleaseAsset[] } | null) => {
+        if (!rel || !Array.isArray(rel.assets)) return;
+        const assets = rel.assets;
+        const next: Record<string, string> = {};
+        const put = (key: string, re: RegExp): void => {
+          const url = pickAsset(assets, re);
+          if (url) next[key] = url;
+        };
+        // Windows: NSIS setup; Linux: portable AppImage. macOS has no CI-built
+        // DMG and the lone Android APK can't be mapped to an app — those rows
+        // keep their release-page links.
+        put('win-mail', /^kestrel\.mail.*\.exe$/i);
+        put('win-cal', /^kestrel\.calendar.*\.exe$/i);
+        put('linux-mail', /^kestrel\.mail.*\.appimage$/i);
+        put('linux-cal', /^kestrel\.calendar.*\.appimage$/i);
+        put('server', /^kestrel-server$/i);
+        dl = next;
+      })
+      .catch(() => {
+        /* offline or rate-limited — release-page links stay */
+      });
+  }
 
   function toggleTheme(): void {
     theme = theme === 'light' ? 'dark' : 'light';
@@ -32,6 +82,8 @@
     fetch('/api/health')
       .then((r) => (serverOnline = r.ok))
       .catch(() => (serverOnline = false));
+
+    resolveDownloads();
 
     const els = document.querySelectorAll(
       '.shot, .demo, .dl, .arch, .final, .stats, .faq details, .feat-list li, .code',
@@ -215,7 +267,7 @@
 <svelte:window onkeydown={demoKey} />
 
 <div class="announce">
-  Kestrel v0.1.0 — Mail + Calendar are ready to self-host. <a href="#download">Get the builds →</a>
+  {#if version !== ''}Kestrel {version} — {/if}Mail + Calendar are ready to self-host. <a href="#download">Get the builds →</a>
 </div>
 <nav class="nav">
   <div class="wrap nav-inner">
@@ -223,13 +275,16 @@
       <img src="/logo.svg" alt="Kestrel logo" width="28" height="28" />
       Kestrel
     </a>
-    <div class="nav-links">
-      <a href="#product">Product</a>
-      <a href="#why">Why Kestrel</a>
-      <a href="#download">Download</a>
-      <a href="#faq">FAQ</a>
+    <div class="nav-links" class:open={menuOpen}>
+      <a href="#product" onclick={() => (menuOpen = false)}>Product</a>
+      <a href="#why" onclick={() => (menuOpen = false)}>Why Kestrel</a>
+      <a href="#download" onclick={() => (menuOpen = false)}>Download</a>
+      <a href="#faq" onclick={() => (menuOpen = false)}>FAQ</a>
     </div>
     <div class="nav-actions">
+      <button class="nav-toggle" onclick={() => (menuOpen = !menuOpen)} aria-label="Toggle navigation menu" aria-expanded={menuOpen}>
+        {menuOpen ? '✕' : '☰'}
+      </button>
       <button class="theme-btn" onclick={toggleTheme} aria-label="Toggle color theme">
         {theme === 'light' ? '◑' : '◐'}
       </button>
@@ -244,7 +299,7 @@
     <span class="eyebrow">Self-hosted mail + calendar</span>
     <h1>Email and calendar that live on your server.</h1>
     <p class="sub">
-      Keep Gmail and Outlook power without handing them your data. One Docker image
+      Your Gmail and Outlook accounts, synced to a server you own. One Docker image
       on your hardware, two fast apps everywhere else.
     </p>
     <div class="hero-cta">
@@ -399,8 +454,8 @@ docker compose up -d</div>
     <div class="sec-index">Download</div>
     <h2>Get the latest builds.</h2>
     <p class="sec-sub">
-      Mail and Calendar ship as separate installers in every tagged release. Pick your app —
-      the links open the latest release.
+      Mail and Calendar ship as separate installers in every tagged release. Where a direct
+      installer exists, one click starts the download — everything else opens the latest release.
     </p>
     <div class="dl">
       {#each platforms as p}
@@ -409,10 +464,20 @@ docker compose up -d</div>
             <span class="dl-os">{p.os}</span>
             <span class="dl-format">{p.format}</span>
           </div>
-          <div class="dl-btns">
-            <a class="dl-link primary" href={site.mailDownload}>Mail ↓</a>
-            <a class="dl-link" href={site.calendarDownload}>Calendar ↓</a>
-          </div>
+          {#if p.os === 'iOS'}
+            <div class="dl-btns">
+              {#if site.iosTestFlight !== ''}
+                <a class="dl-link primary" href={site.iosTestFlight}>Join TestFlight →</a>
+              {:else}
+                <span class="dl-note">TestFlight · invite only for now</span>
+              {/if}
+            </div>
+          {:else}
+            <div class="dl-btns">
+              <a class="dl-link primary" href={dlUrl(p.os, 'mail')}>Mail ↓</a>
+              <a class="dl-link" href={dlUrl(p.os, 'cal')}>Calendar ↓</a>
+            </div>
+          {/if}
         </div>
       {/each}
       <div class="dl-row">
@@ -422,7 +487,7 @@ docker compose up -d</div>
           <div class="dl-note">Self-host the backend that serves this page</div>
         </div>
         <div class="dl-btns">
-          <a class="dl-link" href={site.releaseNotes}>Release notes</a>
+          <a class="dl-link primary" href={dl['server'] ?? site.releaseNotes}>Server ↓</a>
         </div>
       </div>
     </div>
@@ -460,7 +525,7 @@ docker compose up -d</div>
           <img src="/logo.svg" alt="Kestrel logo" width="28" height="28" />
           Kestrel
         </a>
-        <p>A private, self-hosted mail and calendar suite. Your data lives on your server — not in someone else&rsquo;s cloud.</p>
+        <p>A private, self-hosted mail and calendar suite. Your accounts, synced to a server you own — under your control.</p>
       </div>
       <div class="foot-col">
         <h4>Product</h4>
@@ -474,11 +539,13 @@ docker compose up -d</div>
         <a href={site.github}>GitHub</a>
         <a href={site.releaseNotes}>Release notes</a>
         <a href="/api/health">API status</a>
-        <a href="mailto:{site.email}">Contact</a>
+        {#if site.contactEmail !== ''}
+          <a href="mailto:{site.contactEmail}">Contact</a>
+        {/if}
       </div>
     </div>
     <div class="foot-base">
-      <span>Kestrel v0.1.0 · served by its own backend</span>
+      <span>Kestrel{#if version !== ''} {version}{/if} · served by its own backend</span>
       {#if site.buildNotes !== ''}<a href={site.buildNotes}>Build notes</a>{/if}
     </div>
   </div>

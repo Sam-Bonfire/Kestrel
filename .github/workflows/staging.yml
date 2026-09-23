@@ -241,12 +241,19 @@ jobs:
         id: repo_owner
         run: echo "OWNER=$(echo "${{ github.repository_owner }}" | tr "[:upper:]" "[:lower:]")" >> $GITHUB_OUTPUT
 
+      - name: Resolve landing version
+        id: landing_version
+        run: echo "VERSION=dev-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
       - name: Build and push staging image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: backend/Dockerfile
           push: true
+          build-args: |
+            KESTREL_VERSION=${{ steps.landing_version.outputs.VERSION }}
+            KESTREL_REPO=${{ github.repository }}
           tags: |
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:staging
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:dev-${{ github.sha }}
