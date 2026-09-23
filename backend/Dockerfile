@@ -30,8 +30,6 @@ COPY frontend-landing/ frontend-landing/
 COPY frontend-mail/ frontend-mail/
 COPY frontend-calendar/ frontend-calendar/
 
-COPY frontend-shared/ frontend-shared/
-COPY frontend-landing/ frontend-landing/
 # Generate SvelteKit tsconfigs (gitignored) so esbuild can resolve them
 RUN pnpm --filter frontend-mail exec svelte-kit sync
 RUN pnpm --filter frontend-calendar exec svelte-kit sync
