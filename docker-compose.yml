@@ -3,6 +3,13 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        # Landing page identity (see .env.example); empty = repo defaults.
+        KESTREL_VERSION: ${KESTREL_VERSION:-}
+        KESTREL_REPO: ${KESTREL_REPO:-}
+        KESTREL_DOCKER_IMAGE: ${KESTREL_DOCKER_IMAGE:-}
+        KESTREL_CONTACT_EMAIL: ${KESTREL_CONTACT_EMAIL:-}
+        KESTREL_IOS_TESTFLIGHT: ${KESTREL_IOS_TESTFLIGHT:-}
     image: kestrel-backend:latest
     container_name: kestrel-backend
     restart: unless-stopped

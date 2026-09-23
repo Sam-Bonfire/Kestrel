@@ -7,6 +7,12 @@ import tailwindcss from '@tailwindcss/vite';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// Build-time env with fallback (empty string = feature off / derive default).
+function envOr(name: string, fallback: string): string {
+  const v = process.env[name]?.trim();
+  return v ? v : fallback;
+}
+
 // Release tag baked in at build time (KESTREL_VERSION wins, e.g. CI build args).
 // Empty when unknown (e.g. Docker build without git metadata) — the page omits
 // the version instead of printing a stale one.
@@ -30,6 +36,11 @@ export default defineConfig({
   plugins: [tailwindcss(), svelte()],
   define: {
     __KESTREL_VERSION__: JSON.stringify(kestrelVersion()),
+    // Site identity for other self-hosters (defaults live in src/site.ts).
+    __KESTREL_REPO__: JSON.stringify(envOr('KESTREL_REPO', 'Sam-Bonfire/Kestrel')),
+    __KESTREL_DOCKER_IMAGE__: JSON.stringify(envOr('KESTREL_DOCKER_IMAGE', '')),
+    __KESTREL_CONTACT_EMAIL__: JSON.stringify(envOr('KESTREL_CONTACT_EMAIL', '')),
+    __KESTREL_IOS_TESTFLIGHT__: JSON.stringify(envOr('KESTREL_IOS_TESTFLIGHT', '')),
   },
   resolve: {
     alias: {
