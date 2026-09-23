@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { triggerUndoAction, executeUndo, dismissToast, activeToasts } from './undoToast.js';
 import { get } from 'svelte/store';
 

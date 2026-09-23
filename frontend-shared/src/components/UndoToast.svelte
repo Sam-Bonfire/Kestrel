@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { activeToasts, executeUndo, dismissToast } from '../stores/undoToast.js';
   import { RotateCcw, X, CheckCircle2, AlertTriangle, Info, AlertCircle } from 'lucide-svelte';
   import { fly } from 'svelte/transition';
