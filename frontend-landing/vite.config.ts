@@ -1,15 +1,36 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// Release tag baked in at build time (KESTREL_VERSION wins, e.g. CI build args).
+// Empty when unknown (e.g. Docker build without git metadata) — the page omits
+// the version instead of printing a stale one.
+function kestrelVersion(): string {
+  const fromEnv = process.env.KESTREL_VERSION?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return execSync('git describe --tags --abbrev=0', {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
 // Static single-page build, emitted to dist/ and served by the Axum backend.
 // $lib points at Kestrel Mail's lib so the real ThreadList can render here.
 export default defineConfig({
   plugins: [tailwindcss(), svelte()],
+  define: {
+    __KESTREL_VERSION__: JSON.stringify(kestrelVersion()),
+  },
   resolve: {
     alias: {
       $lib: resolve(root, '../frontend-mail/src/lib'),

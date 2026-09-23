@@ -4,13 +4,14 @@
 export const site = {
   name: 'Kestrel',
   tagline: 'Private mail + calendar suite',
-  email: 'hello@example.com',
   github: 'https://github.com/Sam-Bonfire/Kestrel',
   mailDownload: 'https://github.com/Sam-Bonfire/Kestrel/releases/latest',
   calendarDownload: 'https://github.com/Sam-Bonfire/Kestrel/releases/latest',
   releaseNotes: 'https://github.com/Sam-Bonfire/Kestrel/releases/latest',
   dockerImage: 'ghcr.io/sam-bonfire/kestrel:latest',
   buildNotes: '',
+  // TestFlight invite URL once the iOS beta opens; empty renders "invite only".
+  iosTestFlight: '',
 } as const;
 
 export interface PlatformBuild {

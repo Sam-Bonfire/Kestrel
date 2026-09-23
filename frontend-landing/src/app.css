@@ -83,6 +83,13 @@ a { color: inherit; }
 .nav-links a { text-decoration: none; transition: color 120ms; }
 .nav-links a:hover { color: var(--text-primary); }
 .nav-actions { display: flex; gap: 12px; align-items: center; }
+.nav-toggle {
+  display: none;
+  background: var(--canvas-card); border: 1px solid var(--border);
+  color: var(--text-secondary); border-radius: var(--radius);
+  padding: 0.42rem 0.62rem; cursor: pointer; font-size: 0.85rem; line-height: 1;
+}
+.nav-toggle:hover { color: var(--text-primary); border-color: var(--text-secondary); }
 .nav-github { font-size: 0.85rem; color: var(--text-secondary); text-decoration: none; }
 .nav-github:hover { color: var(--text-primary); }
 .theme-btn {
@@ -288,6 +295,15 @@ html.js .reveal.in { opacity: 1; translate: none; }
 @media (max-width: 640px) {
   .wrap { padding: 0 20px; }
   .nav-links { display: none; }
+  .nav-links.open {
+    display: flex; flex-direction: column; gap: 4px;
+    position: absolute; top: 66px; left: 0; right: 0;
+    background: var(--canvas-base); border-bottom: 1px solid var(--border);
+    padding: 12px 20px 16px;
+  }
+  .nav-links.open a { padding: 8px 0; font-size: 0.95rem; }
+  .nav-toggle { display: block; }
+  .nav-github { display: none; }
   .hero { padding: 64px 0 48px; }
   section.block { padding: 64px 0; }
   .frame { height: 480px; }
