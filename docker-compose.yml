@@ -4,7 +4,10 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
-        # Landing page identity (see .env.example); empty = repo defaults.
+        # Landing page identity. CI stamps these automatically; for local
+        # docker builds export them first (e.g. KESTREL_REPO=$(git config --get
+        # remote.origin.url | sed 's/.*[:/]\([^/]*\/[^/]*\)\(\.git\)\?$/\1/')),
+        # otherwise the page falls back to generic placeholders / no version.
         KESTREL_VERSION: ${KESTREL_VERSION:-}
         KESTREL_REPO: ${KESTREL_REPO:-}
         KESTREL_DOCKER_IMAGE: ${KESTREL_DOCKER_IMAGE:-}

@@ -1,6 +1,6 @@
 // Single edit point for links and release targets. Every identity value is
-// overridable at build time via KESTREL_* env vars (see .env.example) so other
-// self-hosters can ship this page with their own repo, image, and contact.
+// resolved at build time (explicit KESTREL_* env, else git remote, else a
+// generic placeholder) so forks ship this page with their own links.
 const repo: string = __KESTREL_REPO__;
 const github = `https://github.com/${repo}`;
 const latestRelease = `${github}/releases/latest`;

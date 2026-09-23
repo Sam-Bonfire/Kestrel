@@ -251,6 +251,7 @@ jobs:
           push: true
           build-args: |
             KESTREL_VERSION=${{ steps.docker_tag.outputs.TAG }}
+            KESTREL_REPO=${{ github.repository }}
           tags: |
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:${{ steps.docker_tag.outputs.TAG }}
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:latest

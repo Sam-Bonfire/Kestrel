@@ -253,6 +253,7 @@ jobs:
           push: true
           build-args: |
             KESTREL_VERSION=${{ steps.landing_version.outputs.VERSION }}
+            KESTREL_REPO=${{ github.repository }}
           tags: |
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:staging
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:dev-${{ github.sha }}

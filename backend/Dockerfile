@@ -5,8 +5,8 @@ RUN corepack enable
 
 WORKDIR /app
 
-# Landing page identity (override with --build-arg so other self-hosters
-# can ship the page with their own repo/image/contact; see .env.example).
+# Landing page identity (override with --build-arg so forks ship the page
+# with their own repo/image/contact; unset values fall back to placeholders).
 ARG KESTREL_VERSION=''
 ARG KESTREL_REPO=''
 ARG KESTREL_DOCKER_IMAGE=''
