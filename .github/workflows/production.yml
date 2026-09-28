@@ -319,6 +319,10 @@ jobs:
           path: |
             target/release/bundle/msi/*Mail*.msi
             target/release/bundle/nsis/*Mail*.exe
+            target/release/bundle/msi/*.sig
+            target/release/bundle/nsis/*.sig
+            target/release/bundle/msi/*.json
+            target/release/bundle/nsis/*.json
           retention-days: 7
 
       - name: Upload Linux Packages
@@ -330,6 +334,12 @@ jobs:
             target/release/bundle/deb/*mail*.deb
             target/release/bundle/rpm/*mail*.rpm
             target/release/bundle/appimage/*Mail*.AppImage
+            target/release/bundle/deb/*.sig
+            target/release/bundle/rpm/*.sig
+            target/release/bundle/appimage/*.sig
+            target/release/bundle/deb/*.json
+            target/release/bundle/rpm/*.json
+            target/release/bundle/appimage/*.json
           retention-days: 7
 
   build-mail-android:
@@ -460,6 +470,10 @@ jobs:
           path: |
             target/release/bundle/msi/*Calendar*.msi
             target/release/bundle/nsis/*Calendar*.exe
+            target/release/bundle/msi/*.sig
+            target/release/bundle/nsis/*.sig
+            target/release/bundle/msi/*.json
+            target/release/bundle/nsis/*.json
           retention-days: 7
 
       - name: Upload Linux Packages
@@ -471,6 +485,12 @@ jobs:
             target/release/bundle/deb/*calendar*.deb
             target/release/bundle/rpm/*calendar*.rpm
             target/release/bundle/appimage/*Calendar*.AppImage
+            target/release/bundle/deb/*.sig
+            target/release/bundle/rpm/*.sig
+            target/release/bundle/appimage/*.sig
+            target/release/bundle/deb/*.json
+            target/release/bundle/rpm/*.json
+            target/release/bundle/appimage/*.json
           retention-days: 7
 
   build-calendar-android:
