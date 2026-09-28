@@ -59,10 +59,8 @@ export {
 } from './focusMode.js';
 
 export {
-  recentBreadcrumbs,
-  pushBreadcrumb,
-  clearBreadcrumbs,
-  type Breadcrumb,
+  currentCrumb,
+  setCurrentCrumb,
 } from './breadcrumbs.js';
 
 export {

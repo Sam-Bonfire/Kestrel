@@ -8,7 +8,7 @@
     Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer, Sparkles
   } from 'lucide-svelte';
   import { AppShell, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
-  import { authState, triggerUndoAction, pushBreadcrumb, theme } from '@kestrel/shared/stores';
+  import { authState, triggerUndoAction, setCurrentCrumb, theme } from '@kestrel/shared/stores';
   import { checkForAppUpdate, installAppUpdate } from '@kestrel/shared';
   import { DEFAULT_WORKING_HOURS, type WorkingHoursConfig } from '@kestrel/shared';
 
@@ -22,11 +22,12 @@
   let selectedDate = $state(new Date());
   let viewMode = $state<string>('month');
 
-  // ── Recent activity trail ─────────────────────────────────────────
-  // $effect (not per-handler pushes): viewMode changes from several dropdown
-  // and shortcut sites, so a single effect covers them all.
+  // ── Location breadcrumb ─────────────────────────────────────────
+  // $effect (not per-handler updates): viewMode changes from several dropdown
+  // and shortcut sites, so a single effect covers them all. The bar mirrors
+  // the current view only — no history, so it can never go stale.
   $effect(() => {
-    pushBreadcrumb(viewMode);
+    setCurrentCrumb(viewMode);
   });
 
   // Deep-link target not yet loaded: retried after each events refresh.
@@ -830,7 +831,7 @@
   {/snippet}
 
   {#snippet children()}
-  <Breadcrumbs />
+  <Breadcrumbs app="Calendar" />
   <SyncErrorBanner />
   <!-- Main View Canvas area -->
   <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 {isDetailsDocked && selectedEvent ? 'lg:mr-80' : ''}"
