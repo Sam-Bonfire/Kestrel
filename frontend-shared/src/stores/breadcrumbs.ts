@@ -1,48 +1,16 @@
 import { writable } from 'svelte/store';
 
-export interface Breadcrumb {
-  label: string;
-}
+// Location breadcrumb (K-1469): the bar shows where the user IS
+// (`App / Current view`), derived from current state only. The previous
+// recency-trail design rewrote itself on every tab/view switch and
+// persisted across sessions, so the bar showed stale history instead of
+// the current location.
 
-export const MAX_CRUMBS = 8;
+/** Raw id of the currently displayed view ('inbox', '2-day', ...). */
+export const currentCrumb = writable<string>('inbox');
 
-const CRUMBS_KEY = 'kestrel:nav:recent';
-
-function loadCrumbs(): Breadcrumb[] {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const val = localStorage.getItem(CRUMBS_KEY);
-      const parsed = val !== null ? JSON.parse(val) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    }
-    return [];
-  } catch {
-    return [];
-  }
-}
-
-/** Newest-first trail of recently visited views. */
-export const recentBreadcrumbs = writable<Breadcrumb[]>(loadCrumbs());
-
-recentBreadcrumbs.subscribe((val) => {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(CRUMBS_KEY, JSON.stringify(val));
-    }
-  } catch {
-    // Non-fatal
-  }
-});
-
-export function pushBreadcrumb(label: string) {
-  recentBreadcrumbs.update((crumbs) => {
-    const rest = crumbs.filter((c) => c.label !== label);
-    return [{ label }, ...rest].slice(0, MAX_CRUMBS);
-  });
-}
-
-export function clearBreadcrumbs() {
-  recentBreadcrumbs.set([]);
+export function setCurrentCrumb(label: string) {
+  currentCrumb.set(label);
 }
 
 /** Turn a raw view id ('reply-later', 'label-receipts') into a display label. */

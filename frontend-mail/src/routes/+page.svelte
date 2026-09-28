@@ -9,7 +9,7 @@
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, pushBreadcrumb } from '@kestrel/shared/stores';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
   import { isNewsletter, setUnreadBadge } from '@kestrel/shared';
   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
@@ -202,11 +202,12 @@
     if (activeCustomViewId === id) activeCustomViewId = null;
   }
 
-  // ── Recent activity trail ─────────────────────────────────────────
-  // $effect (not per-handler pushes): currentView also changes from keyboard
-  // shortcuts, so a single effect covers every change site.
+  // ── Location breadcrumb ──────────────────────────────────────────
+  // $effect (not per-handler updates): currentView also changes from keyboard
+  // shortcuts, so a single effect covers every change site. The bar mirrors
+  // the current view only — no history, so it can never go stale.
   $effect(() => {
-    pushBreadcrumb(currentView);
+    setCurrentCrumb(currentView);
   });
 
   // Split-pane reader: docked panel keeps the list visible.
@@ -1087,7 +1088,7 @@
       </div>
     {/if}
     <!-- Mail panel: full width thread list, no reader pane -->
-    <Breadcrumbs />
+    <Breadcrumbs app="Mail" />
     {#if currentView === 'screener'}
       <ScreenerQueue
         senders={screenerQueue}
