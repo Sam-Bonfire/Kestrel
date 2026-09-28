@@ -155,10 +155,33 @@
   });
 
   // ── Accounts ────────────────────────────────────────────────────
-  const accounts = [
-    { id: '1', name: 'Personal Gmail',  email: 'alex@gmail.com',   color: '#EA4335', provider: 'google' },
+  // Defaults double as the offline fallback; replaced by the account
+  // store once authenticated (K-1475).
+  let accounts = $state([
+    { id: '1', name: 'Personal Gmail',  email: 'alex@gmail.com',   color: '#EA4335', provider: 'gmail' },
     { id: '2', name: 'Work Outlook',    email: 'alex@kestrel.dev', color: '#0078D4', provider: 'outlook' },
-  ];
+  ]);
+  let accountsLoaded = $state(false);
+
+  function toSidebarAccount(a: { id: string; provider: string; provider_account_id: string; display_name: string }) {
+    const color = a.provider === 'gmail' ? '#EA4335' : a.provider === 'outlook' ? '#0078D4' : '#6B7280';
+    return { id: a.id, name: a.display_name, email: a.provider_account_id, color, provider: a.provider };
+  }
+
+  $effect(() => {
+    if (authState.isAuthenticated && !accountsLoaded) {
+      accountsLoaded = true;
+      import('@kestrel/shared/api').then(({ listAccounts }) => {
+        listAccounts()
+          .then((list) => {
+            if (list.length > 0) accounts = list.map(toSidebarAccount);
+          })
+          .catch(() => {
+            /* offline or unreachable — defaults stay */
+          });
+      });
+    }
+  });
 
   // ── App state ───────────────────────────────────────────────────
   let currentView      = $state('inbox');
