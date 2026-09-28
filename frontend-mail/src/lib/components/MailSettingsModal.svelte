@@ -33,6 +33,17 @@
   let updateAvailable = $state(false);
   let checkingUpdate = $state(false);
 
+  // Swipe actions only exist on touch devices (K-1472): the thread list
+  // ignores mouse drags, so advertising swipe settings on desktop is dead UI.
+  let isTouchDevice = $state(false);
+  onMount(() => {
+    try {
+      isTouchDevice = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    } catch {
+      isTouchDevice = false;
+    }
+  });
+
   async function handleCheckForUpdates() {
     checkingUpdate = true;
     updateMessage = 'Checking for updates...';
@@ -334,23 +345,25 @@
             {/if}
           </div>
 
-          <div class="space-y-1">
-            <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Swipe Right Action</span>
-            <select bind:value={$swipeRightAction} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
-              {#each swipeActionOptions as opt}
-                <option value={opt.value}>{opt.label}</option>
-              {/each}
-            </select>
-          </div>
+          {#if isTouchDevice}
+            <div class="space-y-1">
+              <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Swipe Right Action</span>
+              <select bind:value={$swipeRightAction} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
+                {#each swipeActionOptions as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </div>
 
-          <div class="space-y-1">
-            <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Swipe Left Action</span>
-            <select bind:value={$swipeLeftAction} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
-              {#each swipeActionOptions as opt}
-                <option value={opt.value}>{opt.label}</option>
-              {/each}
-            </select>
-          </div>
+            <div class="space-y-1">
+              <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Swipe Left Action</span>
+              <select bind:value={$swipeLeftAction} class="w-full bg-[var(--color-canvas-base)] text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-white/20 transition-all cursor-pointer">
+                {#each swipeActionOptions as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </div>
+          {/if}
 
           <div class="space-y-1">
             <span class="block font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Default Snooze Duration</span>
