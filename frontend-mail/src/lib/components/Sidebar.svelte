@@ -102,6 +102,14 @@
 
   let newViewName = $state('');
 
+  // Custom views overflow (K-1470): cap the rows so a long view list
+  // cannot push labels and folders out of the sidebar.
+  const MAX_VISIBLE_VIEWS = 4;
+  let viewsExpanded = $state(false);
+  let visibleCustomViews = $derived(
+    viewsExpanded ? customViews : customViews.slice(0, MAX_VISIBLE_VIEWS)
+  );
+
   function handleSaveView() {
     if (newViewName.trim()) {
       onSaveCustomView(newViewName);
@@ -450,7 +458,7 @@
             Custom Views
           </div>
           <div class="space-y-0.5 mt-1">
-            {#each customViews as view (view.id)}
+            {#each visibleCustomViews as view (view.id)}
               {@const ViewIcon = iconMapping[view.icon || ''] || Tag}
               <div class="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out {activeCustomViewId === view.id ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]/60'}">
                 <button
@@ -482,6 +490,15 @@
                 </span>
               </div>
             {/each}
+            {#if customViews.length > MAX_VISIBLE_VIEWS}
+              <button
+                onclick={() => (viewsExpanded = !viewsExpanded)}
+                aria-expanded={viewsExpanded}
+                class="w-full text-left px-2.5 py-1 text-[11px] rounded text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)]/60 transition-colors cursor-pointer"
+              >
+                {viewsExpanded ? 'Show less' : `Show ${customViews.length - MAX_VISIBLE_VIEWS} more`}
+              </button>
+            {/if}
             <div class="flex items-center gap-1.5 px-1 pt-1">
               <input
                 type="text"
