@@ -433,6 +433,11 @@
                 }
               }
               eventsFromBackend = true;
+            } else if (res && Array.isArray(res.events)) {
+              // Authenticated but nothing stored: drop bundled samples
+              // (K-1468), keep anything created this session.
+              events = events.filter((ev: any) => !SAMPLE_EVENT_IDS.has(String(ev.id)));
+              eventsFromBackend = true;
             }
           }).catch(console.error);
         });
@@ -607,6 +612,26 @@
       status: 'Scheduled'
     }
   ]);
+
+  // Bundled demo content (K-1468): these ids are the hardcoded samples
+  // shipped for logged-out first paint. Real ids are backend UUIDs, so
+  // the sets below only ever match the samples — never user data.
+  const SAMPLE_ACCOUNT_IDS = new Set(['1', '2']);
+  const SAMPLE_EVENT_IDS = new Set(['1', '2', '3']);
+
+  // Signed-in users get backend truth, never someone else's samples.
+  // Runs on auth flip (before/after the fetch effects) and composes with
+  // the store loaders: real rows have UUIDs, so this is a no-op for them.
+  $effect(() => {
+    if (authState.isAuthenticated) {
+      if (accounts.length > 0 && accounts.every((a) => SAMPLE_ACCOUNT_IDS.has(a.id))) {
+        accounts = [];
+      }
+      if (events.some((ev: any) => SAMPLE_EVENT_IDS.has(String(ev.id)))) {
+        events = events.filter((ev: any) => !SAMPLE_EVENT_IDS.has(String(ev.id)));
+      }
+    }
+  });
 
   let activeCalendarIds = $derived(
     accounts.flatMap(acc => acc.calendars.filter(cal => cal.isActive).map(cal => cal.id))
