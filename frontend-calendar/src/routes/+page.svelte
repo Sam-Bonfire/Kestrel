@@ -534,6 +534,8 @@
   }
 
   // Dynamic calendars metadata structure (Matching prototype)
+  // Samples double as the offline fallback; replaced by the account
+  // store once authenticated (K-1475).
   let accounts = $state<Account[]>([
     {
       id: '1',
@@ -630,6 +632,38 @@
       if (events.some((ev: any) => SAMPLE_EVENT_IDS.has(String(ev.id)))) {
         events = events.filter((ev: any) => !SAMPLE_EVENT_IDS.has(String(ev.id)));
       }
+    }
+  });
+
+  let accountsLoaded = $state(false);
+
+  $effect(() => {
+    if (authState.isAuthenticated && !accountsLoaded) {
+      accountsLoaded = true;
+      import('@kestrel/shared/api').then(({ listAccounts, listCalendars }) => {
+        Promise.all([listAccounts(), listCalendars()])
+          .then(([accts, cals]) => {
+            if (accts.length === 0) return;
+            const fallbackColors = ['blue', 'green', 'purple', 'orange'];
+            accounts = accts.map((a, i) => ({
+              id: a.id,
+              email: a.provider_account_id || a.display_name,
+              isExpanded: true,
+              calendars: cals.calendars
+                .filter((c) => c.account_id === a.id)
+                .map((c, j) => ({
+                  id: c.id,
+                  name: c.name,
+                  color: c.color || fallbackColors[(i + j) % fallbackColors.length],
+                  isActive: true,
+                  isDefault: !!c.is_primary,
+                })),
+            }));
+          })
+          .catch(() => {
+            /* offline or unreachable — samples stay */
+          });
+      });
     }
   });
 

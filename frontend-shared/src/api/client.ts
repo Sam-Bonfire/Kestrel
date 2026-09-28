@@ -1,6 +1,8 @@
 import { authState, logout } from '../stores/auth.svelte.js';
 export * from './generated/types.js';
 import type {
+  Account,
+  CalendarListResponse,
   Contact,
   CreateEventRequest,
   CreateEventResponse,
@@ -345,6 +347,10 @@ export function getCallbackUrl(): string {
 }
 
 // ── Account endpoints ───────────────────────────────────────────
+
+export async function listAccounts(token?: string): Promise<Account[]> {
+  return request<Account[]>('GET', '/accounts', { token });
+}
 
 export async function deleteAccount(
   accountId: string,
@@ -746,6 +752,10 @@ export async function triggerSync(accountId?: string, token?: string): Promise<v
 }
 
 // ── Calendar endpoints ──────────────────────────────────────────
+
+export async function listCalendars(token?: string): Promise<CalendarListResponse> {
+  return request<CalendarListResponse>('GET', '/calendars', { token });
+}
 
 export async function getCalendars(
   token?: string,
