@@ -20,7 +20,7 @@
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
   import { registerNotificationCategories } from '$lib/notifications';
   import { mailStore } from '$lib/stores/mailStore.svelte.js';
-  import { getCustomViews, saveCustomView, deleteCustomView } from '$lib/utils/customViews';
+  import { getCustomViews, saveCustomView, deleteCustomView, updateCustomView } from '$lib/utils/customViews';
   import { inboxCategory } from '$lib/utils/inboxCategory';
   import { onMount, untrack, onDestroy } from 'svelte';
   import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
@@ -200,6 +200,10 @@
   function removeCustomView(id: string) {
     customViews = deleteCustomView(id);
     if (activeCustomViewId === id) activeCustomViewId = null;
+  }
+
+  function editCustomView(id: string, patch: { name?: string; icon?: string }) {
+    customViews = updateCustomView(id, patch);
   }
 
   // ── Location breadcrumb ──────────────────────────────────────────
@@ -1063,6 +1067,7 @@
       {activeCustomViewId}
       onSelectCustomView={applyCustomView}
       onDeleteCustomView={removeCustomView}
+      onUpdateCustomView={editCustomView}
       onSaveCustomView={saveCurrentView}
       onComposeClick={() => { isComposeOpen = true; isMobileSidebarOpen = false; }}
       onOpenMailSettings={() => { isMailSettingsOpen = true; isMobileSidebarOpen = false; }}

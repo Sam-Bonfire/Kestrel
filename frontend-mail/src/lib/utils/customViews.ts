@@ -10,6 +10,8 @@ export interface CustomViewFilter {
 export interface CustomView {
   id: string;
   name: string;
+  /** Icon key into the sidebar icon map; absent = default view icon. */
+  icon?: string;
   filter: CustomViewFilter;
 }
 
@@ -46,7 +48,7 @@ export function getCustomViews(): CustomView[] {
   return loadViews();
 }
 
-export function saveCustomView(name: string, filter: CustomViewFilter): CustomView[] {
+export function saveCustomView(name: string, filter: CustomViewFilter, icon?: string): CustomView[] {
   const trimmed = name.trim().slice(0, 60);
   if (!trimmed) return loadViews();
   const views = loadViews();
@@ -55,7 +57,27 @@ export function saveCustomView(name: string, filter: CustomViewFilter): CustomVi
     name: trimmed,
     filter,
   };
+  if (icon) view.icon = icon;
   const next = [...views, view];
+  saveViews(next);
+  return next;
+}
+
+export interface CustomViewPatch {
+  name?: string;
+  icon?: string;
+}
+
+export function updateCustomView(id: string, patch: CustomViewPatch): CustomView[] {
+  const name = patch.name?.trim().slice(0, 60);
+  const views = loadViews();
+  if (!views.some((v) => v.id === id)) return views;
+  if (name !== undefined && !name) return views;
+  const next = views.map((v) =>
+    v.id === id
+      ? { ...v, ...(name !== undefined ? { name } : {}), ...(patch.icon !== undefined ? { icon: patch.icon } : {}) }
+      : v
+  );
   saveViews(next);
   return next;
 }

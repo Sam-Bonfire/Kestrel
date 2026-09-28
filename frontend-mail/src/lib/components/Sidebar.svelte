@@ -71,10 +71,11 @@
     unreadCount = 0 as string | number,
     viewCounts = {} as Record<string, string | number>,
     onOpenMailSettings = () => {},
-    customViews = [] as { id: string; name: string }[],
+    customViews = [] as { id: string; name: string; icon?: string }[],
     activeCustomViewId = null as string | null,
     onSelectCustomView = (id: string) => {},
     onDeleteCustomView = (id: string) => {},
+    onUpdateCustomView = (id: string, patch: { name?: string; icon?: string }) => {},
     onSaveCustomView = (name: string) => {}
   } = $props<{
     currentView?: string;
@@ -91,10 +92,11 @@
     unreadCount?: string | number;
     viewCounts?: Record<string, string | number>;
     onOpenMailSettings?: () => void;
-    customViews?: { id: string; name: string }[];
+    customViews?: { id: string; name: string; icon?: string }[];
     activeCustomViewId?: string | null;
     onSelectCustomView?: (id: string) => void;
     onDeleteCustomView?: (id: string) => void;
+    onUpdateCustomView?: (id: string, patch: { name?: string; icon?: string }) => void;
     onSaveCustomView?: (name: string) => void;
   }>();
 
@@ -150,6 +152,28 @@
 
   // Context Menu state
   let contextMenu = $state<{ x: number; y: number; label: string } | null>(null);
+
+  // Custom view editor state (rename + icon, mirrors the label menu)
+  let viewMenu = $state<{ x: number; y: number; id: string } | null>(null);
+  let viewEditName = $state('');
+  let viewEditIcon = $state('Tag');
+  let showViewIcons = $state(false);
+
+  function openViewEditor(id: string, x: number, y: number) {
+    const view = customViews.find((v) => v.id === id);
+    if (!view) return;
+    viewEditName = view.name;
+    viewEditIcon = view.icon || 'Tag';
+    showViewIcons = false;
+    viewMenu = { x, y, id };
+  }
+
+  function saveViewEditor(close: boolean) {
+    if (!viewMenu) return;
+    const name = viewEditName.trim();
+    if (name) onUpdateCustomView(viewMenu.id, { name, icon: viewEditIcon });
+    if (close) viewMenu = null;
+  }
   let showIconsDropdown = $state(false);
   let showColorsDropdown = $state(false);
   let showNestingDropdown = $state(false);
@@ -427,22 +451,35 @@
           </div>
           <div class="space-y-0.5 mt-1">
             {#each customViews as view (view.id)}
+              {@const ViewIcon = iconMapping[view.icon || ''] || Tag}
               <div class="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out {activeCustomViewId === view.id ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]/60'}">
                 <button
                   onclick={() => onSelectCustomView(view.id)}
+                  oncontextmenu={(e) => { e.preventDefault(); openViewEditor(view.id, e.clientX, e.clientY); }}
                   aria-current={activeCustomViewId === view.id}
-                  class="flex-1 text-left truncate cursor-pointer"
+                  class="flex-1 flex items-center gap-2 text-left truncate cursor-pointer min-w-0"
                 >
-                  {view.name}
+                  <ViewIcon class="w-3.5 h-3.5 shrink-0 text-[var(--color-text-secondary)]" strokeWidth={1.5} />
+                  <span class="truncate">{view.name}</span>
                 </button>
-                <button
-                  onclick={() => onDeleteCustomView(view.id)}
-                  title="Delete view"
-                  aria-label="Delete view {view.name}"
-                  class="p-1 rounded opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 hover:bg-red-500/20 text-neutral-500 hover:text-red-400 transition-all cursor-pointer"
-                >
-                  <X class="w-3 h-3" />
-                </button>
+                <span class="flex items-center shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                  <button
+                    onclick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); openViewEditor(view.id, r.left - 224, r.bottom + 4); }}
+                    title="Rename or change icon"
+                    aria-label="Edit view {view.name}"
+                    class="p-1 rounded hover:bg-white/10 text-neutral-500 hover:text-white transition-all cursor-pointer"
+                  >
+                    <PenSquare class="w-3 h-3" />
+                  </button>
+                  <button
+                    onclick={() => onDeleteCustomView(view.id)}
+                    title="Delete view"
+                    aria-label="Delete view {view.name}"
+                    class="p-1 rounded hover:bg-red-500/20 text-neutral-500 hover:text-red-400 transition-all cursor-pointer"
+                  >
+                    <X class="w-3 h-3" />
+                  </button>
+                </span>
               </div>
             {/each}
             <div class="flex items-center gap-1.5 px-1 pt-1">
@@ -578,6 +615,67 @@
           <button onclick={handleCreateLabel} class="px-3.5 py-1.5 bg-white text-black font-semibold rounded-lg text-[11px] hover:bg-neutral-200 transition-colors">Create</button>
         </div>
       </div>
+    </div>
+  {/if}
+
+  <!-- Custom view editor menu -->
+  {#if viewMenu}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fixed inset-0 z-40"
+      onclick={() => (viewMenu = null)}
+      role="presentation"
+    ></div>
+    <div
+      class="fixed bg-[#1a1919] border border-white/10 rounded-xl shadow-xl w-56 z-50 py-1.5 font-sans text-xs text-[var(--color-text-primary)]"
+      style="left: {Math.max(8, Math.min(viewMenu.x, window.innerWidth - 232))}px; top: {Math.max(8, viewMenu.y)}px;"
+      onclick={(e) => e.stopPropagation()}
+      role="menu"
+      tabindex="-1"
+    >
+      <div class="px-3 py-1.5 border-b border-white/5 flex items-center gap-1.5 shrink-0">
+        <button
+          onclick={() => (showViewIcons = !showViewIcons)}
+          aria-label="Choose view icon"
+          class="p-1 rounded bg-[#1c1b1b] border border-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer shrink-0"
+        >
+          <svelte:component this={iconMapping[viewEditIcon] || Tag} class="w-3.5 h-3.5" />
+        </button>
+        <input
+          type="text"
+          bind:value={viewEditName}
+          onkeydown={(e) => e.key === 'Enter' && saveViewEditor(true)}
+          onblur={() => saveViewEditor(false)}
+          class="w-full bg-transparent border-none text-xs text-white outline-none focus:ring-0 px-0.5 py-0.5"
+          placeholder="View name"
+          autoFocus
+        />
+      </div>
+      {#if showViewIcons}
+        <div class="p-2 grid grid-cols-6 gap-1 max-h-32 overflow-y-auto">
+          {#each Object.keys(iconMapping) as iconKey}
+            {@const IconComponent = iconMapping[iconKey]}
+            <button
+              onclick={() => { viewEditIcon = iconKey; showViewIcons = false; saveViewEditor(false); }}
+              aria-label="Use {iconKey} icon"
+              class="p-1 rounded hover:bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer flex items-center justify-center border-none bg-transparent"
+            >
+              <IconComponent class="w-3.5 h-3.5" strokeWidth={1.5} />
+            </button>
+          {/each}
+        </div>
+      {/if}
+      <button
+        onclick={() => {
+          onDeleteCustomView(viewMenu!.id);
+          viewMenu = null;
+        }}
+        class="w-full px-3 py-2 text-left hover:bg-red-500/10 text-red-400 flex items-center gap-2 cursor-pointer transition-colors border-t border-white/5 mt-1 border-none bg-transparent"
+      >
+        <Trash2 class="w-3.5 h-3.5" />
+        <span>Delete view</span>
+      </button>
     </div>
   {/if}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getCustomViews, saveCustomView, deleteCustomView } from './customViews.js';
+import { getCustomViews, saveCustomView, deleteCustomView, updateCustomView } from './customViews.js';
 import type { CustomViewFilter } from './customViews.js';
 
 const mockStorage: Record<string, string> = {};
@@ -48,5 +48,30 @@ describe('Custom inbox views', () => {
   it('drops corrupted stored entries', () => {
     localStorage.setItem('kestrel:mail:custom_views', JSON.stringify([{ junk: 1 }, null, 'x']));
     expect(getCustomViews()).toEqual([]);
+  });
+
+  it('stores an icon when provided', () => {
+    const [view] = saveCustomView('Starred work', filter, 'Star');
+    expect(view.icon).toBe('Star');
+    expect(getCustomViews()[0].icon).toBe('Star');
+  });
+
+  it('renames a view', () => {
+    const [view] = saveCustomView('Temp', filter);
+    const next = updateCustomView(view.id, { name: 'Morning triage' });
+    expect(next[0].name).toBe('Morning triage');
+    expect(getCustomViews()[0].name).toBe('Morning triage');
+  });
+
+  it('changes a view icon', () => {
+    const [view] = saveCustomView('Temp', filter);
+    const next = updateCustomView(view.id, { icon: 'Bell' });
+    expect(next[0].icon).toBe('Bell');
+  });
+
+  it('rejects blank renames and unknown ids', () => {
+    const [view] = saveCustomView('Temp', filter);
+    expect(updateCustomView(view.id, { name: '   ' })[0].name).toBe('Temp');
+    expect(updateCustomView('nope', { name: 'X' })).toHaveLength(1);
   });
 });
