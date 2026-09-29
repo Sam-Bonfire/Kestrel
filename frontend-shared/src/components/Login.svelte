@@ -11,6 +11,10 @@
 
   let { initialMode = 'login', onSuccess }: Props = $props();
 
+  // initialMode is intentionally read once: it selects which tab the
+  // form opens on, not a live binding. Later parent updates must not
+  // reset a mode the user already switched.
+  // svelte-ignore state_referenced_locally: one-time init is the contract.
   let mode = $state<'login' | 'register'>(initialMode);
   let username = $state('');
   let password = $state('');

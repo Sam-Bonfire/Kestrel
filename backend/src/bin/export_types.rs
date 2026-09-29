@@ -4,6 +4,7 @@ use std::path::Path;
 
 use backend::api::auth::*;
 use backend::api::availability::*;
+use backend::api::booking::*;
 use backend::api::calendars::*;
 use backend::api::contacts::*;
 use backend::api::messages::*;
@@ -68,7 +69,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<VoteRequest>()
         // Availability models
         .register::<FreebusyRequest>()
-        .register::<BusyBlockDto>();
+        .register::<BusyBlockDto>()
+        // Booking page models
+        .register::<BookingPage>()
+        .register::<CreateBookingPageRequest>()
+        .register::<UpdateBookingPageRequest>()
+        .register::<PublicBookingDto>()
+        .register::<SlotDto>()
+        .register::<SlotsResponse>()
+        .register::<BookSlotRequest>()
+        .register::<BookSlotResponse>();
 
     let out_dir = Path::new("../frontend-shared/src/api/generated");
     std::fs::create_dir_all(out_dir)?;

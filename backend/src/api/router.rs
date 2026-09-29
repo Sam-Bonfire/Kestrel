@@ -8,6 +8,7 @@ use tower_http::trace::TraceLayer;
 use super::accounts;
 use super::auth;
 use super::availability;
+use super::booking;
 use super::calendars;
 use super::contacts;
 use super::health::health_check;
@@ -85,6 +86,15 @@ pub fn create_router(state: AppState) -> Router {
         "/api/webhooks/:provider",
         post(webhooks::handle_generic_webhook),
     );
+
+    // Public booking routes (token-authenticated via slug, no login required)
+    let booking_public = Router::new()
+        .route("/book/:slug", get(booking::guest_page))
+        .route(
+            "/api/book/:slug",
+            get(booking::public_page).post(booking::book_slot),
+        )
+        .route("/api/book/:slug/slots", get(booking::public_slots));
 
     // Protected routes (auth middleware required)
     let protected = Router::new()
@@ -176,6 +186,20 @@ pub fn create_router(state: AppState) -> Router {
             post(polls::vote_poll),
         )
         .route(
+            "/api/v1/booking-pages",
+            get(booking::list_pages).post(booking::create_page),
+        )
+        .route(
+            "/api/v1/booking-pages/:id",
+            get(booking::get_page)
+                .patch(booking::update_page)
+                .delete(booking::delete_page),
+        )
+        .route(
+            "/api/v1/booking-pages/:id/rotate",
+            post(booking::rotate_slug),
+        )
+        .route(
             "/api/v1/accounts/:id/freebusy",
             post(availability::query_freebusy),
         )
@@ -197,6 +221,7 @@ pub fn create_router(state: AppState) -> Router {
     health
         .merge(auth_public)
         .merge(webhooks)
+        .merge(booking_public)
         .merge(protected)
         // Landing page (portfolio + downloads) served by the backend itself.
         // Fallback only fires on unmatched routes, so /api/* behavior is unchanged.

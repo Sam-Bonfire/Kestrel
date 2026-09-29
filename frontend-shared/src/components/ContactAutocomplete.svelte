@@ -170,6 +170,10 @@
     <input
       bind:this={inputElement}
       type="text"
+      role="combobox"
+      aria-expanded={isDropdownOpen && searchResults.length > 0}
+      aria-controls="contact-autocomplete-listbox"
+      aria-autocomplete="list"
       bind:value={inputValue}
       onkeydown={handleKeyDown}
       onblur={handleBlur}
@@ -179,9 +183,11 @@
   </div>
 
   {#if isDropdownOpen && searchResults.length > 0}
-    <ul class="absolute top-full left-0 mt-1 w-full max-w-md bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md shadow-lg overflow-hidden z-50">
+    <ul id="contact-autocomplete-listbox" role="listbox" aria-label="Matching contacts" class="absolute top-full left-0 mt-1 w-full max-w-md bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-md shadow-lg overflow-hidden z-50">
       {#each searchResults as contact, i}
         <li
+          role="option"
+          aria-selected={i === focusedIndex}
           class="px-3 py-2 cursor-pointer flex items-center gap-3 {i === focusedIndex ? 'bg-[var(--color-bg-hover)]' : 'hover:bg-[var(--color-bg-hover)]'}"
           onmousedown={() => addEmail(contact.email, contact)}
         >

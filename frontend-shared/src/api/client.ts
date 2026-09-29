@@ -25,6 +25,9 @@ import type {
   EventPollWithVotes,
   CreatePollRequest,
   VoteRequest,
+  BookingPage,
+  CreateBookingPageRequest,
+  UpdateBookingPageRequest,
   StarParams,
   LabelParams,
   MeResponse,
@@ -587,6 +590,46 @@ export async function voteEventPoll(
     token,
     body,
   });
+}
+
+// ── Booking pages ────────────────────────────────────────────
+
+export async function listBookingPages(token?: string): Promise<BookingPage[]> {
+  return request<BookingPage[]>('GET', '/booking-pages', { token });
+}
+
+export async function getBookingPage(pageId: string, token?: string): Promise<BookingPage> {
+  return request<BookingPage>('GET', `/booking-pages/${pageId}`, { token });
+}
+
+export async function createBookingPage(
+  body: CreateBookingPageRequest,
+  token?: string,
+): Promise<BookingPage> {
+  return request<BookingPage, CreateBookingPageRequest>('POST', '/booking-pages', {
+    token,
+    body,
+  });
+}
+
+export async function updateBookingPage(
+  pageId: string,
+  body: UpdateBookingPageRequest,
+  token?: string,
+): Promise<BookingPage> {
+  return request<BookingPage, UpdateBookingPageRequest>(
+    'PATCH',
+    `/booking-pages/${pageId}`,
+    { token, body },
+  );
+}
+
+export async function rotateBookingSlug(pageId: string, token?: string): Promise<BookingPage> {
+  return request<BookingPage>('POST', `/booking-pages/${pageId}/rotate`, { token });
+}
+
+export async function deleteBookingPage(pageId: string, token?: string): Promise<void> {
+  return request<void>('DELETE', `/booking-pages/${pageId}`, { token });
 }
 
 // ── Team availability ──────────────────────────────────────────

@@ -3,6 +3,7 @@
   import WeekGrid, { type CalendarEvent } from '$lib/components/WeekGrid.svelte';
   import YearGrid from '$lib/components/YearGrid.svelte';
   import EventPeekPanel from '$lib/components/EventPeekPanel.svelte';
+  import BookingPagesModal from '$lib/components/BookingPagesModal.svelte';
   import {
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Grid, List, Clock, AlignLeft,
     Search, Settings, Menu, ChevronDown, X, CalendarDays, Printer, Sparkles
@@ -56,6 +57,7 @@
   let isViewDropdownOpen = $state(false);
   let dropdownSubmenu = $state<'none' | 'number_of_days' | 'settings'>('none');
   let isSettingsOpen = $state(false);
+  let isBookingPagesOpen = $state(false);
   let defaultCalendarId = $state('cal-personal');
   let startHour = $state(8);
   let showWeekends = $state(true);
@@ -213,16 +215,21 @@
         Math.floor(sunday.getTime() / 1000)
       );
       if (seq !== availabilitySeq) return;
-      availabilityBlocks = blocks.map((b) => {
-        const start = new Date(b.start_time * 1000);
-        const end = new Date(Math.min(b.end_time, Math.floor(new Date(start).setHours(23, 59, 59) / 1000)));
-        return {
-          date: toISODateLocal(start),
-          startTime: toHM(b.start_time),
-          endTime: toHM(Math.floor(end.getTime() / 1000)),
-          email: b.email,
-        };
-      });
+      availabilityBlocks = blocks
+        .filter(
+          (b): b is { email: string; start_time: number; end_time: number } =>
+            b.start_time != null && b.end_time != null,
+        )
+        .map((b) => {
+          const start = new Date(b.start_time * 1000);
+          const end = new Date(Math.min(b.end_time, Math.floor(new Date(start).setHours(23, 59, 59) / 1000)));
+          return {
+            date: toISODateLocal(start),
+            startTime: toHM(b.start_time),
+            endTime: toHM(Math.floor(end.getTime() / 1000)),
+            email: b.email,
+          };
+        });
     } catch (e) {
       if (seq !== availabilitySeq) return;
       availabilityError = e instanceof Error ? e.message : String(e);
@@ -886,6 +893,7 @@
           }))
         }));
       }}
+      onBookingPagesClick={() => { isBookingPagesOpen = true; }}
     />
   {/snippet}
 
@@ -1442,9 +1450,9 @@
 
         <div class="p-5 space-y-6 overflow-y-auto max-h-[80vh]">
           <div class="space-y-2.5">
-            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+            <span class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
               Default Calendar
-            </label>
+            </span>
             <div class="space-y-2">
               {#each [
                 { id: 'cal-personal', name: 'Personal' },
@@ -1465,10 +1473,11 @@
           </div>
 
           <div class="space-y-2.5">
-            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+            <label for="start-hour-range" class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
               Start Hour (Day/Week View)
             </label>
             <input
+              id="start-hour-range"
               type="range"
               min="0" max="23"
               bind:value={startHour}
@@ -1478,12 +1487,13 @@
           </div>
 
           <div class="flex items-center justify-between pt-2">
-            <label class="text-xs font-semibold text-white">Show Weekends</label>
+            <label class="text-xs font-semibold text-white cursor-pointer">Show Weekends
             <div class="relative inline-block w-10 h-5 cursor-pointer">
               <input type="checkbox" bind:checked={showWeekends} class="peer sr-only" />
               <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
             </div>
+            </label>
           </div>
 
           <div class="space-y-2 pt-2">
@@ -1523,12 +1533,13 @@
           </div>
 
           <div class="flex items-center justify-between pt-2">
-            <label class="text-xs font-semibold text-white">Highlight working hours</label>
+            <label class="text-xs font-semibold text-white cursor-pointer">Highlight working hours
             <div class="relative inline-block w-10 h-5 cursor-pointer">
               <input type="checkbox" bind:checked={workingHours.enabled} class="peer sr-only" />
               <div class="w-full h-full bg-neutral-700 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
               <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
             </div>
+            </label>
           </div>
 
           {#if workingHours.enabled}
@@ -1574,13 +1585,14 @@
           {/if}
 
           <div class="space-y-2.5">
-            <label class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+            <span class="block text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
               Secondary Timezones (Max 2)
-            </label>
+            </span>
             {#each secondaryTimezones as tz, index}
               <div class="flex items-center gap-2">
                 <select
                   bind:value={secondaryTimezones[index]}
+                  aria-label="Secondary timezone {index + 1}"
                   class="flex-1 bg-[#1a1a1a] border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
                 >
                   {#each Intl.supportedValuesOf('timeZone') as tzOption}
@@ -1621,6 +1633,12 @@
 
   <!-- Unified Undo Action Toast System -->
   <UndoToast />
+
+  <BookingPagesModal
+    open={isBookingPagesOpen}
+    calendars={accounts.flatMap((acc) => acc.calendars.map((cal) => ({ id: cal.id, name: `${cal.name} (${acc.email})` })))}
+    onClose={() => { isBookingPagesOpen = false; }}
+  />
 
   <!-- Print-only agenda schedule -->
   <div class="print-only">

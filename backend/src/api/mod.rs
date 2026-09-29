@@ -1,6 +1,8 @@
 pub mod accounts;
 pub mod auth;
 pub mod availability;
+pub mod booking;
+pub mod booking_slots;
 pub mod calendars;
 pub mod contacts;
 pub mod health;

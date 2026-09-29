@@ -34,7 +34,8 @@
     isMobileOrTablet = false,
     viewMode = 'month',
     onViewModeChange = (mode: string) => {},
-    onApplySet = (calendarIds: string[]) => {}
+    onApplySet = (calendarIds: string[]) => {},
+    onBookingPagesClick = () => {}
   } = $props<{
     selectedDate?: Date;
     onDateSelect?: (d: Date) => void;
@@ -46,6 +47,7 @@
     viewMode?: string;
     onViewModeChange?: (mode: string) => void;
     onApplySet?: (calendarIds: string[]) => void;
+    onBookingPagesClick?: () => void;
   }>();
 
   let currentMonth = $state(new Date());
@@ -54,6 +56,13 @@
   let newSetName = $state('');
   let editingSetId = $state<string | null>(null);
   let editSetName = $state('');
+  let renameInput: HTMLInputElement | undefined = $state(undefined);
+
+  // Focus the rename field when editing starts (user-initiated, so
+  // programmatic focus here is correct; no autofocus attribute).
+  $effect(() => {
+    if (editingSetId) renameInput?.focus();
+  });
 
   function handleCreateSet() {
     if (newSetName.trim()) {
@@ -220,12 +229,13 @@
             { label: 'Day', mode: 'day', icon: Clock },
             { label: 'Agenda', mode: 'agenda', icon: AlignLeft },
           ] as item}
+            {@const ItemIcon = item.icon}
             <button
               onclick={() => onViewModeChange(item.mode)}
               class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-mono transition-colors cursor-pointer {viewMode === item.mode ? 'bg-white text-black font-semibold' : 'text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)]'}"
             >
               <div class="flex items-center gap-2.5">
-                <svelte:component this={item.icon} class="w-4 h-4 shrink-0" />
+                <ItemIcon class="w-4 h-4 shrink-0" />
                 <span>{item.label}</span>
               </div>
               {#if viewMode === item.mode}
@@ -272,10 +282,11 @@
               <div class="flex items-center gap-1 w-full">
                 <input
                   type="text"
+                  bind:this={renameInput}
                   bind:value={editSetName}
+                  aria-label="Rename calendar set"
                   class="w-full bg-[var(--color-canvas-card)] border border-[var(--color-border-hairline)] rounded px-1 py-0.5 text-xs text-white outline-none"
                   onkeydown={(e) => e.key === 'Enter' && handleRenameSet(set.id)}
-                  autoFocus
                 />
                 <button onclick={() => handleRenameSet(set.id)} class="p-0.5 text-green-400">
                   <Check class="w-3 h-3" />
@@ -388,6 +399,10 @@
     <button class="flex items-center gap-2 hover:text-white transition-colors cursor-pointer w-full text-left font-mono">
       <Settings class="w-4 h-4" />
       <span>Settings</span>
+    </button>
+    <button onclick={onBookingPagesClick} class="flex items-center gap-2 hover:text-white transition-colors cursor-pointer w-full text-left font-mono">
+      <CalendarDays class="w-4 h-4" />
+      <span>Booking pages</span>
     </button>
   </div>
 </aside>

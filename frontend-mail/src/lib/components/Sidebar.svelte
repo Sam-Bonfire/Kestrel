@@ -102,6 +102,14 @@
 
   let newViewName = $state('');
 
+  // Custom views overflow (K-1470): cap the rows so a long view list
+  // cannot push labels and folders out of the sidebar.
+  const MAX_VISIBLE_VIEWS = 4;
+  let viewsExpanded = $state(false);
+  let visibleCustomViews = $derived(
+    viewsExpanded ? customViews : customViews.slice(0, MAX_VISIBLE_VIEWS)
+  );
+
   function handleSaveView() {
     if (newViewName.trim()) {
       onSaveCustomView(newViewName);
@@ -158,9 +166,19 @@
   let viewEditName = $state('');
   let viewEditIcon = $state('Tag');
   let showViewIcons = $state(false);
+  let viewNameInput: HTMLInputElement | undefined = $state(undefined);
+  let labelNameInput: HTMLInputElement | undefined = $state(undefined);
+
+  // Focus menu inputs on open (user-initiated menus; no autofocus attribute).
+  $effect(() => {
+    if (viewMenu) viewNameInput?.focus();
+  });
+  $effect(() => {
+    if (contextMenu) labelNameInput?.focus();
+  });
 
   function openViewEditor(id: string, x: number, y: number) {
-    const view = customViews.find((v) => v.id === id);
+    const view = customViews.find((v: { id: string; name: string; icon?: string }) => v.id === id);
     if (!view) return;
     viewEditName = view.name;
     viewEditIcon = view.icon || 'Tag';
@@ -295,6 +313,8 @@
   <!-- Drag Handle -->
   <div 
     class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors z-50"
+    role="separator"
+    aria-label="Drag to resize sidebar"
     onpointerdown={(e) => { isResizing = true; e.preventDefault(); }}
   ></div>
 
@@ -450,7 +470,7 @@
             Custom Views
           </div>
           <div class="space-y-0.5 mt-1">
-            {#each customViews as view (view.id)}
+            {#each visibleCustomViews as view (view.id)}
               {@const ViewIcon = iconMapping[view.icon || ''] || Tag}
               <div class="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out {activeCustomViewId === view.id ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-primary)] hover:bg-[var(--color-canvas-hover)]/60'}">
                 <button
@@ -482,6 +502,15 @@
                 </span>
               </div>
             {/each}
+            {#if customViews.length > MAX_VISIBLE_VIEWS}
+              <button
+                onclick={() => (viewsExpanded = !viewsExpanded)}
+                aria-expanded={viewsExpanded}
+                class="w-full text-left px-2.5 py-1 text-[11px] rounded text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)]/60 transition-colors cursor-pointer"
+              >
+                {viewsExpanded ? 'Show less' : `Show ${customViews.length - MAX_VISIBLE_VIEWS} more`}
+              </button>
+            {/if}
             <div class="flex items-center gap-1.5 px-1 pt-1">
               <input
                 type="text"
@@ -620,6 +649,7 @@
 
   <!-- Custom view editor menu -->
   {#if viewMenu}
+    {@const ViewMenuIcon = iconMapping[viewEditIcon] || Tag}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -631,6 +661,9 @@
       class="fixed bg-[#1a1919] border border-white/10 rounded-xl shadow-xl w-56 z-50 py-1.5 font-sans text-xs text-[var(--color-text-primary)]"
       style="left: {Math.max(8, Math.min(viewMenu.x, window.innerWidth - 232))}px; top: {Math.max(8, viewMenu.y)}px;"
       onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => {
+        if (e.key === 'Escape') viewMenu = null;
+      }}
       role="menu"
       tabindex="-1"
     >
@@ -640,16 +673,17 @@
           aria-label="Choose view icon"
           class="p-1 rounded bg-[#1c1b1b] border border-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer shrink-0"
         >
-          <svelte:component this={iconMapping[viewEditIcon] || Tag} class="w-3.5 h-3.5" />
+          <ViewMenuIcon class="w-3.5 h-3.5" />
         </button>
         <input
           type="text"
+          bind:this={viewNameInput}
           bind:value={viewEditName}
           onkeydown={(e) => e.key === 'Enter' && saveViewEditor(true)}
           onblur={() => saveViewEditor(false)}
           class="w-full bg-transparent border-none text-xs text-white outline-none focus:ring-0 px-0.5 py-0.5"
           placeholder="View name"
-          autoFocus
+          aria-label="View name"
         />
       </div>
       {#if showViewIcons}
@@ -681,12 +715,16 @@
 
   <!-- Label customization context menu -->
   {#if contextMenu}
+    {@const EditMenuIcon = iconMapping[editIcon] || Tag}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div 
       class="fixed bg-[#1a1919] border border-white/10 rounded-xl shadow-xl w-56 z-50 py-1.5 font-sans text-xs text-[var(--color-text-primary)]"
       style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
       onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => {
+        if (e.key === 'Escape') contextMenu = null;
+      }}
       role="menu"
       tabindex="-1"
     >
@@ -699,16 +737,17 @@
           }}
           class="p-1 rounded bg-[#1c1b1b] border border-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer shrink-0"
         >
-          <svelte:component this={iconMapping[editIcon] || Tag} class="w-3.5 h-3.5 {colorConfigs[editColor]?.text || 'text-white'}" />
+          <EditMenuIcon class="w-3.5 h-3.5 {colorConfigs[editColor]?.text || 'text-white'}" />
         </button>
         <input
           type="text"
+          bind:this={labelNameInput}
           bind:value={editName}
           onkeydown={(e) => e.key === 'Enter' && saveLabelCustomization(true)}
           onblur={() => saveLabelCustomization(false)}
           class="w-full bg-transparent border-none text-xs text-white outline-none focus:ring-0 px-0.5 py-0.5"
           placeholder="Label name"
-          autoFocus
+          aria-label="Label name"
         />
       </div>
 
@@ -745,9 +784,10 @@
           {#each Object.keys(colorConfigs) as colorKey}
             <button
               onclick={() => { editColor = colorKey; showColorsDropdown = false; saveLabelCustomization(false); }}
+              aria-label="Use {colorKey} color"
               class="w-5 h-5 rounded-full {colorConfigs[colorKey].dot} cursor-pointer transition-transform hover:scale-110 border-none"
               style="box-shadow: {editColor === colorKey ? '0 0 6px rgba(255,255,255,0.6)' : 'none'}"
-            />
+            ></button>
           {/each}
         </div>
       {/if}

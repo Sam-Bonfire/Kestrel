@@ -11,6 +11,33 @@ export type Account = {
 	updated_at: number | null,
 };
 
+export type BookSlotRequest = {
+	guest_name: string,
+	guest_email: string,
+	start_time: number | null,
+};
+
+export type BookSlotResponse = {
+	event_id: string,
+	start_time: number | null,
+	end_time: number | null,
+};
+
+export type BookingPage = {
+	id: DbUuid,
+	user_id: DbUuid,
+	calendar_id: DbUuid,
+	name: string,
+	/**  Unguessable public token used in the share link. Rotated to revoke. */
+	slug: string,
+	duration_mins: number,
+	buffer_mins: number,
+	window_days: number,
+	is_active: boolean,
+	created_at: number | null,
+	updated_at: number | null,
+};
+
 export type BulkActionParams = {
 	message_ids: string[],
 	action: BulkActionType,
@@ -66,6 +93,14 @@ export type Contact = {
 	notes: string | null,
 	last_contacted_at: number | null,
 	created_at: number | null,
+};
+
+export type CreateBookingPageRequest = {
+	calendar_id: string,
+	name: string,
+	duration_mins: number,
+	buffer_mins: number | null,
+	window_days: number | null,
 };
 
 export type CreateEventRequest = {
@@ -245,6 +280,13 @@ export type PollVote = {
 	created_at: number | null,
 };
 
+export type PublicBookingDto = {
+	name: string,
+	duration_mins: number,
+	buffer_mins: number,
+	window_days: number,
+};
+
 export type RegisterRequest = {
 	username: string,
 	password: string,
@@ -328,6 +370,15 @@ export type Signature = {
 	isDefault: boolean,
 };
 
+export type SlotDto = {
+	start_time: number | null,
+	end_time: number | null,
+};
+
+export type SlotsResponse = {
+	slots: SlotDto[],
+};
+
 export type Snippet = {
 	id: string,
 	title: string,
@@ -347,6 +398,15 @@ export type TokenRequest = {
 export type TokenResponse = {
 	token: string,
 	user_id: string,
+};
+
+export type UpdateBookingPageRequest = {
+	calendar_id: string | null,
+	name: string | null,
+	duration_mins: number | null,
+	buffer_mins: number | null,
+	window_days: number | null,
+	is_active: boolean | null,
 };
 
 export type UpdateEventRequest = {

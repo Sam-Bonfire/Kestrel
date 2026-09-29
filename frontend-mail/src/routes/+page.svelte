@@ -1205,6 +1205,7 @@
     <!-- Mobile FAB for Compose -->
     <button
       onclick={() => isComposeOpen = true}
+      aria-label="Compose new email"
       class="lg:hidden fixed bottom-20 right-6 w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(59,130,246,0.4)] text-white hover:bg-blue-600 transition-transform active:scale-95 z-30"
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
