@@ -9,7 +9,7 @@
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb } from '@kestrel/shared/stores';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb, focusMode, exitFocusMode } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
   import { isNewsletter, setUnreadBadge } from '@kestrel/shared';
   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
@@ -180,6 +180,7 @@
             /* offline or unreachable — defaults stay */
           });
       });
+      loadSubjectOverrides();
     }
   });
 
@@ -197,6 +198,7 @@
   function applyCustomView(id: string) {
     const view = customViews.find((v) => v.id === id);
     if (!view) return;
+    if (isBatchMode) exitBatch(false);
     currentView = view.filter.view;
     filterCategory = view.filter.category;
     filterLabel = view.filter.label;
@@ -265,6 +267,54 @@
   let isBatchMode = $state(false);
   let batchQueue = $state<string[]>([]);
   let batchIndex = $state(0);
+  // Exact view to restore when Focus mode exits.
+  let batchReturn = $state<{
+    view: string;
+    customViewId: string | null;
+    category: string;
+    label: string;
+    attachmentsOnly: boolean;
+    dateRange: string;
+    selectedId: string | null;
+  } | null>(null);
+
+  function advanceBatch(step: 1 | -1) {
+    const next = batchIndex + step;
+    if (next < 0 || next >= batchQueue.length) return;
+    batchIndex = next;
+    selectedThreadId = batchQueue[batchIndex];
+  }
+
+  function exitBatch(restore = true) {
+    isBatchMode = false;
+    exitFocusMode();
+    if (restore && batchReturn) {
+      currentView = batchReturn.view;
+      activeCustomViewId = batchReturn.customViewId;
+      filterCategory = batchReturn.category as typeof filterCategory;
+      filterLabel = batchReturn.label;
+      filterAttachmentsOnly = batchReturn.attachmentsOnly;
+      filterDateRange = batchReturn.dateRange as typeof filterDateRange;
+      selectedThreadId = batchReturn.selectedId;
+    } else if (!restore) {
+      selectedThreadId = null;
+    }
+    batchReturn = null;
+  }
+
+  // Mid-batch the queue item can vanish (archive/delete in the pile).
+  // Drop it and carry on instead of stranding an empty reader.
+  $effect(() => {
+    if (isBatchMode && !isLoading && allEmails.length > 0 && selectedThreadId && !activeEmail) {
+      batchQueue = batchQueue.filter((id) => id !== selectedThreadId);
+      if (batchQueue.length === 0) {
+        exitBatch();
+      } else {
+        batchIndex = Math.min(batchIndex, batchQueue.length - 1);
+        selectedThreadId = batchQueue[batchIndex];
+      }
+    }
+  });
 
   // Custom labels created dynamically by user
   let customLabels = $state<string[]>([]);
@@ -302,6 +352,8 @@
           allEmails = res.messages.map((m: any, index: number) => ({
             id: m.id,
             accountId: (m.sender_email?.includes('kestrel') || m.recipients?.includes('kestrel') || m.subject?.includes('Vercel') || index % 3 === 0) ? '2' : '1',
+            accountUuid: m.account_id,
+            threadId: m.thread_id,
             sender: m.sender_name || m.sender_email,
             senderEmail: m.sender_email,
             to: 'me',
@@ -311,6 +363,7 @@
             isUnread: !m.is_read,
             isStarred: (m.labels ? JSON.parse(m.labels) : []).includes('STARRED'),
             isArchived: m.is_archived,
+            isSetAside: !!m.is_set_aside,
             isTrash: false,
             isDraft: false,
             isSpam: false,
@@ -343,18 +396,21 @@
                 allEmails = res.messages.map((m: any, index: number) => ({
                   id: m.id,
                   accountId: (m.sender_email?.includes('kestrel') || m.recipients?.includes('kestrel') || m.subject?.includes('Vercel') || index % 3 === 0) ? '2' : '1',
+                  accountUuid: m.account_id,
+                  threadId: m.thread_id,
                   sender: m.sender_name || m.sender_email,
                   senderEmail: m.sender_email,
                   to: 'me',
                   subject: m.subject || '(no subject)',
                   body: m.snippet || '', 
                   timestamp: new Date(m.date_received * 1000).toISOString(),
-                  isUnread: !m.is_read,
-                  isStarred: (m.labels ? JSON.parse(m.labels) : []).includes('STARRED'),
-                  isArchived: m.is_archived,
-                  isTrash: false,
-                  isDraft: false,
-                  isSpam: false,
+            isUnread: !m.is_read,
+            isStarred: (m.labels ? JSON.parse(m.labels) : []).includes('STARRED'),
+            isArchived: m.is_archived,
+            isSetAside: !!m.is_set_aside,
+            isTrash: false,
+            isDraft: false,
+            isSpam: false,
               hasAttachment: m.has_attachments,
               labels: m.labels ? JSON.parse(m.labels) : [],
               category: classifyEmail(m)
@@ -422,6 +478,7 @@
 
     counts['inbox'] = getCountStr(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft);
     counts['reply-later'] = getCountStr(e => e.isReplyLater && !e.isTrash);
+    counts['set-aside'] = getCountStr(e => e.isSetAside && !e.isTrash);
     counts['unread'] = getCountStr(e => e.isUnread && !e.isTrash && !e.isSpam);
     counts['sent'] = getCountStr(e => e.isUnread && e.labels.includes('Sent'));
     counts['drafts'] = getCountStr(e => e.isDraft);
@@ -456,6 +513,98 @@
       screened,
       activeAccountId
     )
+  );
+
+  // Unscreened first-time senders stay out of pure consumption views
+  // until reviewed in the Screener. Queued (not deleted) and visible
+  // there. Keys are account-scoped exactly like the queue, so an
+  // approval in one scope never leaks into another. Explicit-intent
+  // views (starred, reply-later, sent, drafts, labels) are exempt.
+  let unscreenedKeys = $derived(new Set(screenerQueue.map((s) => `${activeAccountId}:${s.email}`)));
+
+  // Personal thread subject overrides, keyed accountUuid:threadId.
+  // Loaded per real account; display-only overlay, provider subjects untouched.
+  let subjectOverrides = $state<Record<string, string>>({});
+
+  async function loadSubjectOverrides() {
+    try {
+      const api = await import('@kestrel/shared/api');
+      const accounts = await api.listAccounts();
+      const entries = await Promise.all(
+        accounts.map(async (a: any) => {
+          try {
+            const rows = await api.listSubjectOverrides(a.id);
+            return rows.map((r: any) => [`${a.id}:${r.thread_id}`, r.subject] as const);
+          } catch {
+            return [];
+          }
+        })
+      );
+      subjectOverrides = Object.fromEntries(entries.flat());
+    } catch {
+      // Offline: overrides stay empty until next load.
+    }
+  }
+
+  function displaySubject(email: any): { subject: string; overridden: boolean } {
+    const key = `${email.accountUuid ?? ''}:${email.threadId ?? ''}`;
+    const override = subjectOverrides[key];
+    if (override) return { subject: override, overridden: true };
+    return { subject: email.subject, overridden: false };
+  }
+
+  function overrideFor(email: any): string | null {
+    if (!email?.accountUuid || !email?.threadId) return null;
+    return subjectOverrides[`${email.accountUuid}:${email.threadId}`] ?? null;
+  }
+
+  async function renameSubject(id: string, subject: string) {
+    const email = allEmails.find((e) => e.id === id);
+    if (!email?.accountUuid || !email?.threadId) {
+      console.warn('renameSubject: no account/thread context, ignoring');
+      return;
+    }
+    const key = `${email.accountUuid}:${email.threadId}`;
+    const previous = subjectOverrides[key];
+    subjectOverrides = { ...subjectOverrides, [key]: subject };
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.setThreadSubject(email.threadId, email.accountUuid, subject);
+    } catch {
+      const next = { ...subjectOverrides };
+      if (previous === undefined) delete next[key];
+      else next[key] = previous;
+      subjectOverrides = next;
+    }
+    loadSubjectOverrides();
+  }
+
+  async function clearSubject(id: string) {
+    const email = allEmails.find((e) => e.id === id);
+    if (!email?.accountUuid || !email?.threadId) {
+      console.warn('clearSubject: no account/thread context, ignoring');
+      return;
+    }
+    const key = `${email.accountUuid}:${email.threadId}`;
+    const previous = subjectOverrides[key];
+    const next = { ...subjectOverrides };
+    delete next[key];
+    subjectOverrides = next;
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.clearThreadSubject(email.threadId, email.accountUuid);
+    } catch {
+      if (previous !== undefined) subjectOverrides = { ...subjectOverrides, [key]: previous };
+    }
+    loadSubjectOverrides();
+  }
+  let hiddenForReview = $derived(
+    allEmails.filter(
+      (e) =>
+        (activeAccountId === 'all' || e.accountId === activeAccountId) &&
+        !e.isTrash &&
+        unscreenedKeys.has(`${activeAccountId}:${(e.senderEmail || '').trim().toLowerCase()}`)
+    ).length
   );
 
   function allowSender(email: string) {
@@ -504,8 +653,17 @@
     allEmails
       .filter(e => {
         if (activeAccountId !== 'all' && e.accountId !== activeAccountId) return false;
+        if (
+          (currentView === 'inbox' ||
+            currentView === 'all-mail' ||
+            currentView === 'unread' ||
+            currentView === 'feed') &&
+          unscreenedKeys.has(`${activeAccountId}:${(e.senderEmail || '').trim().toLowerCase()}`)
+        )
+          return false;
         if (currentView === 'inbox')    return !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft;
         if (currentView === 'reply-later') return e.isReplyLater && !e.isTrash;
+        if (currentView === 'set-aside') return e.isSetAside && !e.isTrash;
         if (currentView === 'unread')   return e.isUnread && !e.isTrash && !e.isSpam;
         if (currentView === 'sent')     return e.labels.includes('Sent');
         if (currentView === 'drafts')   return e.isDraft;
@@ -533,42 +691,56 @@
         return true;
       })
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .map(e => ({
+      .map(e => {
+        const shown = displaySubject(e);
+        return {
         id: e.id,
         sender: e.sender,
         senderEmail: e.senderEmail,
-        subject: e.subject,
+        subject: shown.subject,
+        subjectOverridden: shown.overridden,
+        threadId: e.threadId,
+        accountUuid: e.accountUuid,
         snippet: e.body.replace(/<[^>]*>?/gm, '').substring(0, 110) + '…',
         date: formatRelativeTime(e.timestamp, new Date($relativeTimeTick)),
         timestamp: e.timestamp,
         isUnread: e.isUnread,
         isStarred: e.isStarred,
       isReplyLater: e.isReplyLater,
+      isSetAside: !!e.isSetAside,
         hasAttachment: false,
         labels: e.labels,
         category: e.category,
         provider: accounts.find(a => a.id === e.accountId)?.provider || 'unknown',
         accountColor: accounts.find(a => a.id === e.accountId)?.color || '#6B7280'
-      }))
+        };
+      })
   );
 
   let finalThreads = $derived(
     searchResults 
-      ? searchResults.map(e => ({
+      ? searchResults.map(e => {
+          const shown = displaySubject({ ...e, accountUuid: e.account_id, threadId: e.thread_id, subject: e.subject || '(no subject)' });
+          return {
           id: e.id,
           sender: e.sender_name || e.sender_email,
           senderEmail: e.sender_email,
-          subject: e.subject || '(no subject)',
+          subject: shown.subject,
+          subjectOverridden: shown.overridden,
+          threadId: e.thread_id,
+          accountUuid: e.account_id,
           snippet: e.snippet || '',
           date: formatRelativeTime(new Date(e.date_received * 1000).toISOString(), new Date($relativeTimeTick)),
           timestamp: new Date(e.date_received * 1000).toISOString(),
           isUnread: !e.is_read,
           isStarred: false,
       isReplyLater: false,
+      isSetAside: !!e.is_set_aside,
           hasAttachment: false,
           labels: [],
           category: classifyEmail(e)
-        }))
+          };
+        })
       : threads
   );
 
@@ -631,6 +803,15 @@
     if (!email) return;
     const newState = !email.isReplyLater;
     allEmails = allEmails.map(e => e.id === id ? { ...e, isReplyLater: newState } : e);
+  }
+  function toggleSetAside(id: string) {
+    const email = allEmails.find(e => e.id === id);
+    if (!email) return;
+    const newState = !email.isSetAside;
+    allEmails = allEmails.map(e => e.id === id ? { ...e, isSetAside: newState } : e);
+    import('@kestrel/shared/api').then(api => api.setAsideMessage(id, newState).catch(() => {
+      allEmails = allEmails.map(e => e.id === id ? { ...e, isSetAside: !newState } : e);
+    }));
   }
   function toggleStar(id: string) {
     const email = allEmails.find(e => e.id === id);
@@ -825,9 +1006,19 @@
   }
   function startBatchMode() {
     if (threads.length > 0) {
+      batchReturn = {
+        view: currentView,
+        customViewId: activeCustomViewId,
+        category: filterCategory,
+        label: filterLabel,
+        attachmentsOnly: filterAttachmentsOnly,
+        dateRange: filterDateRange,
+        selectedId: selectedThreadId,
+      };
       batchQueue = threads.map((t: any) => t.id);
       batchIndex = 0;
       isBatchMode = true;
+      focusMode.set(true);
       selectedThreadId = batchQueue[batchIndex];
     }
   }
@@ -896,6 +1087,7 @@
       isUnread: false,
       isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
       isArchived: false,
       isTrash: false,
       isDraft: false,
@@ -923,6 +1115,7 @@
       isUnread: false,
       isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
       isArchived: false,
       isTrash: false,
       isDraft: false,
@@ -938,8 +1131,7 @@
         batchIndex++;
         selectedThreadId = batchQueue[batchIndex];
       } else {
-        isBatchMode = false;
-        selectedThreadId = null;
+        exitBatch();
       }
     }
     import('@kestrel/shared/api').then(api => api.sendMessage({ account_id: '1', to: [parent.senderEmail || ''], subject: replyMsg.subject || '', body_text: text, thread_id: id } as any));
@@ -947,12 +1139,12 @@
 
   function handleCommandSelect(cmd: string) {
     if (cmd === 'compose') isComposeOpen = true;
-    else if (cmd === 'inbox') currentView = 'inbox';
+    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); currentView = 'inbox'; }
     else if (cmd === 'settings') {
       isCommandOpen = false;
       isSettingsOpen = true;
     }
-    else if (cmd.startsWith('view-')) currentView = cmd.replace('view-', '');
+    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); currentView = cmd.replace('view-', ''); }
   }
 
   // Bulk Actions
@@ -1037,6 +1229,7 @@
               // Select directly; fall back to all-mail only when the thread
               // isn't in the loaded list. The selected-thread effect below
               // loads the full body and marks it read.
+              if (isBatchMode) exitBatch(false);
               if (!allEmails.some((e) => e.id === link.id)) currentView = 'all-mail';
               selectedThreadId = link.id;
               isMobileSidebarOpen = false;
@@ -1051,15 +1244,10 @@
       if (isTyping(e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
       if (selectedThreadId && (e.key === 'h' || e.key === 'H' || (e.key === 'R' && e.shiftKey))) { toggleReplyLater(selectedThreadId); }
-      if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight')) {
+      if (selectedThreadId && (e.key === 'b' || e.key === 'B')) { toggleSetAside(selectedThreadId); }
+      if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         e.preventDefault();
-        if (batchIndex < batchQueue.length - 1) {
-          batchIndex++;
-          selectedThreadId = batchQueue[batchIndex];
-        } else {
-          isBatchMode = false;
-          selectedThreadId = null;
-        }
+        advanceBatch(e.shiftKey || e.key === 'ArrowLeft' ? -1 : 1);
       }
       if (currentView === 'reply-later' && !isBatchMode && (e.key === 'p' || e.key === 'P' || e.key === ' ')) {
         e.preventDefault();
@@ -1067,8 +1255,9 @@
       }
       if (e.key === 'c') isComposeOpen = true;
       if (e.key === 'Escape') {
-        if (isBatchMode) { isBatchMode = false; }
-        selectedThreadId = null; isCommandOpen = false; isComposeOpen = false;
+        if (isBatchMode) exitBatch();
+        else selectedThreadId = null;
+        isCommandOpen = false; isComposeOpen = false;
       }
     };
     window.addEventListener('keydown', handler);
@@ -1085,7 +1274,8 @@
   {#snippet sidebar()}
     <Sidebar
       {currentView}
-      onSelectView={(v: any) => { currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
+      hideCounts={isBatchMode}
+      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
       {customViews}
       {activeCustomViewId}
       onSelectCustomView={applyCustomView}
@@ -1107,8 +1297,30 @@
     />
   {/snippet}
 
-    {#if currentView === 'reply-later' && !isBatchMode && threads.length > 0}
-      <div class="flex items-center justify-between px-6 py-3 border-b border-white/10 bg-[#131313]">
+    {#if
+      (currentView === 'inbox' ||
+        currentView === 'all-mail' ||
+        currentView === 'unread' ||
+        currentView === 'feed') &&
+      hiddenForReview > 0}
+      <div class="flex items-center justify-between px-6 py-2 border-b border-white/10 bg-emerald-500/5">
+        <div class="text-xs text-neutral-400">
+          {hiddenForReview} email{hiddenForReview === 1 ? '' : 's'} from new senders held for review
+        </div>
+        <button
+          onclick={() => {
+            if (isBatchMode) exitBatch(false);
+            currentView = 'screener';
+            selectedThreadId = null;
+            isMobileSidebarOpen = false;
+          }}
+          class="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium rounded-md transition-colors"
+        >
+          Open Screener
+        </button>
+      </div>
+    {/if}
+    {#if currentView === 'reply-later' && !isBatchMode && threads.length > 0}      <div class="flex items-center justify-between px-6 py-3 border-b border-white/10 bg-[#131313]">
         <div class="text-sm text-neutral-400">Press <kbd class="px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs">P</kbd> or <kbd class="px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs">Space</kbd> to start batch processing</div>
         <button onclick={startBatchMode} class="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors">
           Process All
@@ -1120,6 +1332,7 @@
     {#if currentView === 'screener'}
       <ScreenerQueue
         senders={screenerQueue}
+        active={currentView === 'screener'}
         onAllow={allowSender}
         onBlock={blockScreenedSender}
         onOpen={(id) => { selectedThreadId = id; }}
@@ -1132,12 +1345,13 @@
       bind:activeLabelFilter={filterLabel}
       bind:hasAttachmentFilterOnly={filterAttachmentsOnly}
       bind:activeDateRange={filterDateRange}
-      onFilterChange={() => { activeCustomViewId = null; }}
+      onFilterChange={() => { if (isBatchMode) exitBatch(false); activeCustomViewId = null; }}
       {readerDocked}
       onToggleDock={() => { readerDocked = !readerDocked; }}
       {selectedThreadId}
       {allLabels}
       onSelectThread={(id) => {
+        if (isBatchMode) exitBatch(false);
         selectedThreadId = id;
         import('@kestrel/shared/api').then(api => {
           api.markAsRead(id);
@@ -1233,7 +1447,13 @@
       email={activeEmail}
       docked={readerDocked}
       initialReplyMode={initialReplyMode}
-      onClose={() => { selectedThreadId = null; initialReplyMode = null; }}
+      onClose={() => {
+        if (isBatchMode) exitBatch();
+        else {
+          selectedThreadId = null;
+          initialReplyMode = null;
+        }
+      }}
       onNavigate={navigatePeek}
       hasPrev={threads.findIndex(t => t.id === selectedThreadId) > 0}
       hasNext={threads.findIndex(t => t.id === selectedThreadId) < threads.length - 1}
@@ -1241,22 +1461,22 @@
       onDelete={trash}
       onSnooze={snooze}
       onToggleStar={toggleStar}
-      onToggleReplyLater={toggleReplyLater}
+      onToggleReplyLater={toggleReplyLater} onToggleSetAside={toggleSetAside}
+      subjectOverride={overrideFor(activeEmail)}
+      onRenameSubject={renameSubject}
+      onClearSubject={clearSubject}
       isBatchMode={isBatchMode}
       batchIndex={batchIndex}
       batchTotal={batchQueue.length}
       onSkipNext={() => {
         if (batchIndex < batchQueue.length - 1) {
-          batchIndex++;
-          selectedThreadId = batchQueue[batchIndex];
+          advanceBatch(1);
         } else {
-          isBatchMode = false;
-          selectedThreadId = null;
+          exitBatch();
         }
       }}
       onExitBatch={() => {
-        isBatchMode = false;
-        selectedThreadId = null;
+        exitBatch();
       }}
       onToggleUnread={toggleUnread}
       onAddLabel={applyLabel}
@@ -1322,6 +1542,7 @@
           isUnread: false,
           isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
           isArchived: false,
           isTrash: false,
           isDraft: false,
@@ -1366,6 +1587,7 @@
           isUnread: false,
           isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
           isArchived: false,
           isTrash: false,
           isDraft: false,

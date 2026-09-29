@@ -62,6 +62,7 @@ pub trait MessageRepository: Send + Sync {
         id: Uuid,
         snoozed_until: Option<i64>,
     ) -> Result<(), sqlx::Error>;
+    async fn set_aside(&self, id: Uuid, is_set_aside: bool) -> Result<(), sqlx::Error>;
     async fn unsnooze_due_messages(&self, current_timestamp: i64)
     -> Result<Vec<Uuid>, sqlx::Error>;
 
@@ -207,4 +208,19 @@ pub trait BookingPageRepository: Send + Sync {
         pad_start: i64,
         pad_end: i64,
     ) -> Result<bool, sqlx::Error>;
+}
+
+#[async_trait]
+pub trait ThreadSubjectOverrideRepository: Send + Sync {
+    async fn upsert(
+        &self,
+        account_id: Uuid,
+        thread_id: &str,
+        subject: &str,
+    ) -> Result<(), sqlx::Error>;
+    async fn list_by_account(
+        &self,
+        account_id: Uuid,
+    ) -> Result<Vec<crate::core::models::ThreadSubjectOverride>, sqlx::Error>;
+    async fn delete(&self, account_id: Uuid, thread_id: &str) -> Result<(), sqlx::Error>;
 }
