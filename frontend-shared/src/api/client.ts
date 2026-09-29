@@ -30,6 +30,10 @@ import type {
   UpdateBookingPageRequest,
   StarParams,
   LabelParams,
+  Clip,
+  CreateClipRequest,
+  ThreadNote,
+  SetNoteRequest,
   MeResponse,
 } from './generated/types.js';
 
@@ -698,6 +702,55 @@ export async function toggleStar(id: string, is_starred: boolean, token?: string
   await request<void, StarParams>('POST', `/messages/${id}/star`, {
     token,
     body,
+  });
+}
+
+export async function createClip(
+  accountId: string,
+  messageId: string,
+  snippet: string,
+  token?: string,
+): Promise<Clip> {
+  const body: CreateClipRequest = { account_id: accountId, message_id: messageId, snippet };
+  return request<Clip, CreateClipRequest>('POST', '/clips', { token, body });
+}
+
+export async function listClips(token?: string): Promise<Clip[]> {
+  return request<Clip[]>('GET', '/clips', { token });
+}
+
+export async function deleteClip(id: string, token?: string): Promise<void> {
+  return request<void>('DELETE', `/clips/${id}`, { token });
+}
+
+export async function setThreadNote(
+  threadId: string,
+  accountId: string,
+  note: string,
+  token?: string,
+): Promise<void> {
+  const body: SetNoteRequest = { account_id: accountId, note };
+  await request<void, SetNoteRequest>('PUT', `/threads/${encodeURIComponent(threadId)}/notes`, {
+    token,
+    body,
+  });
+}
+
+export async function clearThreadNote(
+  threadId: string,
+  accountId: string,
+  token?: string,
+): Promise<void> {
+  await request<void>(
+    'DELETE',
+    `/threads/${encodeURIComponent(threadId)}/notes?account_id=${encodeURIComponent(accountId)}`,
+    { token },
+  );
+}
+
+export async function listThreadNotes(accountId: string, token?: string): Promise<ThreadNote[]> {
+  return request<ThreadNote[]>('GET', `/threads/notes?account_id=${encodeURIComponent(accountId)}`, {
+    token,
   });
 }
 

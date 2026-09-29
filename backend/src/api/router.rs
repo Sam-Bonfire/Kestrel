@@ -1,6 +1,6 @@
 use axum::Router;
 use axum::middleware;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -10,6 +10,7 @@ use super::auth;
 use super::availability;
 use super::booking;
 use super::calendars;
+use super::clips;
 use super::contacts;
 use super::health::health_check;
 use super::messages;
@@ -119,6 +120,16 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/v1/messages/:id/archive",
             post(messages::archive_message),
+        )
+        .route(
+            "/api/v1/clips",
+            get(clips::list_clips).post(clips::create_clip),
+        )
+        .route("/api/v1/clips/:id", delete(clips::delete_clip))
+        .route("/api/v1/threads/notes", get(clips::list_notes))
+        .route(
+            "/api/v1/threads/:thread_id/notes",
+            put(clips::set_note).delete(clips::clear_note),
         )
         .route(
             "/api/v1/messages/:id/snooze",
