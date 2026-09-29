@@ -6,6 +6,7 @@ use backend::api::auth::*;
 use backend::api::availability::*;
 use backend::api::booking::*;
 use backend::api::calendars::*;
+use backend::api::clips::*;
 use backend::api::contacts::*;
 use backend::api::messages::*;
 use backend::api::polls::*;
@@ -37,6 +38,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<MessageDetail>()
         .register::<StarParams>()
         .register::<LabelParams>()
+        .register::<Clip>()
+        .register::<CreateClipRequest>()
+        .register::<ThreadNote>()
+        .register::<SetNoteRequest>()
         .register::<BulkActionType>()
         .register::<BulkActionParams>()
         .register::<SendAttachmentPayload>()

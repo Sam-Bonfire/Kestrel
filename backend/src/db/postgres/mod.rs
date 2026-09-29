@@ -1,6 +1,7 @@
 pub mod account_repository;
 pub mod booking_repository;
 pub mod calendar_repository;
+pub mod clip_repository;
 pub mod contact_repository;
 pub mod event_repository;
 pub mod filter_repository;

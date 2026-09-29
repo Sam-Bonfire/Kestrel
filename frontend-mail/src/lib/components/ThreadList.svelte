@@ -8,7 +8,7 @@
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
     ListFilter, Inbox, CheckSquare, Square, ChevronDown, Check, ListPlus,
     Clock, AlertTriangle, Sparkles, Tag, Plus, X, Folder, ChevronRight,
-    Reply, ReplyAll, Forward, BellOff, AlertOctagon, PanelRight
+    Reply, ReplyAll, Forward, BellOff, AlertOctagon, PanelRight, Receipt
   } from 'lucide-svelte';
   import { WindowControls } from '@kestrel/shared/components';
   import {
@@ -62,6 +62,7 @@
     onBulkApplyLabel = (ids: string[], label: string) => {},
     onApplyLabel = (id: string, label: string) => {},
     onMoveTo = (id: string, label: string) => {},
+    onMoveToPaperTrail = (id: string) => {},
     onReply = (id: string) => {},
     onReplyAll = (id: string) => {},
     onForward = (id: string) => {},
@@ -96,6 +97,7 @@
     onBulkApplyLabel?: (ids: string[], label: string) => void;
     onApplyLabel?: (id: string, label: string) => void;
     onMoveTo?: (id: string, label: string) => void;
+    onMoveToPaperTrail?: (id: string) => void;
     onReply?: (id: string) => void;
     onReplyAll?: (id: string) => void;
     onForward?: (id: string) => void;
@@ -918,6 +920,13 @@
     >
       <Archive class="w-3.5 h-3.5 text-violet-400" />
       <span>Archive</span>
+    </button>
+    <button 
+      onclick={() => { onMoveToPaperTrail(threadContextMenu!.threadId); threadContextMenu = null; }}
+      class="w-full px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] flex items-center gap-2 cursor-pointer transition-colors"
+    >
+      <Receipt class="w-3.5 h-3.5 text-stone-400" />
+      <span>Send to Paper Trail</span>
     </button>
     <button 
       onclick={() => { onSnooze(threadContextMenu!.threadId); threadContextMenu = null; }}

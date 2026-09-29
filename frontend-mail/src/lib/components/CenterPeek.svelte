@@ -33,7 +33,9 @@
     UserX,
     CalendarPlus,
     Filter,
-    Download
+    Download,
+    Scissors,
+    StickyNote
   } from 'lucide-svelte';
   import { 
     labelCustomizations, 
@@ -54,6 +56,8 @@
     sender: string;
     senderEmail: string;
     accountId?: string;
+    accountUuid?: string;
+    threadId?: string;
     to: string;
     subject: string;
     body: string;
@@ -101,7 +105,11 @@
     batchIndex = 0,
     batchTotal = 0,
     onSkipNext = () => {},
-    onExitBatch = () => {}
+    onExitBatch = () => {},
+    onClipSelection = (_text: string) => {},
+    threadNote = null as string | null,
+    onSaveNote = async (_note: string) => {},
+    onClearNote = async () => {},
   } = $props<{
     email?: Email | null;
     docked?: boolean;
@@ -136,10 +144,34 @@
     batchTotal?: number;
     onSkipNext?: () => void;
     onExitBatch?: () => void;
+    onClipSelection?: (text: string) => void;
+    threadNote?: string | null;
+    onSaveNote?: (note: string) => Promise<void> | void;
+    onClearNote?: () => Promise<void> | void;
   }>();
 
   // UI state variables
   let showReplyDraft = $state(false);
+
+  // Clip: read the message iframe selection first (sandboxed srcdoc
+  // is same-origin, so this works), fall back to window selection.
+  let bodyFrame: HTMLIFrameElement | undefined = $state(undefined);
+
+  function frameSelection(): string {
+    try {
+      return bodyFrame?.contentWindow?.getSelection()?.toString().trim() ?? '';
+    } catch {
+      // Sandbox tightened unexpectedly; fall back to window selection.
+      return '';
+    }
+  }
+
+  function handleClip() {
+    const frameText = frameSelection();
+    const winText = window.getSelection()?.toString().trim() ?? '';
+    const text = (frameText || winText).slice(0, 2000);
+    if (text) onClipSelection(text);
+  }
   // Tracking protection: reset per email, refresh when the whitelist changes
   let showRemoteOnce = $state(false);
   let allowVersion = $state(0);
@@ -158,6 +190,9 @@
   let contactNotes = $state('');
   let notesLoadedFor: string | null = $state(null);
   let notesSaving = $state(false);
+  // Thread sticky-note editor state (persisted via onSaveNote/onClearNote).
+  let editingNote = $state(false);
+  let draftNote = $state('');
   $effect(() => {
     const key = email?.senderEmail;
     if (!notesOpen || !key || key === notesLoadedFor) return;
@@ -296,6 +331,7 @@
       icsEvent = null;
       loadingIcs = false;
       showRemoteOnce = false;
+      editingNote = false;
       previousEmailId = email.id;
     }
 
@@ -512,6 +548,13 @@
               >
                 <ListPlus class="w-4 h-4" />
               </button>
+              <button
+                onclick={() => handleClip()}
+                class="p-1.5 rounded-full hover:bg-white/5 text-[var(--color-text-secondary)] hover:text-white transition-colors cursor-pointer"
+                title="Clip selected text (or snippet)"
+              >
+                <Scissors class="w-4 h-4" />
+              </button>
               <button class="p-1.5 rounded-full hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer">
                 <Reply class="w-4 h-4" />
               </button>
@@ -526,8 +569,7 @@
             <div class="bg-[#131313] border border-[var(--color-border-hairline)] rounded-xl p-3 space-y-2">
               <label for="contact-notes" class="block text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
                 Notes for {email.senderEmail}
-              </label>
-              <textarea
+              </label>              <textarea
                 id="contact-notes"
                 bind:value={contactNotes}
                 rows="3"
@@ -548,6 +590,74 @@
               </div>
             </div>
           {/if}
+
+          <!-- Thread sticky note (private, per-thread) -->
+          <div class="bg-[#131313] border border-[var(--color-border-hairline)] rounded-xl p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+                Thread note
+              </span>
+              {#if threadNote && !editingNote}
+                <button
+                  onclick={async () => {
+                    await onClearNote();
+                  }}
+                  class="text-[11px] text-neutral-500 hover:text-red-400 cursor-pointer"
+                >
+                  Delete
+                </button>
+              {/if}
+            </div>
+            {#if editingNote}
+              <textarea
+                bind:value={draftNote}
+                rows="2"
+                maxlength="2000"
+                placeholder="Private note for this thread…"
+                class="w-full bg-[var(--color-canvas-base)] text-sm text-white rounded-lg p-2.5 outline-none border border-white/10 focus:border-blue-500/50 resize-y placeholder:text-neutral-600"
+              ></textarea>
+              <div class="flex justify-end gap-2">
+                <button
+                  onclick={() => (editingNote = false)}
+                  class="px-3 py-1.5 text-xs text-neutral-300 hover:text-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onclick={async () => {
+                    if (draftNote.trim()) await onSaveNote(draftNote.trim());
+                    editingNote = false;
+                  }}
+                  class="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-md transition-colors cursor-pointer"
+                >
+                  Save note
+                </button>
+              </div>
+            {:else if threadNote}
+              <p class="text-sm text-white/90 whitespace-pre-wrap">{threadNote}</p>
+              <div class="flex justify-end">
+                <button
+                  onclick={() => {
+                    draftNote = threadNote ?? '';
+                    editingNote = true;
+                  }}
+                  class="text-[11px] text-blue-400/80 hover:text-blue-300 hover:underline cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+            {:else}
+              <button
+                onclick={() => {
+                  draftNote = '';
+                  editingNote = true;
+                }}
+                class="flex items-center gap-1.5 text-[11px] text-neutral-500 hover:text-white cursor-pointer"
+              >
+                <StickyNote class="w-3.5 h-3.5" /> Add a private note
+              </button>
+            {/if}
+          </div>
 
           <!-- Message HTML Render Content (Task 33: Body Sandboxing) -->
           <div class="border border-[var(--color-border-hairline)]/30 rounded-xl bg-[#131313]/10 overflow-hidden">
@@ -574,6 +684,7 @@
             {/if}
             <iframe 
               title="Email Body"
+              bind:this={bodyFrame}
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
               srcdoc={DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
               class="w-full min-h-[20vh] bg-white"
