@@ -1,6 +1,6 @@
 use axum::Router;
 use axum::middleware;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -20,6 +20,7 @@ use super::revisions;
 use super::search;
 use super::settings;
 use super::sync;
+use super::threads;
 use super::vacation;
 use super::webhooks;
 use crate::api::sync::SyncEvent;
@@ -123,6 +124,15 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/v1/messages/:id/snooze",
             post(messages::snooze_message),
+        )
+        .route(
+            "/api/v1/messages/:id/set-aside",
+            post(messages::set_aside_message),
+        )
+        .route("/api/v1/threads/overrides", get(threads::list_overrides))
+        .route(
+            "/api/v1/threads/:thread_id/subject",
+            put(threads::set_subject).delete(threads::clear_subject),
         )
         .route(
             "/api/v1/messages/:id/unsnooze",

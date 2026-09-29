@@ -244,6 +244,7 @@ async fn insert_sent_copy(
         is_deleted: false,
         has_attachments: request.attachments.is_some(),
         snoozed_until: None,
+        is_set_aside: false,
         has_conflict: false,
         created_at: now,
         updated_at: now,

@@ -33,7 +33,9 @@
     UserX,
     CalendarPlus,
     Filter,
-    Download
+    Download,
+    BookOpen,
+    Pencil
   } from 'lucide-svelte';
   import { 
     labelCustomizations, 
@@ -62,6 +64,7 @@
     isStarred: boolean;
     isArchived: boolean;
     isReplyLater?: boolean;
+    isSetAside?: boolean;
     isTrash: boolean;
     labels: string[];
     avatar?: string;
@@ -78,6 +81,10 @@
     onArchive = (id: string) => {},
     onDelete = (id: string) => {},
     onToggleReplyLater = (id: string) => {},
+    onToggleSetAside = (id: string) => {},
+    subjectOverride = null as string | null,
+    onRenameSubject = async (_id: string, _subject: string) => {},
+    onClearSubject = async (_id: string) => {},
     onToggleStar = (id: string) => {},
     onToggleUnread = (id: string) => {},
     onAddLabel = (id: string, label: string) => {},
@@ -112,6 +119,10 @@
     onArchive?: (id: string) => void;
     onDelete?: (id: string) => void;
     onToggleReplyLater?: (id: string) => void;
+    onToggleSetAside?: (id: string) => void;
+    subjectOverride?: string | null;
+    onRenameSubject?: (id: string, subject: string) => Promise<void> | void;
+    onClearSubject?: (id: string) => Promise<void> | void;
     onToggleStar?: (id: string) => void;
     onToggleUnread?: (id: string) => void;
     onAddLabel?: (id: string, label: string) => void;
@@ -203,6 +214,8 @@
   });
 
   let activeMenu = $state<'snooze' | 'label' | 'more' | 'move' | null>(null);
+  let editingSubject = $state(false);
+  let draftSubject = $state('');
 
   // Dynamic more options
   const moreOptions = [
@@ -296,6 +309,7 @@
       icsEvent = null;
       loadingIcs = false;
       showRemoteOnce = false;
+      editingSubject = false;
       previousEmailId = email.id;
     }
 
@@ -347,13 +361,20 @@
       aria-modal={docked ? undefined : true}
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }}
+      onkeydown={(e) => {
+      if (e.key === 'Escape') return;
+      // Let batch-navigation keys and the set-aside toggle reach the
+      // page handler; the reply textarea keeps native keys via the
+      // isTyping guard there.
+      if (e.key === 'Tab' || e.key.startsWith('Arrow') || e.key === 'b' || e.key === 'B') return;
+      e.stopPropagation();
+    }}
     >
       {#if isBatchMode}
         <div class="px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between text-blue-400 shrink-0">
           <div class="text-xs md:text-sm font-medium">Batch Processing: {batchIndex + 1} of {batchTotal} items remaining</div>
           <div class="flex items-center gap-2 md:gap-3">
-            <button onclick={onSkipNext} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1 md:px-3 md:py-1.5 bg-white/5 rounded-md hover:bg-white/10">Skip / Next (Tab)</button>
+            <button onclick={onSkipNext} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1 md:px-3 md:py-1.5 bg-white/5 rounded-md hover:bg-white/10" title="Next (Tab outside the reply field), Previous (Shift+Tab)">Skip / Next (Tab)</button>
             <button onclick={onExitBatch} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1">Exit (Esc)</button>
           </div>
         </div>
@@ -398,9 +419,49 @@
         
         <!-- Subject & Labels Bar -->
         <div class="space-y-2">
-          <h1 class="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-            {email.subject}
-          </h1>
+          {#if editingSubject}
+            <form
+              onsubmit={(e) => {
+                e.preventDefault();
+                if (email && draftSubject.trim()) onRenameSubject(email.id, draftSubject.trim());
+                editingSubject = false;
+              }}
+              class="flex items-center gap-2"
+            >
+              <input
+                bind:value={draftSubject}
+                maxlength="200"
+                aria-label="Personal subject"
+                class="flex-1 bg-[var(--color-canvas-card)] border border-white/10 rounded-lg px-3 py-1.5 text-xl font-bold text-white outline-none focus:border-blue-500/50"
+              />
+              <button type="submit" class="px-3 py-1.5 text-xs rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold">Save</button>
+              <button type="button" onclick={() => (editingSubject = false)} class="px-3 py-1.5 text-xs rounded-lg hover:bg-white/10 text-neutral-300">Cancel</button>
+            </form>
+          {:else}
+            <div class="flex items-start gap-2">
+              <h1 class="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-text-primary)] flex-1">
+                {subjectOverride ?? email.subject}
+              </h1>
+              <button
+                onclick={() => {
+                  draftSubject = subjectOverride ?? email.subject ?? '';
+                  editingSubject = true;
+                }}
+                title="Rename for me only"
+                class="p-1.5 rounded-full hover:bg-white/5 text-neutral-500 hover:text-white transition-colors cursor-pointer shrink-0"
+              >
+                <Pencil class="w-4 h-4" />
+              </button>
+            </div>
+            {#if subjectOverride}
+              <div class="flex items-center gap-2 text-[11px] text-neutral-400">
+                <span class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono">personal name</span>
+                <button onclick={() => email && onClearSubject(email.id)} class="hover:text-white hover:underline cursor-pointer">
+                  Revert to “{email.subject}”
+                </button>
+              </div>
+            {/if}
+          {/if}
 
           <!-- Correctly visible and editable labels bar using customizations -->
           <div id="peek-labels-bar" class="flex flex-wrap items-center gap-1.5">
@@ -511,6 +572,13 @@
                 title="Reply Later"
               >
                 <ListPlus class="w-4 h-4" />
+              </button>
+              <button
+                onclick={() => email && onToggleSetAside(email.id)}
+                class="p-1.5 rounded-full hover:bg-white/5 transition-colors cursor-pointer {email.isSetAside ? 'text-cyan-400' : 'text-[var(--color-text-secondary)] hover:text-white'}"
+                title="Set Aside (B)"
+              >
+                <BookOpen class="w-4 h-4" />
               </button>
               <button class="p-1.5 rounded-full hover:bg-white/5 text-[var(--color-text-secondary)] transition-colors cursor-pointer">
                 <Reply class="w-4 h-4" />
