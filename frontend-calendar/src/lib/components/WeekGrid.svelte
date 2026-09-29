@@ -837,7 +837,7 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focu
             {/if}
 
             <!-- Teammate availability overlays -->
-            {#each availabilityBlocks.filter((b) => b.date === dateStr) as block}
+            {#each availabilityBlocks.filter((b: AvailabilityBlock) => b.date === dateStr) as block}
               <div
                 class="absolute left-0 right-0 pointer-events-none z-0 opacity-60"
                 style="top: {getEventTopOffset(block.startTime)}px; height: {Math.max(getEventHeight(block.startTime, block.endTime), 12)}px; background: repeating-linear-gradient(45deg, rgba(244,63,94,0.18) 0 6px, transparent 6px 12px);"
@@ -928,6 +928,8 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focu
                 <!-- Drag-to-resize handles (top and bottom edges) -->
                 {#if isSelected}
                   <div
+                    role="separator"
+                    aria-label="Drag to resize event"
                     class="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize bg-white/20 hover:bg-white/50 rounded-t-lg transition-colors"
                     onpointerdown={(e) => startResize(e, ev, 'top')}
                     onpointermove={(e) => updateResize(e)}
@@ -935,6 +937,8 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focu
                     onpointercancel={pointerCaptureLost}
                   ></div>
                   <div
+                    role="separator"
+                    aria-label="Drag to resize event"
                     class="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-white/20 hover:bg-white/50 rounded-b-lg transition-colors"
                     onpointerdown={(e) => startResize(e, ev, 'bottom')}
                     onpointermove={(e) => updateResize(e)}

@@ -187,7 +187,7 @@
   }
   let replyType = $state<'reply' | 'reply_all' | 'forward'>('reply');
   let replyToRecipients = $state<string[]>([]);
-  let textareaEl: HTMLTextAreaElement | null = null;
+  let textareaEl = $state<HTMLTextAreaElement | null>(null);
   let replyText = $state('');
   let newLabelText = $state('');
   let showAddLabelInput = $state(false);
@@ -332,7 +332,7 @@
       : 'fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-[2px]'}
     role={docked ? 'complementary' : 'button'}
     aria-label={docked ? 'Email reader' : undefined}
-    tabindex="0"
+    tabindex="-1"
     onclick={docked ? undefined : onClose}
     onkeydown={(e) => { if (e.key === 'Escape' && !docked) onClose(); }}
   >
@@ -519,7 +519,7 @@
           </div>
 
           {#if icsEvent}
-            <EventInviteCard event={icsEvent} emailId={email.id} />
+            <EventInviteCard event={icsEvent} />
           {/if}
 
           {#if notesOpen}

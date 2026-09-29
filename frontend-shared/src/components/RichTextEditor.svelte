@@ -2,10 +2,10 @@
   import { Bold, Italic, Link, List } from 'lucide-svelte';
   import DOMPurify from 'dompurify';
 
-  const SAFE_HTML = {
+  const SAFE_HTML: { ALLOWED_TAGS: string[]; ALLOWED_ATTR: string[] } = {
     ALLOWED_TAGS: ['b', 'i', 'a', 'ul', 'li', 'p', 'br', 'strong', 'em'],
     ALLOWED_ATTR: ['href', 'target'],
-  } as const;
+  };
 
   let {
     value = $bindable(''),
@@ -36,7 +36,7 @@
     // Reflect external resets (e.g. switching events) without clobbering typing.
     // Stored HTML is untrusted (synced from providers): sanitize before render.
     if (editorDiv && document.activeElement !== editorDiv && editorDiv.innerHTML !== value) {
-      editorDiv.innerHTML = DOMPurify.sanitize(value, { ...SAFE_HTML });
+      editorDiv.innerHTML = DOMPurify.sanitize(value ?? '', { ...SAFE_HTML }).toString();
     }
   });
 </script>
@@ -72,11 +72,13 @@
 </div>
 
 <style>
-  [contenteditable] a {
+  /* :global — links/lists are created dynamically inside contenteditable,
+     so scoped selectors never match and the compiler flags them unused. */
+  :global([contenteditable] a) {
     color: var(--color-accent-outlook);
     text-decoration: underline;
   }
-  [contenteditable] ul {
+  :global([contenteditable] ul) {
     list-style-type: disc;
     padding-left: 1.5rem;
   }

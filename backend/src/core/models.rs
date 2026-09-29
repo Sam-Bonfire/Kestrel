@@ -228,3 +228,21 @@ pub struct HistoricalRevision {
     pub revision_number: i32,
     pub created_at: i64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct BookingPage {
+    pub id: DbUuid,
+    pub user_id: DbUuid,
+    pub calendar_id: DbUuid,
+    pub name: String,
+    /// Unguessable public token used in the share link. Rotated to revoke.
+    pub slug: String,
+    pub duration_mins: i32,
+    pub buffer_mins: i32,
+    pub window_days: i32,
+    pub is_active: bool,
+    #[specta(type = f64)]
+    pub created_at: i64,
+    #[specta(type = f64)]
+    pub updated_at: i64,
+}

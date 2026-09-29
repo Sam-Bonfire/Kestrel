@@ -115,16 +115,18 @@
   let polls = $state<PanelPoll[]>([]);
   let voterEmail = $state('');
   let newPollText = $state('');
+  let pollError = $state<string | null>(null);
   let pollsLoadedFor: string | null = $state(null);
 
   async function loadPolls(eventId: string) {
     pollsLoadedFor = eventId;
+    pollError = null;
     try {
       const { listEventPolls } = await import('@kestrel/shared/api');
       const rows = await listEventPolls(eventId);
       if (pollsLoadedFor === eventId) polls = rows;
     } catch (e) {
-      console.error('Failed to load polls', e);
+      pollError = e instanceof Error ? e.message : 'Could not load polls';
     }
   }
 
@@ -142,8 +144,9 @@
       const created = await createEventPoll(event.id, question, options);
       polls = [...polls, { ...created, votes: [] }];
       newPollText = '';
+      pollError = null;
     } catch (e) {
-      console.error('Failed to create poll', e);
+      pollError = e instanceof Error ? e.message : 'Could not create poll';
     }
   }
 
@@ -158,7 +161,7 @@
           : p
       );
     } catch (e) {
-      console.error('Failed to vote', e);
+      pollError = e instanceof Error ? e.message : 'Could not vote';
     }
   }
 
@@ -170,6 +173,7 @@
         initialSnapshot = JSON.parse(JSON.stringify(event));
         currentEventId = event.id;
         polls = [];
+        pollError = null;
         if (event.id) loadPolls(event.id);
       }
 
@@ -288,6 +292,7 @@
       e.stopPropagation();
     }}
     role="dialog"
+    tabindex="-1"
   >
     <!-- Header -->
     <div class="px-4 py-3 flex items-center justify-between border-b border-neutral-800/40">
@@ -313,7 +318,7 @@
       {#if conflicts.length > 0}
         <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2" role="alert">
           <div class="text-xs font-semibold text-amber-200">
-            Overlaps {conflicts.length === 1 ? '1 event' : `${conflicts.length} events`}: {conflicts.map((c) => c.title || 'Untitled').slice(0, 3).join(', ')}
+            Overlaps {conflicts.length === 1 ? '1 event' : `${conflicts.length} events`}: {conflicts.map((c: Schedulable) => c.title || 'Untitled').slice(0, 3).join(', ')}
           </div>
           {#if suggestedSlot}
             <button

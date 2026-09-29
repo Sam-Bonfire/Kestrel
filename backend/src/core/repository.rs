@@ -179,3 +179,32 @@ pub trait EventPollRepository: Send + Sync {
         option_index: i32,
     ) -> Result<bool, sqlx::Error>;
 }
+
+#[async_trait]
+pub trait BookingPageRepository: Send + Sync {
+    async fn create(&self, page: &crate::core::models::BookingPage) -> Result<(), sqlx::Error>;
+    async fn list_by_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<crate::core::models::BookingPage>, sqlx::Error>;
+    async fn find_by_slug(
+        &self,
+        slug: &str,
+    ) -> Result<Option<crate::core::models::BookingPage>, sqlx::Error>;
+    async fn find_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<crate::core::models::BookingPage>, sqlx::Error>;
+    async fn update(&self, page: &crate::core::models::BookingPage) -> Result<(), sqlx::Error>;
+    async fn delete(&self, id: Uuid) -> Result<(), sqlx::Error>;
+    /// Insert `event` only if no event on the same calendar overlaps
+    /// `[pad_start, pad_end)`. Returns false when the slot was taken.
+    /// Implemented as one atomic INSERT..SELECT..WHERE NOT EXISTS
+    /// statement so concurrent bookings cannot double-book.
+    async fn insert_event_if_free(
+        &self,
+        event: &crate::core::models::CalendarEvent,
+        pad_start: i64,
+        pad_end: i64,
+    ) -> Result<bool, sqlx::Error>;
+}

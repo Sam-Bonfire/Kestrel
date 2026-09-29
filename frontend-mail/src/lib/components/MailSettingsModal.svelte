@@ -191,7 +191,7 @@
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs font-sans">
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="fixed inset-0 cursor-pointer" onclick={onClose} />
+    <div class="fixed inset-0 cursor-pointer" onclick={onClose} role="presentation"></div>
     
     <div class="relative w-full max-w-2xl bg-[#131313] border border-neutral-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50 text-xs text-[var(--color-text-primary)]" style="max-height: 90vh;">
       <!-- Header -->
@@ -395,17 +395,17 @@
                 </button>
                 <div class="grid grid-cols-2 gap-3 pr-8">
                   <div>
-                    <label class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Title</label>
-                    <input type="text" bind:value={snippet.title} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50" />
+                    <label for="sn-title-{snippet.id}" class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Title</label>
+                    <input id="sn-title-{snippet.id}" type="text" bind:value={snippet.title} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50" />
                   </div>
                   <div>
-                    <label class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Shortcut</label>
-                    <input type="text" bind:value={snippet.shortcut} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50" placeholder="e.g. /thanks" />
+                    <label for="sn-shortcut-{snippet.id}" class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Shortcut</label>
+                    <input id="sn-shortcut-{snippet.id}" type="text" bind:value={snippet.shortcut} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50" placeholder="e.g. /thanks" />
                   </div>
                 </div>
                 <div>
-                  <label class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Template String</label>
-                  <textarea bind:value={snippet.template} class="w-full h-20 bg-[var(--color-canvas-base)] text-white rounded p-2 outline-none border border-white/10 focus:border-blue-500/50 resize-none font-mono text-[11px]" placeholder="Use {{name}} for variables..."></textarea>
+                  <label for="sn-template-{snippet.id}" class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Template String</label>
+                  <textarea id="sn-template-{snippet.id}" bind:value={snippet.template} class="w-full h-20 bg-[var(--color-canvas-base)] text-white rounded p-2 outline-none border border-white/10 focus:border-blue-500/50 resize-none font-mono text-[11px]" placeholder="Use {{name}} for variables..."></textarea>
                 </div>
               </div>
             {/each}
@@ -432,12 +432,12 @@
                 </button>
                 <div class="grid grid-cols-2 gap-3 pr-8">
                   <div>
-                    <label class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Name</label>
-                    <input type="text" bind:value={sig.name} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50" />
+                    <label for="sig-name-{sig.id}" class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Name</label>
+                    <input id="sig-name-{sig.id}" type="text" bind:value={sig.name} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50" />
                   </div>
                   <div>
-                    <label class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Default For Account</label>
-                    <select bind:value={sig.accountId} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50">
+                    <label for="sig-account-{sig.id}" class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">Default For Account</label>
+                    <select id="sig-account-{sig.id}" bind:value={sig.accountId} class="w-full bg-[var(--color-canvas-base)] text-white rounded p-1.5 outline-none border border-white/10 focus:border-blue-500/50">
                       <option value={null}>None</option>
                       {#each accounts as acc}
                         <option value={acc.id}>{acc.email_address} ({acc.provider})</option>
@@ -450,7 +450,7 @@
                   <span class="text-[11px] text-neutral-300">Set as default signature for this account</span>
                 </label>
                 <div class="pt-2">
-                  <label class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">HTML Content</label>
+                  <span class="block text-[10px] text-neutral-400 mb-1 uppercase tracking-wider">HTML Content</span>
                   <RichTextSignature bind:value={sig.htmlContent} />
                 </div>
               </div>
