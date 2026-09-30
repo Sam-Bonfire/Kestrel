@@ -9,7 +9,7 @@
   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
   import { SettingsModal } from '@kestrel/shared';
   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb } from '@kestrel/shared/stores';
+  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb, focusMode, exitFocusMode } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
   import { isNewsletter, setUnreadBadge } from '@kestrel/shared';
   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
@@ -197,6 +197,7 @@
   function applyCustomView(id: string) {
     const view = customViews.find((v) => v.id === id);
     if (!view) return;
+    if (isBatchMode) exitBatch(false);
     currentView = view.filter.view;
     filterCategory = view.filter.category;
     filterLabel = view.filter.label;
@@ -265,6 +266,54 @@
   let isBatchMode = $state(false);
   let batchQueue = $state<string[]>([]);
   let batchIndex = $state(0);
+  // Exact view to restore when Focus mode exits.
+  let batchReturn = $state<{
+    view: string;
+    customViewId: string | null;
+    category: string;
+    label: string;
+    attachmentsOnly: boolean;
+    dateRange: string;
+    selectedId: string | null;
+  } | null>(null);
+
+  function advanceBatch(step: 1 | -1) {
+    const next = batchIndex + step;
+    if (next < 0 || next >= batchQueue.length) return;
+    batchIndex = next;
+    selectedThreadId = batchQueue[batchIndex];
+  }
+
+  function exitBatch(restore = true) {
+    isBatchMode = false;
+    exitFocusMode();
+    if (restore && batchReturn) {
+      currentView = batchReturn.view;
+      activeCustomViewId = batchReturn.customViewId;
+      filterCategory = batchReturn.category as typeof filterCategory;
+      filterLabel = batchReturn.label;
+      filterAttachmentsOnly = batchReturn.attachmentsOnly;
+      filterDateRange = batchReturn.dateRange as typeof filterDateRange;
+      selectedThreadId = batchReturn.selectedId;
+    } else if (!restore) {
+      selectedThreadId = null;
+    }
+    batchReturn = null;
+  }
+
+  // Mid-batch the queue item can vanish (archive/delete in the pile).
+  // Drop it and carry on instead of stranding an empty reader.
+  $effect(() => {
+    if (isBatchMode && !isLoading && allEmails.length > 0 && selectedThreadId && !activeEmail) {
+      batchQueue = batchQueue.filter((id) => id !== selectedThreadId);
+      if (batchQueue.length === 0) {
+        exitBatch();
+      } else {
+        batchIndex = Math.min(batchIndex, batchQueue.length - 1);
+        selectedThreadId = batchQueue[batchIndex];
+      }
+    }
+  });
 
   // Custom labels created dynamically by user
   let customLabels = $state<string[]>([]);
@@ -848,9 +897,19 @@
   }
   function startBatchMode() {
     if (threads.length > 0) {
+      batchReturn = {
+        view: currentView,
+        customViewId: activeCustomViewId,
+        category: filterCategory,
+        label: filterLabel,
+        attachmentsOnly: filterAttachmentsOnly,
+        dateRange: filterDateRange,
+        selectedId: selectedThreadId,
+      };
       batchQueue = threads.map((t: any) => t.id);
       batchIndex = 0;
       isBatchMode = true;
+      focusMode.set(true);
       selectedThreadId = batchQueue[batchIndex];
     }
   }
@@ -961,8 +1020,7 @@
         batchIndex++;
         selectedThreadId = batchQueue[batchIndex];
       } else {
-        isBatchMode = false;
-        selectedThreadId = null;
+        exitBatch();
       }
     }
     import('@kestrel/shared/api').then(api => api.sendMessage({ account_id: '1', to: [parent.senderEmail || ''], subject: replyMsg.subject || '', body_text: text, thread_id: id } as any));
@@ -970,12 +1028,12 @@
 
   function handleCommandSelect(cmd: string) {
     if (cmd === 'compose') isComposeOpen = true;
-    else if (cmd === 'inbox') currentView = 'inbox';
+    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); currentView = 'inbox'; }
     else if (cmd === 'settings') {
       isCommandOpen = false;
       isSettingsOpen = true;
     }
-    else if (cmd.startsWith('view-')) currentView = cmd.replace('view-', '');
+    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); currentView = cmd.replace('view-', ''); }
   }
 
   // Bulk Actions
@@ -1060,6 +1118,7 @@
               // Select directly; fall back to all-mail only when the thread
               // isn't in the loaded list. The selected-thread effect below
               // loads the full body and marks it read.
+              if (isBatchMode) exitBatch(false);
               if (!allEmails.some((e) => e.id === link.id)) currentView = 'all-mail';
               selectedThreadId = link.id;
               isMobileSidebarOpen = false;
@@ -1074,15 +1133,9 @@
       if (isTyping(e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
       if (selectedThreadId && (e.key === 'h' || e.key === 'H' || (e.key === 'R' && e.shiftKey))) { toggleReplyLater(selectedThreadId); }
-      if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight')) {
+      if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         e.preventDefault();
-        if (batchIndex < batchQueue.length - 1) {
-          batchIndex++;
-          selectedThreadId = batchQueue[batchIndex];
-        } else {
-          isBatchMode = false;
-          selectedThreadId = null;
-        }
+        advanceBatch(e.shiftKey || e.key === 'ArrowLeft' ? -1 : 1);
       }
       if (currentView === 'reply-later' && !isBatchMode && (e.key === 'p' || e.key === 'P' || e.key === ' ')) {
         e.preventDefault();
@@ -1090,8 +1143,9 @@
       }
       if (e.key === 'c') isComposeOpen = true;
       if (e.key === 'Escape') {
-        if (isBatchMode) { isBatchMode = false; }
-        selectedThreadId = null; isCommandOpen = false; isComposeOpen = false;
+        if (isBatchMode) exitBatch();
+        else selectedThreadId = null;
+        isCommandOpen = false; isComposeOpen = false;
       }
     };
     window.addEventListener('keydown', handler);
@@ -1108,7 +1162,8 @@
   {#snippet sidebar()}
     <Sidebar
       {currentView}
-      onSelectView={(v: any) => { currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
+      hideCounts={isBatchMode}
+      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
       {customViews}
       {activeCustomViewId}
       onSelectCustomView={applyCustomView}
@@ -1142,6 +1197,7 @@
         </div>
         <button
           onclick={() => {
+            if (isBatchMode) exitBatch(false);
             currentView = 'screener';
             selectedThreadId = null;
             isMobileSidebarOpen = false;
@@ -1177,12 +1233,13 @@
       bind:activeLabelFilter={filterLabel}
       bind:hasAttachmentFilterOnly={filterAttachmentsOnly}
       bind:activeDateRange={filterDateRange}
-      onFilterChange={() => { activeCustomViewId = null; }}
+      onFilterChange={() => { if (isBatchMode) exitBatch(false); activeCustomViewId = null; }}
       {readerDocked}
       onToggleDock={() => { readerDocked = !readerDocked; }}
       {selectedThreadId}
       {allLabels}
       onSelectThread={(id) => {
+        if (isBatchMode) exitBatch(false);
         selectedThreadId = id;
         import('@kestrel/shared/api').then(api => {
           api.markAsRead(id);
@@ -1278,7 +1335,13 @@
       email={activeEmail}
       docked={readerDocked}
       initialReplyMode={initialReplyMode}
-      onClose={() => { selectedThreadId = null; initialReplyMode = null; }}
+      onClose={() => {
+        if (isBatchMode) exitBatch();
+        else {
+          selectedThreadId = null;
+          initialReplyMode = null;
+        }
+      }}
       onNavigate={navigatePeek}
       hasPrev={threads.findIndex(t => t.id === selectedThreadId) > 0}
       hasNext={threads.findIndex(t => t.id === selectedThreadId) < threads.length - 1}
@@ -1292,16 +1355,13 @@
       batchTotal={batchQueue.length}
       onSkipNext={() => {
         if (batchIndex < batchQueue.length - 1) {
-          batchIndex++;
-          selectedThreadId = batchQueue[batchIndex];
+          advanceBatch(1);
         } else {
-          isBatchMode = false;
-          selectedThreadId = null;
+          exitBatch();
         }
       }}
       onExitBatch={() => {
-        isBatchMode = false;
-        selectedThreadId = null;
+        exitBatch();
       }}
       onToggleUnread={toggleUnread}
       onAddLabel={applyLabel}
