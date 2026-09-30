@@ -211,6 +211,31 @@ pub trait BookingPageRepository: Send + Sync {
 }
 
 #[async_trait]
+pub trait ClipRepository: Send + Sync {
+    async fn create(&self, clip: &crate::core::models::Clip) -> Result<(), sqlx::Error>;
+    async fn list_by_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<crate::core::models::Clip>, sqlx::Error>;
+    async fn delete(&self, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error>;
+}
+
+#[async_trait]
+pub trait ThreadNoteRepository: Send + Sync {
+    async fn upsert(
+        &self,
+        account_id: Uuid,
+        thread_id: &str,
+        note: &str,
+    ) -> Result<(), sqlx::Error>;
+    async fn list_by_account(
+        &self,
+        account_id: Uuid,
+    ) -> Result<Vec<crate::core::models::ThreadNote>, sqlx::Error>;
+    async fn delete(&self, account_id: Uuid, thread_id: &str) -> Result<(), sqlx::Error>;
+}
+
+#[async_trait]
 pub trait ThreadSubjectOverrideRepository: Send + Sync {
     async fn upsert(
         &self,

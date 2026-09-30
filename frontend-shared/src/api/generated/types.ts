@@ -383,13 +383,13 @@ export type SendMessageResponse = {
 	queued: boolean,
 };
 
+export type SetAsideParams = {
+	is_set_aside: boolean,
+};
+
 export type SetNoteRequest = {
 	account_id: string,
 	note: string,
-};
-
-export type SetAsideParams = {
-	is_set_aside: boolean,
 };
 
 export type SetSubjectRequest = {

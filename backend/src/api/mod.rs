@@ -4,6 +4,7 @@ pub mod availability;
 pub mod booking;
 pub mod booking_slots;
 pub mod calendars;
+pub mod clips;
 pub mod contacts;
 pub mod health;
 pub mod labels;
