@@ -33,7 +33,8 @@
     AlertCircle,
     Info,
     X,
-    Plus
+    Plus,
+    Scissors
   } from 'lucide-svelte';
   import RichTextSignature from './RichTextSignature.svelte';
   import { PomodoroWidget } from '@kestrel/shared/components';
@@ -133,8 +134,10 @@
     { id: 'all-mail', label: 'All Mail', icon: Mail,          color: 'text-pink-400'   },
     { id: 'spam',     label: 'Spam',     icon: AlertTriangle, color: 'text-orange-400' },
     { id: 'trash',    label: 'Trash',    icon: Trash2,        color: 'text-red-400'    },
-    { id: 'feed',     label: 'Feed',     icon: Newspaper,     color: 'text-teal-400'   },
+    { id: 'feed',     label: 'Feed',     icon: Newspaper,      color: 'text-teal-400'   },
+    { id: 'paper-trail', label: 'Paper Trail', icon: Receipt, color: 'text-stone-400' },
     { id: 'screener', label: 'Screener', icon: UserCheck,     color: 'text-emerald-400'},
+    { id: 'clips', label: 'Clips', icon: Scissors, color: 'text-amber-400'},
   ] as const;
 
   // Icons map for dynamic rendering

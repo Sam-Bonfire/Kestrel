@@ -2,6 +2,7 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ThreadList from '$lib/components/ThreadList.svelte';
   import ScreenerQueue from '$lib/components/ScreenerQueue.svelte';
+  import ClipsLibrary from '$lib/components/ClipsLibrary.svelte';
   import { firstTimeSenders, approveSender, loadScreened } from '@kestrel/shared';
   import CenterPeek from '$lib/components/CenterPeek.svelte';
   import ComposeModal from '$lib/components/ComposeModal.svelte';
@@ -11,7 +12,7 @@
   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
   import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb, focusMode, exitFocusMode } from '@kestrel/shared/stores';
   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
-  import { isNewsletter, setUnreadBadge } from '@kestrel/shared';
+  import { isNewsletter, setUnreadBadge, resolveBucket, type PinMap, type Bucket } from '@kestrel/shared';
   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
   import { triageCandidates, shouldRunTriage, markTriageRun, smartTriageEnabled } from '@kestrel/shared';
   import { get } from 'svelte/store';
@@ -180,6 +181,8 @@
             /* offline or unreachable — defaults stay */
           });
       });
+      loadClips();
+      loadThreadNotes();
       loadSubjectOverrides();
     }
   });
@@ -497,6 +500,10 @@
       });
     });
     counts['screener'] = screenerQueue.length;
+    counts['paper-trail'] = getCountStr(e => {
+      if (e.isTrash || e.isSpam || !e.isUnread) return false;
+      return bucketOf(e) === 'paper';
+    });
 
     allLabels.forEach((lbl: string) => {
       counts[`label-${lbl}`] = getCountStr(e => !e.isTrash && e.isUnread && e.labels.some((l: string) => l.toLowerCase() === lbl.toLowerCase()));
@@ -648,6 +655,235 @@
     }
   });
 
+  // ── Clips library + thread sticky notes ──────────────────────────
+  // Local-only personal data; never leaves the NAS.
+  let clips = $state<any[]>([]);
+  let threadNotes = $state<Record<string, string>>({});
+
+  async function loadClips() {
+    try {
+      const api = await import('@kestrel/shared/api');
+      clips = await api.listClips();
+    } catch {
+      // Offline: library stays as-is until next load.
+    }
+  }
+
+  async function loadThreadNotes() {
+    try {
+      const api = await import('@kestrel/shared/api');
+      const accounts = await api.listAccounts();
+      const entries = await Promise.all(
+        accounts.map(async (a: any) => {
+          try {
+            const rows = await api.listThreadNotes(a.id);
+            return rows.map((r: any) => [`${a.id}:${r.thread_id}`, r.note] as const);
+          } catch {
+            return [];
+          }
+        })
+      );
+      threadNotes = Object.fromEntries(entries.flat());
+    } catch {
+      // Offline: notes stay empty until next load.
+    }
+  }
+
+  function noteKey(accountUuid: string, threadId: string): string {
+    return `${accountUuid}:${threadId}`;
+  }
+
+  function noteFor(email: any): string | null {
+    if (!email?.accountUuid || !email?.threadId) return null;
+    return threadNotes[noteKey(email.accountUuid, email.threadId)] ?? null;
+  }
+
+  async function saveThreadNote(id: string, note: string) {
+    const email = allEmails.find((e) => e.id === id);
+    if (!email?.accountUuid || !email?.threadId) return;
+    const key = noteKey(email.accountUuid, email.threadId);
+    const previous = threadNotes[key];
+    threadNotes = { ...threadNotes, [key]: note };
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.setThreadNote(email.threadId, email.accountUuid, note);
+    } catch {
+      const next = { ...threadNotes };
+      if (previous === undefined) delete next[key];
+      else next[key] = previous;
+      threadNotes = next;
+    }
+  }
+
+  async function clearThreadNote(id: string) {
+    const email = allEmails.find((e) => e.id === id);
+    if (!email?.accountUuid || !email?.threadId) return;
+    const key = noteKey(email.accountUuid, email.threadId);
+    const previous = threadNotes[key];
+    const next = { ...threadNotes };
+    delete next[key];
+    threadNotes = next;
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.clearThreadNote(email.threadId, email.accountUuid);
+      loadThreadNotes();
+    } catch {
+      if (previous !== undefined) threadNotes = { ...threadNotes, [key]: previous };
+    }
+  }
+
+  async function clipSelection(text: string) {
+    const snippet = text.trim().slice(0, 2000);
+    const email = activeEmail;
+    if (!snippet || !email?.accountUuid) return;
+    try {
+      const api = await import('@kestrel/shared/api');
+      const clip = await api.createClip(email.accountUuid, email.id, snippet);
+      clips = [clip, ...clips];
+      triggerUndoAction({
+        title: 'Clipped to library',
+        timeoutMs: 5000,
+        onCommit: () => {},
+        onUndo: async () => {
+          try {
+            await api.deleteClip(clip.id);
+            clips = clips.filter((c) => c.id !== clip.id);
+          } catch {
+            loadClips();
+          }
+        },
+        type: 'success',
+      });
+    } catch (e) {
+      console.error('Failed to save clip', e);
+    }
+  }
+
+  function jumpToClip(messageId: string) {
+    const found = allEmails.find((e) => e.id === messageId);
+    if (!found) {
+      triggerUndoAction({
+        title: 'Source message is not loaded',
+        timeoutMs: 4000,
+        onCommit: () => {},
+        onUndo: () => {},
+        type: 'info',
+      });
+      return;
+    }
+    currentView = 'all-mail';
+    selectedThreadId = messageId;
+    isMobileSidebarOpen = false;
+  }
+
+  async function deleteClip(id: string) {
+    const snapshot = clips;
+    clips = clips.filter((c) => c.id !== id);
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.deleteClip(id);
+    } catch (e) {
+      console.error('Failed to delete clip', e);
+      clips = snapshot;
+    }
+  }
+
+  // ── Paper Trail routing ──────────────────────────────────────────
+  // Order: user label pin wins, then sender override, then keywords.
+  // Persisted locally; explicit pins always beat the classifier.
+  const PIN_STORE_KEY = 'kestrel:mail:bucket_pins';
+
+  function loadPins(): { labels: PinMap; senders: PinMap } {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PIN_STORE_KEY) : null;
+      const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+      if (typeof parsed !== 'object' || parsed === null) return { labels: {}, senders: {} };
+      const p = parsed as Record<string, unknown>;
+      const clean = (v: unknown, lowerKeys: boolean): PinMap => {
+        if (typeof v !== 'object' || v === null || Array.isArray(v)) return {};
+        const out: PinMap = {};
+        for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+          if (val === 'inbox' || val === 'paper' || val === 'feed') {
+            out[lowerKeys ? k.toLowerCase() : k] = val;
+          }
+        }
+        return out;
+      };
+      return { labels: clean(p.labels, false), senders: clean(p.senders, true) };
+    } catch {
+      return { labels: {}, senders: {} };
+    }
+  }
+
+  let labelPins = $state<PinMap>(loadPins().labels);
+  let senderPins = $state<PinMap>(loadPins().senders);
+  let managingPins = $state(false);
+
+  function persistPins() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(PIN_STORE_KEY, JSON.stringify({ labels: labelPins, senders: senderPins }));
+      }
+    } catch {
+      // Non-fatal.
+    }
+  }
+
+  function bucketOf(e: any): string | null {
+    return resolveBucket(
+      {
+        senderEmail: e.senderEmail,
+        subject: e.subject,
+        snippet: (e.body ?? '').replace(/<[^>]*>?/gm, ''),
+        labels: e.labels,
+      },
+      labelPins,
+      senderPins
+    );
+  }
+
+  function moveToPaperTrail(id: string) {
+    const email = allEmails.find((e) => e.id === id);
+    if (!email?.senderEmail) return;
+    const key = email.senderEmail.trim().toLowerCase();
+    const previous = senderPins[key];
+    senderPins = { ...senderPins, [key]: 'paper' };
+    persistPins();
+    triggerUndoAction({
+      title: `Future mail from ${email.senderEmail} goes to Paper Trail`,
+      timeoutMs: 5000,
+      onCommit: () => {},
+      onUndo: () => {
+        const next = { ...senderPins };
+        if (previous === undefined) delete next[key];
+        else next[key] = previous;
+        senderPins = next;
+        persistPins();
+      },
+      type: 'info',
+    });
+  }
+
+  function unpinSender(email: string) {
+    const next = { ...senderPins };
+    delete next[email];
+    senderPins = next;
+    persistPins();
+  }
+
+  function pinLabel(label: string, bucket: string) {
+    if (!bucket) {
+      const next = { ...labelPins };
+      delete next[label];
+      labelPins = next;
+    } else if (bucket === 'inbox' || bucket === 'paper' || bucket === 'feed') {
+      labelPins = { ...labelPins, [label]: bucket };
+    } else {
+      return;
+    }
+    persistPins();
+  }
+
   // ── Filtered thread list ─────────────────────────────────────────
   let threads = $derived(
     allEmails
@@ -678,6 +914,10 @@
             snippet: (e.body ?? '').replace(/<[^>]*>?/gm, ''),
             labels: e.labels,
           });
+        }
+        if (currentView === 'paper-trail') {
+          if (e.isTrash || e.isSpam) return false;
+          return bucketOf(e) === 'paper';
         }
         if (currentView === 'github')   return e.sender === 'GitHub' && !e.isTrash;
         if (currentView === 'all-mail') return !e.isTrash;
@@ -1337,7 +1577,67 @@
         onBlock={blockScreenedSender}
         onOpen={(id) => { selectedThreadId = id; }}
       />
+    {:else if currentView === 'clips'}
+      <ClipsLibrary
+        clips={clips}
+        onOpen={jumpToClip}
+        onDelete={deleteClip}
+      />
     {:else}
+    {#if currentView === 'paper-trail'}
+      <div class="px-6 py-2 border-b border-white/10 bg-[#131313] text-xs text-neutral-400 flex items-center justify-between">
+        <span>Receipts and transactional mail live here. Your pins always beat the classifier.</span>
+        <button
+          onclick={() => (managingPins = !managingPins)}
+          class="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 text-white transition-colors cursor-pointer"
+        >
+          {managingPins ? 'Done' : 'Manage routing'}
+        </button>
+      </div>
+      {#if managingPins}
+        <div class="px-6 py-3 border-b border-white/10 bg-[#101010] space-y-3 max-h-64 overflow-y-auto">
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-wider text-neutral-500 mb-1.5">Labels</p>
+            {#if allLabels.length === 0}
+              <p class="text-[11px] text-neutral-500">No labels yet.</p>
+            {/if}
+            {#each allLabels as lbl}
+              <div class="flex items-center justify-between py-1">
+                <span class="text-xs text-white truncate">{lbl}</span>
+                <select
+                  value={labelPins[lbl] ?? ''}
+                  onchange={(e) => pinLabel(lbl, (e.currentTarget as HTMLSelectElement).value)}
+                  aria-label="Route {lbl} to"
+                  class="text-xs bg-white/5 border border-white/10 rounded px-1.5 py-1 text-white cursor-pointer"
+                >
+                  <option value="">Auto</option>
+                  <option value="inbox">Inbox</option>
+                  <option value="paper">Paper Trail</option>
+                  <option value="feed">Feed</option>
+                </select>
+              </div>
+            {/each}
+          </div>
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-wider text-neutral-500 mb-1.5">Senders</p>
+            {#if Object.keys(senderPins).length === 0}
+              <p class="text-[11px] text-neutral-500">No sender overrides. Right-click any thread and pick “Send to Paper Trail”.</p>
+            {/if}
+            {#each Object.entries(senderPins) as [email, bucket]}
+              <div class="flex items-center justify-between py-1">
+                <span class="text-xs text-white truncate font-mono">{email} → {bucket}</span>
+                <button
+                  onclick={() => unpinSender(email)}
+                  class="text-[11px] text-neutral-500 hover:text-red-400 cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    {/if}
     <ThreadList
       threads={finalThreads}
       {currentView}
@@ -1378,6 +1678,7 @@
       onBulkApplyLabel={bulkApplyLabel}
       onApplyLabel={applyLabel}
       onMoveTo={moveTo}
+      onMoveToPaperTrail={moveToPaperTrail}
       onReply={initiateReply}
       onReplyAll={initiateReplyAll}
       onForward={initiateForward}
@@ -1462,6 +1763,10 @@
       onSnooze={snooze}
       onToggleStar={toggleStar}
       onToggleReplyLater={toggleReplyLater} onToggleSetAside={toggleSetAside}
+      onClipSelection={clipSelection}
+      threadNote={activeEmail ? noteFor(activeEmail) : null}
+      onSaveNote={(note) => activeEmail && saveThreadNote(activeEmail.id, note)}
+      onClearNote={() => activeEmail && clearThreadNote(activeEmail.id)}
       subjectOverride={overrideFor(activeEmail)}
       onRenameSubject={renameSubject}
       onClearSubject={clearSubject}

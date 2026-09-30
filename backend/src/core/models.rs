@@ -256,3 +256,23 @@ pub struct BookingPage {
     #[specta(type = f64)]
     pub updated_at: i64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct Clip {
+    pub id: DbUuid,
+    pub user_id: DbUuid,
+    pub account_id: DbUuid,
+    pub message_id: String,
+    pub snippet: String,
+    #[specta(type = f64)]
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct ThreadNote {
+    pub account_id: DbUuid,
+    pub thread_id: String,
+    pub note: String,
+    #[specta(type = f64)]
+    pub updated_at: i64,
+}
