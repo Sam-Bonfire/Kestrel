@@ -179,7 +179,7 @@ pub struct NotificationPrefs {
     pub loud_threads: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AiCapabilityToggles {
     pub sort: bool,
@@ -197,18 +197,6 @@ impl Default for NotificationPrefs {
             quiet_hours_end: None,
             loud_contacts: Vec::new(),
             loud_threads: Vec::new(),
-        }
-    }
-}
-
-impl Default for AiCapabilityToggles {
-    fn default() -> Self {
-        Self {
-            sort: false,
-            event_draft: false,
-            digest: false,
-            predraft: false,
-            newlabel: false,
         }
     }
 }

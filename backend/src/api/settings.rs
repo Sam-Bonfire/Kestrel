@@ -94,19 +94,19 @@ pub async fn update_settings(
         current_prefs.signatures = payload.signatures;
     }
     if let Some(mut prefs) = payload.notification_prefs {
-        if let Some(s) = &prefs.quiet_hours_start {
-            if !is_valid_hhmm(s) {
-                return Err(KestrelError::BadRequest(format!(
-                    "quiet_hours_start must be HH:MM, got '{s}'"
-                )));
-            }
+        if let Some(s) = &prefs.quiet_hours_start
+            && !is_valid_hhmm(s)
+        {
+            return Err(KestrelError::BadRequest(format!(
+                "quiet_hours_start must be HH:MM, got '{s}'"
+            )));
         }
-        if let Some(s) = &prefs.quiet_hours_end {
-            if !is_valid_hhmm(s) {
-                return Err(KestrelError::BadRequest(format!(
-                    "quiet_hours_end must be HH:MM, got '{s}'"
-                )));
-            }
+        if let Some(s) = &prefs.quiet_hours_end
+            && !is_valid_hhmm(s)
+        {
+            return Err(KestrelError::BadRequest(format!(
+                "quiet_hours_end must be HH:MM, got '{s}'"
+            )));
         }
         prefs.loud_contacts = normalize_list(&prefs.loud_contacts);
         prefs.loud_threads = normalize_list(&prefs.loud_threads);
