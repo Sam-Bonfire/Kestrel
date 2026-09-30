@@ -883,6 +883,7 @@ pub async fn sync_account_messages(
                         is_deleted: is_blocked,
                         has_attachments: false,
                         snoozed_until: None,
+                        is_set_aside: false,
                         has_conflict: false,
                         created_at: Utc::now().timestamp(),
                         updated_at: Utc::now().timestamp(),
