@@ -45,7 +45,13 @@ function saveScreened(emails: Set<string>) {
 
 function key(email: string, scope: string): string {
   const normalized = normalize(email);
+  if (!normalized) return '';
   return scope ? `${scope}:${normalized}` : normalized;
+}
+
+/** Review key shared with consuming views so allow/approve and gating agree. */
+export function screenedKey(email: string, scope = ''): string {
+  return key(email, scope);
 }
 
 /** Mark a sender as reviewed so they leave the screener queue. */

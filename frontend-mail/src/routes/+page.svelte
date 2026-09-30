@@ -458,6 +458,21 @@
     )
   );
 
+  // Unscreened first-time senders stay out of pure consumption views
+  // until reviewed in the Screener. Queued (not deleted) and visible
+  // there. Keys are account-scoped exactly like the queue, so an
+  // approval in one scope never leaks into another. Explicit-intent
+  // views (starred, reply-later, sent, drafts, labels) are exempt.
+  let unscreenedKeys = $derived(new Set(screenerQueue.map((s) => `${activeAccountId}:${s.email}`)));
+  let hiddenForReview = $derived(
+    allEmails.filter(
+      (e) =>
+        (activeAccountId === 'all' || e.accountId === activeAccountId) &&
+        !e.isTrash &&
+        unscreenedKeys.has(`${activeAccountId}:${(e.senderEmail || '').trim().toLowerCase()}`)
+    ).length
+  );
+
   function allowSender(email: string) {
     screened = approveSender(email, screened, activeAccountId);
   }
@@ -504,6 +519,14 @@
     allEmails
       .filter(e => {
         if (activeAccountId !== 'all' && e.accountId !== activeAccountId) return false;
+        if (
+          (currentView === 'inbox' ||
+            currentView === 'all-mail' ||
+            currentView === 'unread' ||
+            currentView === 'feed') &&
+          unscreenedKeys.has(`${activeAccountId}:${(e.senderEmail || '').trim().toLowerCase()}`)
+        )
+          return false;
         if (currentView === 'inbox')    return !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft;
         if (currentView === 'reply-later') return e.isReplyLater && !e.isTrash;
         if (currentView === 'unread')   return e.isUnread && !e.isTrash && !e.isSpam;
@@ -1107,8 +1130,29 @@
     />
   {/snippet}
 
-    {#if currentView === 'reply-later' && !isBatchMode && threads.length > 0}
-      <div class="flex items-center justify-between px-6 py-3 border-b border-white/10 bg-[#131313]">
+    {#if
+      (currentView === 'inbox' ||
+        currentView === 'all-mail' ||
+        currentView === 'unread' ||
+        currentView === 'feed') &&
+      hiddenForReview > 0}
+      <div class="flex items-center justify-between px-6 py-2 border-b border-white/10 bg-emerald-500/5">
+        <div class="text-xs text-neutral-400">
+          {hiddenForReview} email{hiddenForReview === 1 ? '' : 's'} from new senders held for review
+        </div>
+        <button
+          onclick={() => {
+            currentView = 'screener';
+            selectedThreadId = null;
+            isMobileSidebarOpen = false;
+          }}
+          class="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium rounded-md transition-colors"
+        >
+          Open Screener
+        </button>
+      </div>
+    {/if}
+    {#if currentView === 'reply-later' && !isBatchMode && threads.length > 0}      <div class="flex items-center justify-between px-6 py-3 border-b border-white/10 bg-[#131313]">
         <div class="text-sm text-neutral-400">Press <kbd class="px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs">P</kbd> or <kbd class="px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs">Space</kbd> to start batch processing</div>
         <button onclick={startBatchMode} class="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors">
           Process All
@@ -1120,6 +1164,7 @@
     {#if currentView === 'screener'}
       <ScreenerQueue
         senders={screenerQueue}
+        active={currentView === 'screener'}
         onAllow={allowSender}
         onBlock={blockScreenedSender}
         onOpen={(id) => { selectedThreadId = id; }}
