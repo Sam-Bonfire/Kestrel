@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { firstTimeSenders, approveSender, loadScreened } from './screener.js';
+import { firstTimeSenders, approveSender, loadScreened, screenedKey } from './screener.js';
 
 const mockStorage: Record<string, string> = {};
 globalThis.localStorage = {
@@ -48,5 +48,23 @@ describe('Screener queue', () => {
       'fresh@example.com',
       'new@example.com',
     ]);
+  });
+
+  it('ignores messages without a sender email', () => {
+    const withBlank = [
+      ...msgs,
+      { id: 'm5', senderEmail: '', sender: 'No Address', subject: '?', timestamp: '2026-09-03T10:00:00Z' },
+      { id: 'm6', senderEmail: '   ', sender: 'Spaces', subject: '?', timestamp: '2026-09-03T09:00:00Z' },
+    ];
+    expect(firstTimeSenders(withBlank, new Set()).map((q) => q.email)).toEqual(['new@example.com']);
+  });
+
+  it('scopes review keys per account', () => {
+    expect(screenedKey('A@x.com', 'acct1')).toBe('acct1:a@x.com');
+    expect(screenedKey('A@x.com', '')).toBe('a@x.com');
+    expect(screenedKey('  ', 'acct1')).toBe('');
+    const scoped = approveSender('new@example.com', new Set(), 'acct1');
+    expect(firstTimeSenders(msgs, scoped, 'acct1')).toEqual([]);
+    expect(firstTimeSenders(msgs, scoped, 'acct2')).toHaveLength(1);
   });
 });

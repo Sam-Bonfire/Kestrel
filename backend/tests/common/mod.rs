@@ -118,6 +118,7 @@ pub async fn seed_message(
         is_deleted: false,
         has_attachments: false,
         snoozed_until: None,
+        is_set_aside: false,
         has_conflict: false,
         created_at: now,
         updated_at: now,

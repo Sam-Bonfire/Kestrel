@@ -255,6 +255,7 @@ export type MessageDetail = {
 	is_archived: boolean,
 	is_deleted: boolean,
 	has_attachments: boolean,
+	is_set_aside: boolean,
 	created_at: number | null,
 	updated_at: number | null,
 };
@@ -285,6 +286,7 @@ export type MessageSummary = {
 	is_read: boolean,
 	is_archived: boolean,
 	has_attachments: boolean,
+	is_set_aside: boolean,
 	labels: string | null,
 };
 
@@ -338,6 +340,7 @@ export type SearchResult = {
 	snippet: string | null,
 	date_received: number | null,
 	is_read: boolean,
+	is_set_aside: boolean,
 };
 
 export type SendAttachmentPayload = {
@@ -365,6 +368,15 @@ export type SendMessageResponse = {
 export type SetNoteRequest = {
 	account_id: string,
 	note: string,
+};
+
+export type SetAsideParams = {
+	is_set_aside: boolean,
+};
+
+export type SetSubjectRequest = {
+	account_id: string,
+	subject: string,
 };
 
 export type SettingsPayload = {
@@ -414,6 +426,13 @@ export type ThreadNote = {
 	account_id: DbUuid,
 	thread_id: string,
 	note: string,
+	updated_at: number | null,
+};
+
+export type ThreadSubjectOverride = {
+	account_id: DbUuid,
+	thread_id: string,
+	subject: string,
 	updated_at: number | null,
 };
 

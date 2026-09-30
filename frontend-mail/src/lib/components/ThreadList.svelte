@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { fade, slide, fly } from 'svelte/transition';
-  import { flip } from 'svelte/animate';
+  import { fly } from 'svelte/transition';
   import { isTyping } from '$lib/utils/keyboard';
   import {
     Star, Paperclip, Archive, Trash2, MailOpen, Mail, RotateCw, 
@@ -29,6 +28,7 @@
     sender: string;
     senderEmail: string;
     subject: string;
+    subjectOverridden?: boolean;
     snippet: string;
     date: string;
     timestamp?: string;
@@ -222,6 +222,117 @@
 
   let unreadCount = $derived(filteredList.filter((t: EmailThread) => t.isUnread).length);
 
+  // Sender bundles (K-1500): flooding senders collapse to one row.
+  // View-only grouping — never a mutation, so no sync or undo semantics.
+  const BUNDLE_CUTOFF = 3;
+  const BUNDLE_STORE_KEY = 'kestrel:mail:bundle_senders';
+
+  function loadBundlePrefs(): Record<string, boolean> {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(BUNDLE_STORE_KEY) : null;
+      if (!raw) return {};
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+      const clean: Record<string, boolean> = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'boolean' && Object.keys(clean).length < 200) clean[k] = v;
+      }
+      return clean;
+    } catch {
+      return {};
+    }
+  }
+
+  // Null when the thread has no usable email: never bundle those
+  // (display-name-only collisions would merge strangers).
+  function senderKey(t: EmailThread): string | null {
+    const e = (t.senderEmail || '').trim().toLowerCase();
+    return e ? e : null;
+  }
+
+  // Senders the user chose never to bundle.
+  let unbundledSenders = $state<Record<string, boolean>>(loadBundlePrefs());
+  // Bundles expanded inline for this view session.
+  let expandedBundles = $state<Record<string, boolean>>({});
+
+  function persistBundlePrefs() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(BUNDLE_STORE_KEY, JSON.stringify(unbundledSenders));
+      }
+    } catch {
+      // Non-fatal.
+    }
+  }
+
+  // Grouped once per filter change; template lookups are O(1).
+  let bundleGroups = $derived.by(() => {
+    const map = new Map<string, EmailThread[]>();
+    for (const t of filteredList) {
+      const k = senderKey(t);
+      if (!k) continue;
+      const arr = map.get(k);
+      if (arr) arr.push(t);
+      else map.set(k, [t]);
+    }
+    return map;
+  });
+
+  // Group of same-sender threads when they qualify for a bundle row,
+  // otherwise null.
+  function bundleGroup(t: EmailThread): EmailThread[] | null {
+    const k = senderKey(t);
+    if (!k || unbundledSenders[k] || expandedBundles[k]) return null;
+    const group = bundleGroups.get(k) ?? [];
+    return group.length >= BUNDLE_CUTOFF ? group : null;
+  }
+
+  function isBundleHead(t: EmailThread): boolean {
+    const g = bundleGroup(t);
+    return !!g && g[0].id === t.id;
+  }
+
+  function inCollapsedBundle(t: EmailThread): boolean {
+    return bundleGroup(t) !== null;
+  }
+
+  // Keep the cursor inside the visible list when filters shrink it.
+  $effect(() => {
+    selectedIndex = Math.min(selectedIndex, Math.max(0, visibleIds.length - 1));
+  });
+
+  function expandBundleFor(id: string) {
+    const t = filteredList.find((x: EmailThread) => x.id === id);
+    if (!t) return;
+    const k = senderKey(t);
+    if (k && !expandedBundles[k]) expandedBundles = { ...expandedBundles, [k]: true };
+  }
+
+  function unbundleSender(key: string) {
+    unbundledSenders = { ...unbundledSenders, [key]: true };
+    persistBundlePrefs();
+  }
+
+  // Thread ids in visible order: collapsed bundles contribute only
+  // their head thread, so keyboard nav never walks invisible rows.
+  let visibleIds = $derived.by(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const t of filteredList) {
+      const g = bundleGroup(t);
+      if (!g) {
+        ids.push(t.id);
+        continue;
+      }
+      const k = senderKey(t)!;
+      if (!seen.has(k)) {
+        seen.add(k);
+        ids.push(g[0].id);
+      }
+    }
+    return ids;
+  });
+
   // Selection helpers
   let isAllChecked = $derived(
     filteredList.length > 0 && filteredList.every((t: EmailThread) => checkedThreads[t.id])
@@ -250,14 +361,14 @@
   function toggleCheck(id: string, e: MouseEvent) {
     e.stopPropagation();
     if (e.shiftKey && lastCheckedId) {
-      const lastIdx = filteredList.findIndex((t: EmailThread) => t.id === lastCheckedId);
-      const currIdx = filteredList.findIndex((t: EmailThread) => t.id === id);
+      const lastIdx = visibleIds.findIndex((x) => x === lastCheckedId);
+      const currIdx = visibleIds.findIndex((x) => x === id);
       if (lastIdx !== -1 && currIdx !== -1) {
         const start = Math.min(lastIdx, currIdx);
         const end = Math.max(lastIdx, currIdx);
         const nextChecked = { ...checkedThreads };
         for (let i = start; i <= end; i++) {
-          nextChecked[filteredList[i].id] = true;
+          nextChecked[visibleIds[i]] = true;
         }
         checkedThreads = nextChecked;
       }
@@ -283,15 +394,17 @@
 
     if (event.key === 'j' || event.key === 'ArrowDown') {
       event.preventDefault();
-      selectedIndex = Math.min(selectedIndex + 1, filteredList.length - 1);
-      onSelectThread(filteredList[selectedIndex].id);
+      selectedIndex = Math.min(selectedIndex + 1, visibleIds.length - 1);
+      expandBundleFor(visibleIds[selectedIndex]);
+      onSelectThread(visibleIds[selectedIndex]);
     } else if (event.key === 'k' || event.key === 'ArrowUp') {
       event.preventDefault();
       selectedIndex = Math.max(selectedIndex - 1, 0);
-      onSelectThread(filteredList[selectedIndex].id);
+      expandBundleFor(visibleIds[selectedIndex]);
+      onSelectThread(visibleIds[selectedIndex]);
     } else if (event.key === 'x') {
-      if (filteredList[selectedIndex]) {
-        const id = filteredList[selectedIndex].id;
+      if (visibleIds[selectedIndex]) {
+        const id = visibleIds[selectedIndex];
         checkedThreads = { ...checkedThreads, [id]: !checkedThreads[id] };
         lastCheckedId = id;
       }
@@ -660,18 +773,52 @@
       </div>
     {:else}
       {#each filteredList as thread, i (thread.id)}
+        {#if isBundleHead(thread)}
+          {@const bundleThreads = bundleGroup(thread)!}
+          {@const bundleUnread = bundleThreads.filter((t) => t.isUnread).length}
+          {@const bundleKey = senderKey(thread) ?? ''}
+          <div
+            class="group relative flex items-center gap-2 bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 rounded-lg border border-transparent px-3 py-2.5 focus-within:ring-2 focus-within:ring-blue-500"
+          >
+            <button
+              onclick={() => {
+                expandedBundles = { ...expandedBundles, [bundleKey]: true };
+              }}
+              aria-expanded="false"
+              aria-label="Expand {bundleThreads.length} emails from {thread.sender}"
+              class="flex flex-1 items-center gap-3 text-left cursor-pointer min-w-0 focus:outline-none"
+            >
+              {#if bundleUnread > 0}
+                <span class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] shrink-0"></span>
+              {/if}
+              <ChevronRight class="w-4 h-4 text-neutral-400 shrink-0" />
+              <span class="text-xs font-semibold text-white truncate">{thread.sender}</span>
+              <span class="text-[11px] font-mono text-neutral-400 shrink-0">
+                {bundleThreads.length} emails{#if bundleUnread > 0} · {bundleUnread} unread{/if}
+              </span>
+            </button>
+            <button
+              onclick={() => unbundleSender(bundleKey)}
+              title="Always show this sender separately"
+              class="text-[11px] text-neutral-500 hover:text-white transition-colors shrink-0 px-1"
+            >
+              Don't bundle
+            </button>
+          </div>
+        {/if}
+        {#if !inCollapsedBundle(thread)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
           in:fly={{ y: 20, duration: 300, delay: Math.min(i * 30, 300), easing: (t) => t * (2 - t) }}
-          animate:flip={{ duration: 300 }}
           class="group relative flex flex-col sm:flex-row sm:items-center bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)]/40 hover:-translate-y-px hover:shadow-md hover:z-10 rounded-lg cursor-pointer transition-all duration-200 border border-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas-base)] focus:outline-none touch-pan-y
             {selectedThreadId === thread.id ? 'bg-[var(--color-canvas-hover)]/60 border-white/5 shadow-sm -translate-y-px z-10' : ''}
             {densityRowClasses[$mailDensity]}"
           style={swipeStart?.id === thread.id && swipeOffset !== 0 ? `transform: translateX(${swipeOffset}px);` : undefined}
           onclick={() => {
             if (suppressClickId === thread.id) { suppressClickId = null; return; }
-            selectedIndex = i; onSelectThread(thread.id);
+            selectedIndex = Math.max(0, visibleIds.indexOf(thread.id));
+            onSelectThread(thread.id);
           }}
           oncontextmenu={(e) => handleThreadContextMenu(thread.id, e)}
           onpointerdown={(e) => handleSwipeStart(thread.id, e)}
@@ -849,6 +996,7 @@
             </div>
           </div>
         </div>
+        {/if}
       {/each}
     {/if}
   </div>

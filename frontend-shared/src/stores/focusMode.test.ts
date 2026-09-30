@@ -40,9 +40,10 @@ describe('focusMode store', () => {
     expect(localStorage.getItem('kestrel:focus_mode')).toBe('false');
   });
 
-  it('initializes from persisted value', async () => {
+  it('always starts off even when a value is persisted', async () => {
+    // Batch queues are session-only: a reload must not resurrect focus UI.
     localStorage.setItem('kestrel:focus_mode', 'true');
     const { focusMode } = await import('./focusMode.js');
-    expect(get(focusMode)).toBe(true);
+    expect(get(focusMode)).toBe(false);
   });
 });

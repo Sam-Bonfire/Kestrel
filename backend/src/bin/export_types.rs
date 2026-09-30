@@ -11,6 +11,7 @@ use backend::api::contacts::*;
 use backend::api::messages::*;
 use backend::api::polls::*;
 use backend::api::search::*;
+use backend::api::threads::*;
 use backend::api::vacation::*;
 use backend::core::models::*;
 
@@ -42,6 +43,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<CreateClipRequest>()
         .register::<ThreadNote>()
         .register::<SetNoteRequest>()
+        .register::<SetAsideParams>()
+        .register::<ThreadSubjectOverride>()
+        .register::<SetSubjectRequest>()
         .register::<BulkActionType>()
         .register::<BulkActionParams>()
         .register::<SendAttachmentPayload>()

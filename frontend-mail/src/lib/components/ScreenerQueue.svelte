@@ -1,18 +1,55 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { UserCheck, Ban, MailOpen } from 'lucide-svelte';
   import type { ScreenedSender } from '@kestrel/shared';
+  import { isTyping } from '$lib/utils/keyboard';
 
   let {
     senders = [],
     onAllow = (_email: string) => {},
     onBlock = (_email: string) => {},
     onOpen = (_messageId: string) => {},
+    active = false,
   } = $props<{
     senders?: ScreenedSender[];
     onAllow?: (email: string) => void;
     onBlock?: (email: string) => void;
     onOpen?: (messageId: string) => void;
+    active?: boolean;
   }>();
+
+  let sel = $state(0);
+
+  $effect(() => {
+    if (sel > senders.length - 1) sel = Math.max(0, senders.length - 1);
+  });
+
+  function onKey(e: KeyboardEvent) {
+    if (!active || senders.length === 0 || isTyping(e)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const cur = senders[Math.min(sel, senders.length - 1)];
+    if (!cur) return;
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      sel = Math.min(sel + 1, senders.length - 1);
+    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      sel = Math.max(sel - 1, 0);
+    } else if (e.key === 'y' || e.key === 'Y') {
+      onAllow(cur.email);
+    } else if (e.key === 'n' || e.key === 'N') {
+      onBlock(cur.email);
+    } else if (e.key === 'Enter' || e.key === 'o') {
+      onOpen(cur.messageId);
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('keydown', onKey);
+  });
+  onDestroy(() => {
+    window.removeEventListener('keydown', onKey);
+  });
 </script>
 
 <div class="flex-1 overflow-y-auto px-4 py-3 space-y-2">
@@ -20,7 +57,8 @@
     First-time senders ({senders.length})
   </div>
   <div class="px-2 pb-1 text-[11px] text-[var(--color-text-secondary)]/70">
-    Senders with a single message in recent mail.
+    Senders with a single message in recent mail. Hidden from inbox until reviewed.
+    <span class="font-mono">Y</span> allow · <span class="font-mono">N</span> block · <span class="font-mono">J/K</span> move
   </div>
   {#if senders.length === 0}
     <div class="flex flex-col items-center justify-center py-16 text-center">
@@ -29,8 +67,8 @@
       <span class="text-[11px] opacity-60">Everyone writing to you has been seen before.</span>
     </div>
   {:else}
-    {#each senders as sender (sender.email)}
-      <div class="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-canvas-base)] border border-white/5 hover:border-white/10 transition-colors">
+    {#each senders as sender, idx (sender.email)}
+      <div class="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-canvas-base)] border transition-colors {idx === sel && active ? 'border-blue-500/60' : 'border-white/5 hover:border-white/10'}">
         <button
           type="button"
           onclick={() => onOpen(sender.messageId)}

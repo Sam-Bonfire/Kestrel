@@ -18,7 +18,7 @@ impl PostgresMessageRepository {
 const MESSAGE_COLUMNS: &str = "m.id, m.account_id, m.external_id, m.thread_id, m.subject, m.sender_name, m.sender_email, \
      m.recipients::TEXT as recipients, m.date_sent, m.date_received, m.snippet, m.body_text, m.body_html, \
      m.labels::TEXT as labels, m.is_read, m.is_archived, m.is_deleted, m.has_attachments, m.snoozed_until, \
-     m.created_at, m.updated_at";
+     m.is_set_aside, m.created_at, m.updated_at";
 
 #[async_trait]
 impl MessageRepository for PostgresMessageRepository {
@@ -128,8 +128,8 @@ impl MessageRepository for PostgresMessageRepository {
         sqlx::query(
             "INSERT INTO messages (id, account_id, external_id, thread_id, subject, sender_name, \
              sender_email, recipients, date_sent, date_received, snippet, body_text, body_html, \
-             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, has_conflict, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) \
+             labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, is_set_aside, has_conflict, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) \
              ON CONFLICT (account_id, external_id) DO UPDATE SET \
              thread_id = EXCLUDED.thread_id, subject = EXCLUDED.subject, \
              sender_name = EXCLUDED.sender_name, sender_email = EXCLUDED.sender_email, \
@@ -138,7 +138,7 @@ impl MessageRepository for PostgresMessageRepository {
              body_text = EXCLUDED.body_text, body_html = EXCLUDED.body_html, \
              labels = EXCLUDED.labels, is_read = EXCLUDED.is_read, \
              is_archived = EXCLUDED.is_archived, is_deleted = EXCLUDED.is_deleted, \
-             has_attachments = EXCLUDED.has_attachments, snoozed_until = EXCLUDED.snoozed_until, has_conflict = EXCLUDED.has_conflict, \
+             has_attachments = EXCLUDED.has_attachments, snoozed_until = EXCLUDED.snoozed_until, is_set_aside = EXCLUDED.is_set_aside, has_conflict = EXCLUDED.has_conflict, \
              updated_at = EXCLUDED.updated_at",
         )
         .bind(message.id)
@@ -160,8 +160,21 @@ impl MessageRepository for PostgresMessageRepository {
         .bind(message.is_deleted)
         .bind(message.has_attachments)
         .bind(message.snoozed_until)
+        .bind(message.is_set_aside)
+        .bind(message.has_conflict)
         .bind(message.created_at)
         .bind(message.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn set_aside(&self, id: Uuid, is_set_aside: bool) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE messages SET is_set_aside = $1, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id = $2",
+        )
+        .bind(is_set_aside)
+        .bind(id)
         .execute(&self.pool)
         .await?;
         Ok(())
