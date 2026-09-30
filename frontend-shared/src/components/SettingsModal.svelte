@@ -8,7 +8,7 @@
     onClose?: () => void;
   }>();
 
-  let activeTab = $state('shortcuts'); // 'shortcuts' | 'accounts' | 'server'
+  let activeTab: 'shortcuts' | 'accounts' | 'server' | 'notifications' | 'ai' = $state('shortcuts');
 
   // --- Server State ---
   let serverUrl = $state(getServerUrl());
@@ -47,6 +47,106 @@
     }
   }
 
+  // --- App settings (notifications + AI, server-persisted) ---
+  let settingsLoading = $state(false);
+  let settingsError = $state<string | null>(null);
+  let quietByDefault = $state(true);
+  let quietStart = $state('');
+  let quietEnd = $state('');
+  let loudContacts = $state<string[]>([]);
+  let loudThreads = $state<string[]>([]);
+  let loudInput = $state('');
+  let aiToggles = $state<Record<string, boolean>>({
+    sort: false,
+    eventDraft: false,
+    digest: false,
+    predraft: false,
+    newlabel: false,
+  });
+
+  const AI_CAPS = [
+    ['sort', 'Inbox sorting help'],
+    ['eventDraft', 'Draft events from mail'],
+    ['digest', 'Daily digest'],
+    ['predraft', 'Reply pre-drafts'],
+    ['newlabel', 'New label suggestions'],
+  ] as const;
+
+  async function loadAppSettings() {
+    settingsLoading = true;
+    settingsError = null;
+    try {
+      const { getSettings } = await import('../api/client.js');
+      const s = await getSettings();
+      const n = s.notificationPrefs;
+      quietByDefault = n?.quietByDefault ?? true;
+      quietStart = n?.quietHoursStart ?? '';
+      quietEnd = n?.quietHoursEnd ?? '';
+      loudContacts = n?.loudContacts ?? [];
+      loudThreads = n?.loudThreads ?? [];
+      const t = s.aiToggles;
+      if (t) {
+        aiToggles = {
+          sort: t.sort,
+          eventDraft: t.eventDraft,
+          digest: t.digest,
+          predraft: t.predraft,
+          newlabel: t.newlabel,
+        };
+      }
+    } catch (e) {
+      settingsError = e instanceof Error ? e.message : 'Could not load settings';
+    } finally {
+      settingsLoading = false;
+    }
+  }
+
+  async function saveAppSettings(patch: Record<string, unknown>) {
+    settingsError = null;
+    try {
+      const { updateSettings } = await import('../api/client.js');
+      await updateSettings(patch as never);
+    } catch (e) {
+      settingsError = e instanceof Error ? e.message : 'Could not save settings';
+    }
+  }
+
+  function saveNotifications() {
+    saveAppSettings({
+      notificationPrefs: {
+        quietByDefault,
+        quietHoursStart: quietStart || null,
+        quietHoursEnd: quietEnd || null,
+        loudContacts,
+        loudThreads,
+      },
+    });
+  }
+
+  function addLoudContact() {
+    const email = loudInput.trim().toLowerCase();
+    if (!email || !email.includes('@') || loudContacts.includes(email)) return;
+    loudContacts = [...loudContacts, email];
+    loudInput = '';
+    saveNotifications();
+  }
+
+  function removeLoudContact(email: string) {
+    loudContacts = loudContacts.filter((c) => c !== email);
+    saveNotifications();
+  }
+
+  function saveAi() {
+    saveAppSettings({
+      aiToggles: {
+        sort: aiToggles.sort,
+        eventDraft: aiToggles.eventDraft,
+        digest: aiToggles.digest,
+        predraft: aiToggles.predraft,
+        newlabel: aiToggles.newlabel,
+      },
+    });
+  }
   // --- Shortcuts State ---
   let shortcuts = $state([
     { id: 'compose', label: 'Compose New Message', key: 'C' },
@@ -257,6 +357,16 @@
             onclick={() => { activeTab = 'server'; testServerConnection(); }}
             class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'server' ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-white/5'}">
             Server & Network
+          </button>
+          <button 
+            onclick={() => { activeTab = 'notifications'; loadAppSettings(); }}
+            class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'notifications' ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-white/5'}">
+            Notifications
+          </button>
+          <button 
+            onclick={() => { activeTab = 'ai'; loadAppSettings(); }}
+            class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'ai' ? 'bg-[var(--color-canvas-hover)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-white/5'}">
+            AI Features
           </button>
         </div>
         
@@ -487,7 +597,6 @@
                     <span class="text-[var(--color-text-secondary)]">Click test to verify server connectivity</span>
                   {/if}
                 </div>
-
                 <div class="flex items-center gap-2">
                   <button
                     onclick={testServerConnection}
@@ -511,6 +620,105 @@
                 </div>
               </div>
             </div>
+          {:else if activeTab === 'notifications'}
+            <h3 class="text-white font-medium mb-1">Notifications</h3>
+            <p class="text-[var(--color-text-secondary)] text-sm mb-6">
+              Quiet by default. Only loud contacts and threads can interrupt you.
+            </p>
+            {#if settingsLoading}
+              <p class="text-sm text-[var(--color-text-secondary)]">Loading…</p>
+            {:else}
+              {#if settingsError}
+                <p class="text-sm text-red-400 mb-3" role="alert">{settingsError}</p>
+              {/if}
+              <div class="space-y-4 bg-[var(--color-canvas-base)] p-4 rounded-lg border border-[var(--color-border-hairline)]">
+                <label class="flex items-center justify-between gap-3 cursor-pointer">
+                  <span class="text-sm text-white">Quiet by default</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={quietByDefault}
+                    onchange={saveNotifications}
+                    class="accent-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="block text-xs text-[var(--color-text-secondary)]">Quiet from
+                    <input
+                      type="time"
+                      bind:value={quietStart}
+                      onchange={saveNotifications}
+                      class="mt-1 w-full px-3 py-2 bg-[#121212] border border-[var(--color-border-hairline)] rounded-md text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </label>
+                  <label class="block text-xs text-[var(--color-text-secondary)]">Quiet until
+                    <input
+                      type="time"
+                      bind:value={quietEnd}
+                      onchange={saveNotifications}
+                      class="mt-1 w-full px-3 py-2 bg-[#121212] border border-[var(--color-border-hairline)] rounded-md text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <span class="block text-xs text-[var(--color-text-secondary)] mb-1.5">Loud contacts (always notify)</span>
+                  <div class="flex items-center gap-2 mb-2">
+                    <input
+                      type="email"
+                      bind:value={loudInput}
+                      placeholder="boss@example.com"
+                      aria-label="Add loud contact"
+                      class="flex-1 px-3 py-2 bg-[#121212] border border-[var(--color-border-hairline)] rounded-md text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      onclick={addLoudContact}
+                      class="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-md transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {#if loudContacts.length === 0}
+                    <p class="text-xs text-[var(--color-text-secondary)]">Nobody punches through quiet mode yet.</p>
+                  {/if}
+                  {#each loudContacts as contact}
+                    <div class="flex items-center justify-between py-1">
+                      <span class="text-sm text-white font-mono truncate">{contact}</span>
+                      <button
+                        onclick={() => removeLoudContact(contact)}
+                        class="text-xs text-neutral-500 hover:text-red-400 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+          {:else if activeTab === 'ai'}
+            <h3 class="text-white font-medium mb-1">AI Features</h3>
+            <p class="text-[var(--color-text-secondary)] text-sm mb-6">
+              Every capability is off until you enable it. Nothing leaves your NAS without a toggle.
+            </p>
+            {#if settingsLoading}
+              <p class="text-sm text-[var(--color-text-secondary)]">Loading…</p>
+            {:else}
+              {#if settingsError}
+                <p class="text-sm text-red-400 mb-3" role="alert">{settingsError}</p>
+              {/if}
+              <div class="space-y-3">
+                {#each AI_CAPS as [key, label]}
+                  <label class="flex items-center justify-between gap-3 p-3 rounded-lg border border-[var(--color-border-hairline)] bg-[var(--color-canvas-base)] cursor-pointer">
+                    <span class="text-sm text-white">{label}</span>
+                    <input
+                      type="checkbox"
+                      bind:checked={aiToggles[key]}
+                      onchange={saveAi}
+                      class="accent-blue-500 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
+                {/each}
+              </div>
+            {/if}
           {/if}
           
         </div>

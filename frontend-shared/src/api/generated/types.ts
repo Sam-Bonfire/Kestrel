@@ -11,6 +11,14 @@ export type Account = {
 	updated_at: number | null,
 };
 
+export type AiCapabilityToggles = {
+	sort: boolean,
+	eventDraft: boolean,
+	digest: boolean,
+	predraft: boolean,
+	newlabel: boolean,
+};
+
 export type BookSlotRequest = {
 	guest_name: string,
 	guest_email: string,
@@ -290,6 +298,16 @@ export type MessageSummary = {
 	labels: string | null,
 };
 
+export type NotificationPrefs = {
+	/**  Master switch. True = silent unless contact/thread is loud. */
+	quietByDefault: boolean,
+	/**  "HH:MM" 24h local bounds; absent = no quiet window. */
+	quietHoursStart: string | null,
+	quietHoursEnd: string | null,
+	loudContacts: string[],
+	loudThreads: string[],
+};
+
 export type PollVote = {
 	poll_id: DbUuid,
 	voter_email: string,
@@ -365,13 +383,13 @@ export type SendMessageResponse = {
 	queued: boolean,
 };
 
+export type SetAsideParams = {
+	is_set_aside: boolean,
+};
+
 export type SetNoteRequest = {
 	account_id: string,
 	note: string,
-};
-
-export type SetAsideParams = {
-	is_set_aside: boolean,
 };
 
 export type SetSubjectRequest = {
@@ -392,6 +410,8 @@ export type SettingsPayload = {
 	theme: string | null,
 	snippets: Snippet[] | null,
 	signatures: Signature[] | null,
+	notificationPrefs: NotificationPrefs | null,
+	aiToggles: AiCapabilityToggles | null,
 };
 
 export type Signature = {

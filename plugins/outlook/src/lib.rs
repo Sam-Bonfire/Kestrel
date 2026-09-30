@@ -1,7 +1,7 @@
-use wit_bindgen::generate;
-use serde_json::{Value, json};
-use chrono::{DateTime, Utc};
 use base64::{Engine as _, engine::general_purpose::STANDARD as b64};
+use chrono::{DateTime, Utc};
+use serde_json::{Value, json};
+use wit_bindgen::generate;
 
 generate!({
     world: "kestrel-plugin",
@@ -21,11 +21,14 @@ impl exports::kestrel::provider::provider_branding::Guest for OutlookPlugin {
     }
 }
 
-use kestrel::provider::http_client::{HttpRequest, request};
-use exports::kestrel::provider::mail_provider::{Guest as MailGuest, SyncResult, 
-MessageBody, SendMessagePayload, VacationSettings};
+use exports::kestrel::provider::calendar_provider::{
+    BusyBlock, CalendarPayload, EventPayload, Guest as CalendarGuest,
+};
 use exports::kestrel::provider::mail_provider::MessagePayload;
-use exports::kestrel::provider::calendar_provider::{Guest as CalendarGuest, CalendarPayload, EventPayload, BusyBlock};
+use exports::kestrel::provider::mail_provider::{
+    Guest as MailGuest, MessageBody, SendMessagePayload, SyncResult, VacationSettings,
+};
+use kestrel::provider::http_client::{HttpRequest, request};
 
 fn parse_outlook_date(date_str: Option<&str>) -> i64 {
     if let Some(s) = date_str {
@@ -40,10 +43,15 @@ fn map_message(v: &Value) -> Option<MessagePayload> {
     let id = v["id"].as_str()?.to_string();
     let thread_id = v["conversationId"].as_str().unwrap_or(&id).to_string();
     let subject = v["subject"].as_str().map(|s| s.to_string());
-    
-    let sender_email = v["sender"]["emailAddress"]["address"].as_str().unwrap_or("").to_string();
-    let sender_name = v["sender"]["emailAddress"]["name"].as_str().map(|s| s.to_string());
-    
+
+    let sender_email = v["sender"]["emailAddress"]["address"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let sender_name = v["sender"]["emailAddress"]["name"]
+        .as_str()
+        .map(|s| s.to_string());
+
     let mut recipients_list = Vec::new();
     if let Some(to) = v["toRecipients"].as_array() {
         for r in to {
@@ -53,10 +61,10 @@ fn map_message(v: &Value) -> Option<MessagePayload> {
         }
     }
     let recipients = recipients_list.join(", ");
-    
+
     let date_received = parse_outlook_date(v["receivedDateTime"].as_str());
     let date_sent = parse_outlook_date(v["sentDateTime"].as_str());
-    
+
     let snippet = v["bodyPreview"].as_str().map(|s| s.to_string());
     let is_read = v["isRead"].as_bool().unwrap_or(false);
 
@@ -110,17 +118,20 @@ impl MailGuest for OutlookPlugin {
         let req = HttpRequest {
             method: "GET".to_string(),
             url,
-            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            headers: vec![(
+                "Authorization".to_string(),
+                format!("Bearer {}", auth_token),
+            )],
             body: None,
         };
-        
+
         let res = request(&req)?;
         if res.status != 200 {
             return Err(format!("Failed to sync mail: HTTP {}", res.status));
         }
-        
+
         let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse JSON")?;
-        
+
         let mut messages = Vec::new();
         if let Some(vals) = json["value"].as_array() {
             for v in vals {
@@ -129,74 +140,103 @@ impl MailGuest for OutlookPlugin {
                 }
             }
         }
-        
-        let next_cursor = json["@odata.nextLink"].as_str().map(|s| s.to_string()).unwrap_or_default();
-        
+
+        let next_cursor = json["@odata.nextLink"]
+            .as_str()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
         Ok(SyncResult {
             messages,
             next_cursor,
         })
     }
-    
+
     fn fetch_message_body(auth_token: String, external_id: String) -> Result<MessageBody, String> {
         let req = HttpRequest {
             method: "GET".to_string(),
-            url: format!("https://graph.microsoft.com/v1.0/me/messages/{}?$select=body", external_id),
-            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            url: format!(
+                "https://graph.microsoft.com/v1.0/me/messages/{}?$select=body",
+                external_id
+            ),
+            headers: vec![(
+                "Authorization".to_string(),
+                format!("Bearer {}", auth_token),
+            )],
             body: None,
         };
-        
+
         let res = request(&req)?;
         if res.status != 200 {
             return Err(format!("Failed to fetch message body: HTTP {}", res.status));
         }
-        
+
         let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse JSON")?;
         let content_type = json["body"]["contentType"].as_str().unwrap_or("text");
         let content = json["body"]["content"].as_str().unwrap_or("").to_string();
-        
+
         let (body_text, body_html) = if content_type.eq_ignore_ascii_case("html") {
             (None, Some(content))
         } else {
             (Some(content), None)
         };
-        
+
         Ok(MessageBody {
             body_text,
             body_html,
         })
     }
-    
-    fn download_attachment(auth_token: String, external_message_id: String, external_attachment_id: String) -> Result<Vec<u8>, String> {
+
+    fn download_attachment(
+        auth_token: String,
+        external_message_id: String,
+        external_attachment_id: String,
+    ) -> Result<Vec<u8>, String> {
         let req = HttpRequest {
             method: "GET".to_string(),
-            url: format!("https://graph.microsoft.com/v1.0/me/messages/{}/attachments/{}/$value", external_message_id, external_attachment_id),
-            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            url: format!(
+                "https://graph.microsoft.com/v1.0/me/messages/{}/attachments/{}/$value",
+                external_message_id, external_attachment_id
+            ),
+            headers: vec![(
+                "Authorization".to_string(),
+                format!("Bearer {}", auth_token),
+            )],
             body: None,
         };
         let res = request(&req)?;
         if res.status != 200 {
-            return Err(format!("Failed to download attachment: HTTP {}", res.status));
+            return Err(format!(
+                "Failed to download attachment: HTTP {}",
+                res.status
+            ));
         }
-        
+
         Ok(res.body)
     }
 
     fn delete_message(auth_token: String, external_id: String) -> Result<(), String> {
         let req = HttpRequest {
             method: "DELETE".to_string(),
-            url: format!("https://graph.microsoft.com/v1.0/me/messages/{}", external_id),
-            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            url: format!(
+                "https://graph.microsoft.com/v1.0/me/messages/{}",
+                external_id
+            ),
+            headers: vec![(
+                "Authorization".to_string(),
+                format!("Bearer {}", auth_token),
+            )],
             body: None,
         };
         let res = request(&req)?;
-        if res.status == 204 || res.status == 200 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+        if res.status == 204 || res.status == 200 {
+            Ok(())
+        } else {
+            Err(format!("HTTP {}", res.status))
+        }
     }
 
-    fn send_message(
-        auth_token: String,
-        payload: SendMessagePayload,
-    ) -> Result<(), String> {
+    fn send_message(auth_token: String, payload: SendMessagePayload) -> Result<(), String> {
         let mut to_recipients = Vec::new();
         for addr in payload.to {
             to_recipients.push(json!({ "emailAddress": { "address": addr } }));
@@ -248,14 +288,21 @@ impl MailGuest for OutlookPlugin {
             method: "POST".to_string(),
             url: "https://graph.microsoft.com/v1.0/me/sendMail".to_string(),
             headers: vec![
-                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                (
+                    "Authorization".to_string(),
+                    format!("Bearer {}", auth_token),
+                ),
                 ("Content-Type".to_string(), "application/json".to_string()),
             ],
             body: Some(body_bytes),
         };
-        
+
         let res = request(&req)?;
-        if res.status == 202 || res.status == 200 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+        if res.status == 202 || res.status == 200 {
+            Ok(())
+        } else {
+            Err(format!("HTTP {}", res.status))
+        }
     }
 
     fn get_vacation(auth_token: String) -> Result<VacationSettings, String> {
@@ -267,15 +314,22 @@ impl MailGuest for OutlookPlugin {
         };
         let res = request(&req)?;
         if res.status != 200 {
-            return Err(format!("Failed to read vacation settings: HTTP {}", res.status));
+            return Err(format!(
+                "Failed to read vacation settings: HTTP {}",
+                res.status
+            ));
         }
-        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse vacation settings")?;
+        let json: Value =
+            serde_json::from_slice(&res.body).map_err(|_| "Failed to parse vacation settings")?;
         let auto = &json["automaticRepliesSetting"];
         let status = auto["status"].as_str().unwrap_or("disabled");
         Ok(VacationSettings {
             enabled: status != "disabled",
             subject: None,
-            body_text: auto["internalReplyMessage"].as_str().unwrap_or_default().to_string(),
+            body_text: auto["internalReplyMessage"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
             start_time: graph_to_millis(&auto["scheduledStartDateTime"]),
             end_time: graph_to_millis(&auto["scheduledEndDateTime"]),
         })
@@ -295,22 +349,37 @@ impl MailGuest for OutlookPlugin {
             "internalReplyMessage": settings.body_text,
         });
         if let Some(start) = settings.start_time {
-            auto["scheduledStartDateTime"] = serde_json::json!({ "dateTime": millis_to_graph(start), "timeZone": "UTC" });
+            auto["scheduledStartDateTime"] =
+                serde_json::json!({ "dateTime": millis_to_graph(start), "timeZone": "UTC" });
         }
         if let Some(end) = settings.end_time {
-            auto["scheduledEndDateTime"] = serde_json::json!({ "dateTime": millis_to_graph(end), "timeZone": "UTC" });
+            auto["scheduledEndDateTime"] =
+                serde_json::json!({ "dateTime": millis_to_graph(end), "timeZone": "UTC" });
         }
         let req = HttpRequest {
             method: "PATCH".to_string(),
             url: "https://graph.microsoft.com/v1.0/me/mailboxSettings".to_string(),
             headers: vec![
-                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                (
+                    "Authorization".to_string(),
+                    format!("Bearer {}", auth_token),
+                ),
                 ("Content-Type".to_string(), "application/json".to_string()),
             ],
-            body: Some(serde_json::to_vec(&serde_json::json!({ "automaticRepliesSetting": auto })).unwrap()),
+            body: Some(
+                serde_json::to_vec(&serde_json::json!({ "automaticRepliesSetting": auto }))
+                    .unwrap(),
+            ),
         };
         let res = request(&req)?;
-        if res.status == 200 { Ok(()) } else { Err(format!("Failed to save vacation settings: HTTP {}", res.status)) }
+        if res.status == 200 {
+            Ok(())
+        } else {
+            Err(format!(
+                "Failed to save vacation settings: HTTP {}",
+                res.status
+            ))
+        }
     }
 }
 
@@ -318,9 +387,13 @@ impl MailGuest for OutlookPlugin {
 
 fn parse_outlook_calendar(item: &Value) -> Option<CalendarPayload> {
     let id = item["id"].as_str()?.to_string();
-    let name = item["name"].as_str().map(|s| s.to_string()).unwrap_or_else(|| id.clone());
+    let name = item["name"]
+        .as_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| id.clone());
     // Graph returns hexColor for Outlook calendars (e.g. "auto", "#FF0000")
-    let color = item["hexColor"].as_str()
+    let color = item["hexColor"]
+        .as_str()
         .map(|s| s.to_string())
         .filter(|c| c.starts_with('#'));
     let is_primary = item["isDefaultCalendar"].as_bool().unwrap_or(false);
@@ -336,15 +409,28 @@ fn parse_outlook_calendar(item: &Value) -> Option<CalendarPayload> {
 fn parse_outlook_event(item: &Value) -> Option<EventPayload> {
     let id = item["id"].as_str()?.to_string();
     let external_id = id.clone();
-    let title = item["subject"].as_str().map(|s| s.to_string()).unwrap_or_else(|| "(no title)".to_string());
+    let title = item["subject"]
+        .as_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "(no title)".to_string());
     let description = item["body"]["content"].as_str().map(|s| s.to_string());
-    let location = item["location"]["displayName"].as_str().map(|s| s.to_string());
+    let location = item["location"]["displayName"]
+        .as_str()
+        .map(|s| s.to_string());
 
     let is_all_day = item["isAllDay"].as_bool().unwrap_or(false);
 
     // Timed events: start/end.dateTime in RFC3339.
-    let start_dt = item["start"]["dateTime"].as_str().and_then(|s| DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.timestamp()));
-    let end_dt = item["end"]["dateTime"].as_str().and_then(|s| DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.timestamp()));
+    let start_dt = item["start"]["dateTime"].as_str().and_then(|s| {
+        DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|dt| dt.timestamp())
+    });
+    let end_dt = item["end"]["dateTime"].as_str().and_then(|s| {
+        DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|dt| dt.timestamp())
+    });
 
     // All-day events: start/end.date (YYYY-MM-DD), end is exclusive.
     let start_date = item["start"]["date"].as_str();
@@ -353,10 +439,12 @@ fn parse_outlook_event(item: &Value) -> Option<EventPayload> {
     let (start_time, end_time) = if let (Some(s), Some(e)) = (start_dt, end_dt) {
         (s, e)
     } else if let (Some(sd), Some(ed)) = (start_date, end_date) {
-        let s = chrono::NaiveDate::parse_from_str(sd, "%Y-%m-%d").ok()
+        let s = chrono::NaiveDate::parse_from_str(sd, "%Y-%m-%d")
+            .ok()
             .and_then(|d| d.and_hms_opt(0, 0, 0))
             .and_then(|dt| dt.and_utc().timestamp().into());
-        let e = chrono::NaiveDate::parse_from_str(ed, "%Y-%m-%d").ok()
+        let e = chrono::NaiveDate::parse_from_str(ed, "%Y-%m-%d")
+            .ok()
             .and_then(|d| d.and_hms_opt(0, 0, 0))
             .and_then(|dt| dt.and_utc().timestamp().into());
         (s.unwrap_or(0), e.unwrap_or(0))
@@ -368,21 +456,29 @@ fn parse_outlook_event(item: &Value) -> Option<EventPayload> {
         .as_str()
         .map(|s| s.to_string());
 
-    let organizer_email = item["organizer"]["emailAddress"]["address"].as_str().map(|s| s.to_string());
-    let organizer_name = item["organizer"]["emailAddress"]["name"].as_str().map(|s| s.to_string());
+    let organizer_email = item["organizer"]["emailAddress"]["address"]
+        .as_str()
+        .map(|s| s.to_string());
+    let organizer_name = item["organizer"]["emailAddress"]["name"]
+        .as_str()
+        .map(|s| s.to_string());
 
     let attendees = item["attendees"].as_array().map(|arr| {
-        let mapped: Vec<Value> = arr.iter().map(|a| {
-            json!({
-                "email": a["emailAddress"]["address"].as_str().unwrap_or(""),
-                "name": a["emailAddress"]["name"].as_str(),
-                "responseStatus": a["status"].as_str(),
+        let mapped: Vec<Value> = arr
+            .iter()
+            .map(|a| {
+                json!({
+                    "email": a["emailAddress"]["address"].as_str().unwrap_or(""),
+                    "name": a["emailAddress"]["name"].as_str(),
+                    "responseStatus": a["status"].as_str(),
+                })
             })
-        }).collect();
+            .collect();
         serde_json::to_string(&mapped).unwrap_or_else(|_| "[]".to_string())
     });
 
-    let status = item["isCancelled"].as_bool()
+    let status = item["isCancelled"]
+        .as_bool()
         .map(|c| if c { "cancelled" } else { "confirmed" })
         .map(|s| s.to_string());
 
@@ -408,14 +504,18 @@ impl CalendarGuest for OutlookPlugin {
         let req = HttpRequest {
             method: "GET".to_string(),
             url: "https://graph.microsoft.com/v1.0/me/calendars".to_string(),
-            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            headers: vec![(
+                "Authorization".to_string(),
+                format!("Bearer {}", auth_token),
+            )],
             body: None,
         };
         let res = request(&req)?;
         if res.status != 200 {
             return Err(format!("Failed to list calendars: HTTP {}", res.status));
         }
-        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse calendars")?;
+        let json: Value =
+            serde_json::from_slice(&res.body).map_err(|_| "Failed to parse calendars")?;
         let mut calendars = Vec::new();
         if let Some(items) = json["value"].as_array() {
             for item in items {
@@ -427,7 +527,11 @@ impl CalendarGuest for OutlookPlugin {
         Ok(calendars)
     }
 
-    fn fetch_events(auth_token: String, start_time: i64, end_time: i64) -> Result<Vec<EventPayload>, String> {
+    fn fetch_events(
+        auth_token: String,
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<EventPayload>, String> {
         let start = chrono::DateTime::from_timestamp(start_time, 0)
             .map(|dt| dt.to_rfc3339())
             .unwrap_or_default();
@@ -454,14 +558,18 @@ impl CalendarGuest for OutlookPlugin {
         let req = HttpRequest {
             method: "GET".to_string(),
             url,
-            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            headers: vec![(
+                "Authorization".to_string(),
+                format!("Bearer {}", auth_token),
+            )],
             body: None,
         };
         let res = request(&req)?;
         if res.status != 200 {
             return Err(format!("Failed to list events: HTTP {}", res.status));
         }
-        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse events")?;
+        let json: Value =
+            serde_json::from_slice(&res.body).map_err(|_| "Failed to parse events")?;
         let mut events = Vec::new();
         if let Some(items) = json["value"].as_array() {
             for item in items {
@@ -472,13 +580,17 @@ impl CalendarGuest for OutlookPlugin {
         }
         Ok(events)
     }
-    
-    fn mutate_event(auth_token: String, action: String, payload: EventPayload) -> Result<(), String> {
+
+    fn mutate_event(
+        auth_token: String,
+        action: String,
+        payload: EventPayload,
+    ) -> Result<(), String> {
         // Use chrono's TimeZone to create UTC DateTime, then format
         use chrono::TimeZone;
         let start_dt = chrono::Utc.timestamp_opt(payload.start_time, 0).unwrap();
         let end_dt = chrono::Utc.timestamp_opt(payload.end_time, 0).unwrap();
-        
+
         // Graph API requires the format: YYYY-MM-DDTHH:MM:SS
         let start_str = start_dt.format("%Y-%m-%dT%H:%M:%S").to_string();
         let end_str = end_dt.format("%Y-%m-%dT%H:%M:%S").to_string();
@@ -502,38 +614,65 @@ impl CalendarGuest for OutlookPlugin {
             },
             "isAllDay": payload.is_all_day
         });
-        
+
         let (method, url) = if action == "create" {
-            ("POST".to_string(), "https://graph.microsoft.com/v1.0/me/events".to_string())
+            (
+                "POST".to_string(),
+                "https://graph.microsoft.com/v1.0/me/events".to_string(),
+            )
         } else {
-            ("PATCH".to_string(), format!("https://graph.microsoft.com/v1.0/me/events/{}", payload.external_id))
+            (
+                "PATCH".to_string(),
+                format!(
+                    "https://graph.microsoft.com/v1.0/me/events/{}",
+                    payload.external_id
+                ),
+            )
         };
-        
+
         let body_bytes = serde_json::to_vec(&event_json).unwrap();
-        
+
         let req = HttpRequest {
             method,
             url,
             headers: vec![
-                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                (
+                    "Authorization".to_string(),
+                    format!("Bearer {}", auth_token),
+                ),
                 ("Content-Type".to_string(), "application/json".to_string()),
             ],
             body: Some(body_bytes),
         };
-        
+
         let res = request(&req)?;
-        if res.status >= 200 && res.status < 300 { Ok(()) } else { Err(format!("HTTP {} - {}", res.status, String::from_utf8_lossy(&res.body))) }
+        if res.status >= 200 && res.status < 300 {
+            Ok(())
+        } else {
+            Err(format!(
+                "HTTP {} - {}",
+                res.status,
+                String::from_utf8_lossy(&res.body)
+            ))
+        }
     }
-    
+
     fn delete_event(auth_token: String, external_id: String) -> Result<(), String> {
         let req = HttpRequest {
             method: "DELETE".to_string(),
             url: format!("https://graph.microsoft.com/v1.0/me/events/{}", external_id),
-            headers: vec![("Authorization".to_string(), format!("Bearer {}", auth_token))],
+            headers: vec![(
+                "Authorization".to_string(),
+                format!("Bearer {}", auth_token),
+            )],
             body: None,
         };
         let res = request(&req)?;
-        if res.status == 204 || res.status == 200 || res.status == 404 { Ok(()) } else { Err(format!("HTTP {}", res.status)) }
+        if res.status == 204 || res.status == 200 || res.status == 404 {
+            Ok(())
+        } else {
+            Err(format!("HTTP {}", res.status))
+        }
     }
 
     fn query_freebusy(
@@ -552,7 +691,10 @@ impl CalendarGuest for OutlookPlugin {
             method: "POST".to_string(),
             url: "https://graph.microsoft.com/v1.0/me/calendar/getSchedule".to_string(),
             headers: vec![
-                ("Authorization".to_string(), format!("Bearer {}", auth_token)),
+                (
+                    "Authorization".to_string(),
+                    format!("Bearer {}", auth_token),
+                ),
                 ("Content-Type".to_string(), "application/json".to_string()),
             ],
             body: Some(serde_json::to_vec(&body).unwrap()),
@@ -561,11 +703,15 @@ impl CalendarGuest for OutlookPlugin {
         if res.status != 200 {
             return Err(format!("Failed to query freebusy: HTTP {}", res.status));
         }
-        let json: Value = serde_json::from_slice(&res.body).map_err(|_| "Failed to parse freebusy")?;
+        let json: Value =
+            serde_json::from_slice(&res.body).map_err(|_| "Failed to parse freebusy")?;
         let mut blocks = Vec::new();
         if let Some(schedules) = json["value"].as_array() {
             for schedule in schedules {
-                let email = schedule["scheduleId"].as_str().unwrap_or_default().to_string();
+                let email = schedule["scheduleId"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string();
                 if let Some(items) = schedule["scheduleItems"].as_array() {
                     for item in items {
                         let status = item["status"].as_str().unwrap_or("");
@@ -576,7 +722,11 @@ impl CalendarGuest for OutlookPlugin {
                             graph_schedule_to_secs(&item["start"]),
                             graph_schedule_to_secs(&item["end"]),
                         ) {
-                            blocks.push(BusyBlock { email: email.clone(), start_time: start, end_time: end });
+                            blocks.push(BusyBlock {
+                                email: email.clone(),
+                                start_time: start,
+                                end_time: end,
+                            });
                         }
                     }
                 }
@@ -595,7 +745,11 @@ impl exports::kestrel::provider::webhook_handler::Guest for OutlookPlugin {
         body: Vec<u8>,
     ) -> Result<exports::kestrel::provider::webhook_handler::WebhookResult, String> {
         // 1. Handle validation handshake
-        if let Some(token) = query_params.iter().find(|(k, _)| k == "validationToken").map(|(_, v)| v.clone()) {
+        if let Some(token) = query_params
+            .iter()
+            .find(|(k, _)| k == "validationToken")
+            .map(|(_, v)| v.clone())
+        {
             return Ok(exports::kestrel::provider::webhook_handler::WebhookResult {
                 status: 200,
                 headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
@@ -625,7 +779,8 @@ impl exports::kestrel::provider::webhook_handler::Guest for OutlookPlugin {
             value: Vec<MicrosoftNotification>,
         }
 
-        let payload: MicrosoftWebhookPayload = serde_json::from_slice(&body).map_err(|_| "Invalid JSON".to_string())?;
+        let payload: MicrosoftWebhookPayload =
+            serde_json::from_slice(&body).map_err(|_| "Invalid JSON".to_string())?;
 
         let mut email = String::new();
 
@@ -638,7 +793,8 @@ impl exports::kestrel::provider::webhook_handler::Guest for OutlookPlugin {
             if r.starts_with("Users/") || r.starts_with("users/") {
                 let parts: Vec<&str> = r.split('/').collect();
                 if parts.len() > 1 {
-                    let clean = parts[1].trim_matches(|c| c == '\'' || c == '"' || c == '(' || c == ')');
+                    let clean =
+                        parts[1].trim_matches(|c| c == '\'' || c == '"' || c == '(' || c == ')');
                     if clean.contains('@') {
                         email = clean.to_string();
                     }
@@ -697,7 +853,8 @@ mod tests {
         }
         "#;
 
-        let result = OutlookPlugin::handle_webhook(secret, query, payload.as_bytes().to_vec()).unwrap();
+        let result =
+            OutlookPlugin::handle_webhook(secret, query, payload.as_bytes().to_vec()).unwrap();
         assert_eq!(result.status, 202);
         assert_eq!(result.account_identifier.unwrap(), "test@outlook.com");
     }
