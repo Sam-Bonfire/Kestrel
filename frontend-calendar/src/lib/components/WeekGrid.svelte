@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Clock, MapPin, Video, AlignLeft, CalendarDays, Calendar as CalendarIcon, CheckSquare, Pencil, Trash2 } from 'lucide-svelte';
   import { detectConferenceLink, isWorkingDay,
-parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focusDayColumn, focusEventInColumn, type WorkingHoursConfig } from '@kestrel/shared';
+parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focusDayColumn, focusEventInColumn, computeFreeBlocks, formatFreeBlock, type WorkingHoursConfig } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
   import EventHoverPopover from './EventHoverPopover.svelte';
 
@@ -843,6 +843,23 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focu
                 style="top: {getEventTopOffset(block.startTime)}px; height: {Math.max(getEventHeight(block.startTime, block.endTime), 12)}px; background: repeating-linear-gradient(45deg, rgba(244,63,94,0.18) 0 6px, transparent 6px 12px);"
                 title="{block.email} busy"
               ></div>
+            {/each}
+
+            <!-- Freetime highlights: long uninterrupted gaps -->
+            {#each computeFreeBlocks(
+              [
+                ...dayEvents.filter((ev) => !ev.isAllDay),
+                ...availabilityBlocks.filter((b: AvailabilityBlock) => b.date === dateStr),
+              ],
+              120
+            ) as free}
+              <div
+                class="absolute left-0 right-0 pointer-events-none z-0 opacity-70"
+                style="top: {free.startMins}px; height: {free.mins}px; background: linear-gradient(180deg, rgba(52,211,153,0.10), rgba(52,211,153,0.04)); border-top: 1px dashed rgba(52,211,153,0.35);"
+                title={formatFreeBlock(free.mins)}
+              >
+                <span class="absolute top-1 left-2 text-[9px] font-mono text-emerald-300/70">{formatFreeBlock(free.mins)}</span>
+              </div>
             {/each}
 
             <!-- Render events for this column day -->
