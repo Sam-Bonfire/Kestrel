@@ -77,7 +77,8 @@
     onSelectCustomView = (id: string) => {},
     onDeleteCustomView = (id: string) => {},
     onUpdateCustomView = (id: string, patch: { name?: string; icon?: string }) => {},
-    onSaveCustomView = (name: string) => {}
+    onSaveCustomView = (name: string) => {},
+    hideCounts = false
   } = $props<{
     currentView?: string;
     onSelectView?: (view: string) => void;
@@ -99,6 +100,7 @@
     onDeleteCustomView?: (id: string) => void;
     onUpdateCustomView?: (id: string, patch: { name?: string; icon?: string }) => void;
     onSaveCustomView?: (name: string) => void;
+    hideCounts?: boolean;
   }>();
 
   let newViewName = $state('');
@@ -428,7 +430,7 @@
               <folder.icon class="w-4 h-4 {folder.color}" strokeWidth={1.5} />
               <span>{folder.label}</span>
             </div>
-            {#if (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) !== 0 && (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) !== '0'}
+            {#if !hideCounts && (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) !== 0 && (viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : folder.id === 'unread' ? unreadCount : 0)) !== '0'}
               <span in:scale={{ duration: 200, start: 0.8 }} class="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border-hairline)]/40 shadow-sm">
                 {viewCounts[folder.id] ?? (folder.id === 'inbox' ? inboxCount : unreadCount)}
               </span>
@@ -580,7 +582,7 @@
               <IconComponent class="w-3.5 h-3.5 shrink-0 {style.textColor}" strokeWidth={1.5} />
               <span class="truncate text-[var(--color-text-primary)]">{item.displayName}</span>
             </div>
-            {#if (viewCounts[`label-${item.name}`] ?? 0) !== 0 && (viewCounts[`label-${item.name}`] ?? 0) !== '0'}
+            {#if !hideCounts && (viewCounts[`label-${item.name}`] ?? 0) !== 0 && (viewCounts[`label-${item.name}`] ?? 0) !== '0'}
               <span class="bg-[var(--color-canvas-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border-hairline)]/40 text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-auto">{viewCounts[`label-${item.name}`]}</span>
             {/if}
           </button>

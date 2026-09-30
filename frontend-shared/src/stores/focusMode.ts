@@ -3,13 +3,9 @@ import { writable } from 'svelte/store';
 const FOCUS_MODE_KEY = 'kestrel:focus_mode';
 
 function loadInitial(): boolean {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem(FOCUS_MODE_KEY) === 'true';
-    }
-  } catch {
-    // Non-fatal: fall through to default
-  }
+  // Always start off: Focus/batch queues are session-only, so a reload
+  // mid-batch must not resurrect the collapsed UI without its queue.
+  // The persisted write below is kept for future subscribers.
   return false;
 }
 

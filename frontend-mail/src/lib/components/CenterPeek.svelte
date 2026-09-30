@@ -383,13 +383,19 @@
       aria-modal={docked ? undefined : true}
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }}
+      onkeydown={(e) => {
+      if (e.key === 'Escape') return;
+      // Let batch-navigation keys reach the page handler; the reply
+      // textarea keeps native Tab via the isTyping guard there.
+      if (e.key === 'Tab' || e.key.startsWith('Arrow')) return;
+      e.stopPropagation();
+    }}
     >
       {#if isBatchMode}
         <div class="px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between text-blue-400 shrink-0">
           <div class="text-xs md:text-sm font-medium">Batch Processing: {batchIndex + 1} of {batchTotal} items remaining</div>
           <div class="flex items-center gap-2 md:gap-3">
-            <button onclick={onSkipNext} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1 md:px-3 md:py-1.5 bg-white/5 rounded-md hover:bg-white/10">Skip / Next (Tab)</button>
+            <button onclick={onSkipNext} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1 md:px-3 md:py-1.5 bg-white/5 rounded-md hover:bg-white/10" title="Next (Tab outside the reply field), Previous (Shift+Tab)">Skip / Next (Tab)</button>
             <button onclick={onExitBatch} class="text-[10px] md:text-xs font-semibold hover:text-white transition-colors cursor-pointer px-2 py-1">Exit (Esc)</button>
           </div>
         </div>
