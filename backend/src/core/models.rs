@@ -64,6 +64,7 @@ pub struct Message {
     pub is_deleted: bool,
     pub has_attachments: bool,
     pub snoozed_until: Option<i64>,
+    pub is_set_aside: bool,
     pub has_conflict: bool,
     pub created_at: i64,
     pub updated_at: i64,
@@ -212,6 +213,26 @@ impl Default for AiCapabilityToggles {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct Clip {
+    pub id: DbUuid,
+    pub user_id: DbUuid,
+    pub account_id: DbUuid,
+    pub message_id: String,
+    pub snippet: String,
+    #[specta(type = f64)]
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct ThreadNote {
+    pub account_id: DbUuid,
+    pub thread_id: String,
+    pub note: String,
+    #[specta(type = f64)]
+    pub updated_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LabelCustomization {
@@ -275,6 +296,15 @@ pub struct HistoricalRevision {
     pub serialized_payload: String,
     pub revision_number: i32,
     pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct ThreadSubjectOverride {
+    pub account_id: DbUuid,
+    pub thread_id: String,
+    pub subject: String,
+    #[specta(type = f64)]
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]

@@ -6,6 +6,7 @@
   import { builtInEventTemplates, applyEventTemplate, type EventTemplate } from '@kestrel/shared/stores';
   import { RichTextEditor } from '@kestrel/shared/components';
   import type { Schedulable, FreeSlot } from '@kestrel/shared';
+  import { formatCountdown } from '@kestrel/shared';
   import { openUrl } from '@tauri-apps/plugin-opener';
 
   export interface EventDetail {
@@ -299,6 +300,14 @@
       <div class="flex items-center gap-2">
         <div class="w-3 h-3 rounded-full shrink-0" style="background-color: {color || '#3b82f6'};"></div>
         <span class="font-bold text-white text-xs">{category || 'Event'}</span>
+        {#if event?.id}
+          {@const countdown = formatCountdown(date)}
+          {#if countdown}
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">
+              {countdown}
+            </span>
+          {/if}
+        {/if}
       </div>
       <div class="flex items-center gap-1">
         {#if event.id}

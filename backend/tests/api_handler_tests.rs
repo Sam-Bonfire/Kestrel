@@ -653,11 +653,7 @@ async fn test_settings_notification_validation_and_isolation() {
     let app = create_router(state.clone());
     let (_, token) = register_and_get_token(&app, "settings_prefs2@kestrel.dev").await;
 
-    async fn put_settings(
-        app: &axum::Router,
-        token: &str,
-        value: serde_json::Value,
-    ) -> StatusCode {
+    async fn put_settings(app: &axum::Router, token: &str, value: serde_json::Value) -> StatusCode {
         let res = app
             .clone()
             .oneshot(
@@ -738,7 +734,12 @@ async fn test_settings_notification_validation_and_isolation() {
     let notif = settings_resp.notification_prefs.expect("prefs persist");
     assert_eq!(notif.loud_contacts, vec!["boss@example.com".to_string()]);
     assert_eq!(notif.loud_threads, vec!["t1".to_string()]);
-    assert!(settings_resp.ai_toggles.expect("toggles survive").event_draft);
+    assert!(
+        settings_resp
+            .ai_toggles
+            .expect("toggles survive")
+            .event_draft
+    );
 }
 
 // === Security & Multi-Tenant Isolation Tests ===

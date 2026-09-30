@@ -36,6 +36,7 @@ pub struct SearchResult {
     #[specta(type = f64)]
     pub date_received: i64,
     pub is_read: bool,
+    pub is_set_aside: bool,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -87,6 +88,7 @@ pub async fn search_messages(
             snippet: m.snippet,
             date_received: m.date_received,
             is_read: m.is_read,
+            is_set_aside: m.is_set_aside,
         })
         .collect();
 

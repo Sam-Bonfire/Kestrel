@@ -247,3 +247,5 @@ export {
   markTriageRun,
 } from './utils/triage.js';
 export { findConflicts, nextFreeSlot, type Schedulable, type FreeSlot } from './utils/conflicts.js';
+export { computeFreeBlocks, formatFreeBlock, type FreeBlock } from './utils/freetime.js';
+export { getDayLabel, setDayLabel, daysUntil, formatCountdown } from './utils/daylabels.js';
