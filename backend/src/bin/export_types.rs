@@ -30,6 +30,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<LabelCustomization>()
         .register::<Snippet>()
         .register::<Signature>()
+        .register::<NotificationPrefs>()
+        .register::<AiCapabilityToggles>()
         // Messages models
         .register::<MessageListParams>()
         .register::<MessageListResponse>()

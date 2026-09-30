@@ -11,6 +11,14 @@ export type Account = {
 	updated_at: number | null,
 };
 
+export type AiCapabilityToggles = {
+	sort: boolean,
+	eventDraft: boolean,
+	digest: boolean,
+	predraft: boolean,
+	newlabel: boolean,
+};
+
 export type BookSlotRequest = {
 	guest_name: string,
 	guest_email: string,
@@ -84,6 +92,15 @@ export type CallbackParams = {
 	code: string | null,
 };
 
+export type Clip = {
+	id: DbUuid,
+	user_id: DbUuid,
+	account_id: DbUuid,
+	message_id: string,
+	snippet: string,
+	created_at: number | null,
+};
+
 export type Contact = {
 	id: DbUuid,
 	account_id: DbUuid,
@@ -101,6 +118,12 @@ export type CreateBookingPageRequest = {
 	duration_mins: number,
 	buffer_mins: number | null,
 	window_days: number | null,
+};
+
+export type CreateClipRequest = {
+	account_id: string,
+	message_id: string,
+	snippet: string,
 };
 
 export type CreateEventRequest = {
@@ -273,6 +296,16 @@ export type MessageSummary = {
 	labels: string | null,
 };
 
+export type NotificationPrefs = {
+	/**  Master switch. True = silent unless contact/thread is loud. */
+	quietByDefault: boolean,
+	/**  "HH:MM" 24h local bounds; absent = no quiet window. */
+	quietHoursStart: string | null,
+	quietHoursEnd: string | null,
+	loudContacts: string[],
+	loudThreads: string[],
+};
+
 export type PollVote = {
 	poll_id: DbUuid,
 	voter_email: string,
@@ -347,6 +380,11 @@ export type SendMessageResponse = {
 	queued: boolean,
 };
 
+export type SetNoteRequest = {
+	account_id: string,
+	note: string,
+};
+
 export type SettingsPayload = {
 	mailDenseMode: boolean | null,
 	mailDefaultLandingView: string | null,
@@ -360,6 +398,8 @@ export type SettingsPayload = {
 	theme: string | null,
 	snippets: Snippet[] | null,
 	signatures: Signature[] | null,
+	notificationPrefs: NotificationPrefs | null,
+	aiToggles: AiCapabilityToggles | null,
 };
 
 export type Signature = {
@@ -388,6 +428,13 @@ export type Snippet = {
 
 export type StarParams = {
 	is_starred: boolean,
+};
+
+export type ThreadNote = {
+	account_id: DbUuid,
+	thread_id: string,
+	note: string,
+	updated_at: number | null,
 };
 
 export type TokenRequest = {

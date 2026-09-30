@@ -162,6 +162,54 @@ pub struct SettingsPayload {
     pub theme: Option<String>,
     pub snippets: Option<Vec<Snippet>>,
     pub signatures: Option<Vec<Signature>>,
+    pub notification_prefs: Option<NotificationPrefs>,
+    pub ai_toggles: Option<AiCapabilityToggles>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationPrefs {
+    /// Master switch. True = silent unless contact/thread is loud.
+    pub quiet_by_default: bool,
+    /// "HH:MM" 24h local bounds; absent = no quiet window.
+    pub quiet_hours_start: Option<String>,
+    pub quiet_hours_end: Option<String>,
+    pub loud_contacts: Vec<String>,
+    pub loud_threads: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AiCapabilityToggles {
+    pub sort: bool,
+    pub event_draft: bool,
+    pub digest: bool,
+    pub predraft: bool,
+    pub newlabel: bool,
+}
+
+impl Default for NotificationPrefs {
+    fn default() -> Self {
+        Self {
+            quiet_by_default: true,
+            quiet_hours_start: None,
+            quiet_hours_end: None,
+            loud_contacts: Vec::new(),
+            loud_threads: Vec::new(),
+        }
+    }
+}
+
+impl Default for AiCapabilityToggles {
+    fn default() -> Self {
+        Self {
+            sort: false,
+            event_draft: false,
+            digest: false,
+            predraft: false,
+            newlabel: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]

@@ -566,6 +566,181 @@ async fn test_get_and_put_settings_full_cycle() {
     assert_eq!(settings_resp.sync_interval, Some(600));
 }
 
+#[tokio::test]
+async fn test_settings_notification_and_ai_merge() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (_, token) = register_and_get_token(&app, "settings_prefs@kestrel.dev").await;
+
+    // PUT notification prefs plus one AI toggle.
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/settings")
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "notificationPrefs": {
+                            "quietByDefault": true,
+                            "quietHoursStart": "22:00",
+                            "quietHoursEnd": "07:00",
+                            "loudContacts": ["boss@example.com"],
+                            "loudThreads": []
+                        },
+                        "aiToggles": {
+                            "sort": true,
+                            "eventDraft": false,
+                            "digest": false,
+                            "predraft": false,
+                            "newlabel": false
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Unrelated PUT must preserve them (merge, not replace).
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/settings")
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(json!({ "theme": "dark" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/settings")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let settings_resp: SettingsPayload = serde_json::from_slice(&body).unwrap();
+    let notif = settings_resp.notification_prefs.expect("prefs persist");
+    assert!(notif.quiet_by_default);
+    assert_eq!(notif.quiet_hours_start.as_deref(), Some("22:00"));
+    assert_eq!(notif.loud_contacts, vec!["boss@example.com".to_string()]);
+    assert!(settings_resp.ai_toggles.expect("toggles persist").sort);
+    assert_eq!(settings_resp.theme.as_deref(), Some("dark"));
+}
+
+#[tokio::test]
+async fn test_settings_notification_validation_and_isolation() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (_, token) = register_and_get_token(&app, "settings_prefs2@kestrel.dev").await;
+
+    async fn put_settings(
+        app: &axum::Router,
+        token: &str,
+        value: serde_json::Value,
+    ) -> StatusCode {
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/settings")
+                    .header("Authorization", format!("Bearer {}", token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(value.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        res.status()
+    }
+
+    // Seed aiToggles first.
+    assert_eq!(
+        put_settings(
+            &app,
+            &token,
+            json!({ "aiToggles": {
+                "sort": false, "eventDraft": true, "digest": false,
+                "predraft": false, "newlabel": false
+            } })
+        )
+        .await,
+        StatusCode::OK
+    );
+
+    // Malformed quiet bound is rejected and stores nothing.
+    assert_eq!(
+        put_settings(
+            &app,
+            &token,
+            json!({ "notificationPrefs": {
+                "quietByDefault": true, "quietHoursStart": "25:99",
+                "quietHoursEnd": null, "loudContacts": [], "loudThreads": []
+            } })
+        )
+        .await,
+        StatusCode::BAD_REQUEST
+    );
+
+    // notificationPrefs-only PUT preserves aiToggles and normalizes loud lists.
+    assert_eq!(
+        put_settings(
+            &app,
+            &token,
+            json!({ "notificationPrefs": {
+                "quietByDefault": true, "quietHoursStart": "22:00",
+                "quietHoursEnd": "07:00",
+                "loudContacts": [" Boss@Example.com ", "boss@example.com", ""],
+                "loudThreads": ["t1", "t1"]
+            } })
+        )
+        .await,
+        StatusCode::OK
+    );
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/settings")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let settings_resp: SettingsPayload = serde_json::from_slice(&body).unwrap();
+    let notif = settings_resp.notification_prefs.expect("prefs persist");
+    assert_eq!(notif.loud_contacts, vec!["boss@example.com".to_string()]);
+    assert_eq!(notif.loud_threads, vec!["t1".to_string()]);
+    assert!(settings_resp.ai_toggles.expect("toggles survive").event_draft);
+}
+
 // === Security & Multi-Tenant Isolation Tests ===
 
 #[tokio::test]

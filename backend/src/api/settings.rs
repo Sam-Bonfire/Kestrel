@@ -93,6 +93,28 @@ pub async fn update_settings(
     if payload.signatures.is_some() {
         current_prefs.signatures = payload.signatures;
     }
+    if let Some(mut prefs) = payload.notification_prefs {
+        if let Some(s) = &prefs.quiet_hours_start {
+            if !is_valid_hhmm(s) {
+                return Err(KestrelError::BadRequest(format!(
+                    "quiet_hours_start must be HH:MM, got '{s}'"
+                )));
+            }
+        }
+        if let Some(s) = &prefs.quiet_hours_end {
+            if !is_valid_hhmm(s) {
+                return Err(KestrelError::BadRequest(format!(
+                    "quiet_hours_end must be HH:MM, got '{s}'"
+                )));
+            }
+        }
+        prefs.loud_contacts = normalize_list(&prefs.loud_contacts);
+        prefs.loud_threads = normalize_list(&prefs.loud_threads);
+        current_prefs.notification_prefs = Some(prefs);
+    }
+    if payload.ai_toggles.is_some() {
+        current_prefs.ai_toggles = payload.ai_toggles;
+    }
 
     let new_prefs_str = serde_json::to_string(&current_prefs).map_err(|e| {
         KestrelError::Internal(format!("Failed to serialize preferences: {}", e).into())
@@ -112,4 +134,26 @@ pub async fn update_settings(
     }
 
     Ok(Json(current_prefs))
+}
+
+// ponytail: naive HH:MM check, chrono parse if formats ever widen
+fn is_valid_hhmm(s: &str) -> bool {
+    match s.split_once(':') {
+        Some((h, m)) => {
+            h.len() == 2
+                && m.len() == 2
+                && matches!(h.parse::<u8>(), Ok(h) if h < 24)
+                && matches!(m.parse::<u8>(), Ok(m) if m < 60)
+        }
+        None => false,
+    }
+}
+
+fn normalize_list(items: &[String]) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    items
+        .iter()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty() && seen.insert(s.clone()))
+        .collect()
 }
