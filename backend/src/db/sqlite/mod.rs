@@ -8,6 +8,7 @@ pub mod event_repository;
 pub mod filter_repository;
 pub mod label_repository;
 pub mod message_repository;
+pub mod override_repository;
 pub mod poll_repository;
 pub mod user_preferences_repository;
 pub mod user_repository;

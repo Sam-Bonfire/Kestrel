@@ -51,6 +51,7 @@ pub struct MessageSummary {
     pub is_read: bool,
     pub is_archived: bool,
     pub has_attachments: bool,
+    pub is_set_aside: bool,
     pub labels: Option<String>,
 }
 
@@ -76,6 +77,7 @@ pub struct MessageDetail {
     pub is_archived: bool,
     pub is_deleted: bool,
     pub has_attachments: bool,
+    pub is_set_aside: bool,
     #[specta(type = f64)]
     pub created_at: i64,
     #[specta(type = f64)]
@@ -149,6 +151,7 @@ pub async fn list_messages(
             is_read: m.is_read,
             is_archived: m.is_archived,
             has_attachments: m.has_attachments,
+            is_set_aside: m.is_set_aside,
             labels: m.labels,
         })
         .collect();
@@ -262,6 +265,7 @@ pub async fn get_message(
         is_archived: msg.is_archived,
         is_deleted: msg.is_deleted,
         has_attachments: msg.has_attachments,
+        is_set_aside: msg.is_set_aside,
         created_at: msg.created_at,
         updated_at: msg.updated_at,
     }))
@@ -368,6 +372,35 @@ pub async fn unsnooze_message(
 ) -> Result<StatusCode, KestrelError> {
     verify_message_ownership(&state, user_id, message_id).await?;
     set_message_snoozed_until(&state, message_id, None).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// --- Set Aside: reference-later pile (local flag, no provider sync) ---
+
+#[derive(serde::Deserialize, specta::Type)]
+pub struct SetAsideParams {
+    pub is_set_aside: bool,
+}
+
+pub async fn set_aside_message(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(message_id): Path<Uuid>,
+    Json(payload): Json<SetAsideParams>,
+) -> Result<StatusCode, KestrelError> {
+    verify_message_ownership(&state, user_id, message_id).await?;
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            SqliteMessageRepository::new(pool.clone())
+                .set_aside(message_id, payload.is_set_aside)
+                .await?;
+        }
+        DbPool::Postgres(pool) => {
+            PostgresMessageRepository::new(pool.clone())
+                .set_aside(message_id, payload.is_set_aside)
+                .await?;
+        }
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1068,6 +1101,7 @@ pub async fn send_message(
         is_deleted: false,
         has_attachments,
         snoozed_until: None,
+        is_set_aside: false,
         has_conflict: false,
         created_at: now,
         updated_at: now,

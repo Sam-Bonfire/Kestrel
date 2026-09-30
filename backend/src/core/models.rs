@@ -64,6 +64,7 @@ pub struct Message {
     pub is_deleted: bool,
     pub has_attachments: bool,
     pub snoozed_until: Option<i64>,
+    pub is_set_aside: bool,
     pub has_conflict: bool,
     pub created_at: i64,
     pub updated_at: i64,
@@ -227,6 +228,15 @@ pub struct HistoricalRevision {
     pub serialized_payload: String,
     pub revision_number: i32,
     pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]
+pub struct ThreadSubjectOverride {
+    pub account_id: DbUuid,
+    pub thread_id: String,
+    pub subject: String,
+    #[specta(type = f64)]
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, specta::Type)]

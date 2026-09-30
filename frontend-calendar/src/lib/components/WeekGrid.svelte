@@ -4,6 +4,7 @@
 parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focusDayColumn, focusEventInColumn, computeFreeBlocks, formatFreeBlock, type WorkingHoursConfig } from '@kestrel/shared';
   import { scale } from 'svelte/transition';
   import EventHoverPopover from './EventHoverPopover.svelte';
+  import DayLabel from './DayLabel.svelte';
 
   export interface CalendarEvent {
     id: string;
@@ -645,6 +646,7 @@ parseTimeToMinutes, DEFAULT_WORKING_HOURS, plainText, mergeDuplicateEvents, focu
               : 'text-white'}">
             {date.getDate()}
           </span>
+          <DayLabel dateStr={toISODateString(date)} />
         </div>
       {/each}
     </div>

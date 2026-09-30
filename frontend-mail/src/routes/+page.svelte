@@ -183,6 +183,7 @@
       });
       loadClips();
       loadThreadNotes();
+      loadSubjectOverrides();
     }
   });
 
@@ -365,6 +366,7 @@
             isUnread: !m.is_read,
             isStarred: (m.labels ? JSON.parse(m.labels) : []).includes('STARRED'),
             isArchived: m.is_archived,
+            isSetAside: !!m.is_set_aside,
             isTrash: false,
             isDraft: false,
             isSpam: false,
@@ -405,12 +407,13 @@
                   subject: m.subject || '(no subject)',
                   body: m.snippet || '', 
                   timestamp: new Date(m.date_received * 1000).toISOString(),
-                  isUnread: !m.is_read,
-                  isStarred: (m.labels ? JSON.parse(m.labels) : []).includes('STARRED'),
-                  isArchived: m.is_archived,
-                  isTrash: false,
-                  isDraft: false,
-                  isSpam: false,
+            isUnread: !m.is_read,
+            isStarred: (m.labels ? JSON.parse(m.labels) : []).includes('STARRED'),
+            isArchived: m.is_archived,
+            isSetAside: !!m.is_set_aside,
+            isTrash: false,
+            isDraft: false,
+            isSpam: false,
               hasAttachment: m.has_attachments,
               labels: m.labels ? JSON.parse(m.labels) : [],
               category: classifyEmail(m)
@@ -478,6 +481,7 @@
 
     counts['inbox'] = getCountStr(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft);
     counts['reply-later'] = getCountStr(e => e.isReplyLater && !e.isTrash);
+    counts['set-aside'] = getCountStr(e => e.isSetAside && !e.isTrash);
     counts['unread'] = getCountStr(e => e.isUnread && !e.isTrash && !e.isSpam);
     counts['sent'] = getCountStr(e => e.isUnread && e.labels.includes('Sent'));
     counts['drafts'] = getCountStr(e => e.isDraft);
@@ -524,6 +528,83 @@
   // approval in one scope never leaks into another. Explicit-intent
   // views (starred, reply-later, sent, drafts, labels) are exempt.
   let unscreenedKeys = $derived(new Set(screenerQueue.map((s) => `${activeAccountId}:${s.email}`)));
+
+  // Personal thread subject overrides, keyed accountUuid:threadId.
+  // Loaded per real account; display-only overlay, provider subjects untouched.
+  let subjectOverrides = $state<Record<string, string>>({});
+
+  async function loadSubjectOverrides() {
+    try {
+      const api = await import('@kestrel/shared/api');
+      const accounts = await api.listAccounts();
+      const entries = await Promise.all(
+        accounts.map(async (a: any) => {
+          try {
+            const rows = await api.listSubjectOverrides(a.id);
+            return rows.map((r: any) => [`${a.id}:${r.thread_id}`, r.subject] as const);
+          } catch {
+            return [];
+          }
+        })
+      );
+      subjectOverrides = Object.fromEntries(entries.flat());
+    } catch {
+      // Offline: overrides stay empty until next load.
+    }
+  }
+
+  function displaySubject(email: any): { subject: string; overridden: boolean } {
+    const key = `${email.accountUuid ?? ''}:${email.threadId ?? ''}`;
+    const override = subjectOverrides[key];
+    if (override) return { subject: override, overridden: true };
+    return { subject: email.subject, overridden: false };
+  }
+
+  function overrideFor(email: any): string | null {
+    if (!email?.accountUuid || !email?.threadId) return null;
+    return subjectOverrides[`${email.accountUuid}:${email.threadId}`] ?? null;
+  }
+
+  async function renameSubject(id: string, subject: string) {
+    const email = allEmails.find((e) => e.id === id);
+    if (!email?.accountUuid || !email?.threadId) {
+      console.warn('renameSubject: no account/thread context, ignoring');
+      return;
+    }
+    const key = `${email.accountUuid}:${email.threadId}`;
+    const previous = subjectOverrides[key];
+    subjectOverrides = { ...subjectOverrides, [key]: subject };
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.setThreadSubject(email.threadId, email.accountUuid, subject);
+    } catch {
+      const next = { ...subjectOverrides };
+      if (previous === undefined) delete next[key];
+      else next[key] = previous;
+      subjectOverrides = next;
+    }
+    loadSubjectOverrides();
+  }
+
+  async function clearSubject(id: string) {
+    const email = allEmails.find((e) => e.id === id);
+    if (!email?.accountUuid || !email?.threadId) {
+      console.warn('clearSubject: no account/thread context, ignoring');
+      return;
+    }
+    const key = `${email.accountUuid}:${email.threadId}`;
+    const previous = subjectOverrides[key];
+    const next = { ...subjectOverrides };
+    delete next[key];
+    subjectOverrides = next;
+    try {
+      const api = await import('@kestrel/shared/api');
+      await api.clearThreadSubject(email.threadId, email.accountUuid);
+    } catch {
+      if (previous !== undefined) subjectOverrides = { ...subjectOverrides, [key]: previous };
+    }
+    loadSubjectOverrides();
+  }
   let hiddenForReview = $derived(
     allEmails.filter(
       (e) =>
@@ -818,6 +899,7 @@
           return false;
         if (currentView === 'inbox')    return !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft;
         if (currentView === 'reply-later') return e.isReplyLater && !e.isTrash;
+        if (currentView === 'set-aside') return e.isSetAside && !e.isTrash;
         if (currentView === 'unread')   return e.isUnread && !e.isTrash && !e.isSpam;
         if (currentView === 'sent')     return e.labels.includes('Sent');
         if (currentView === 'drafts')   return e.isDraft;
@@ -849,42 +931,56 @@
         return true;
       })
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .map(e => ({
+      .map(e => {
+        const shown = displaySubject(e);
+        return {
         id: e.id,
         sender: e.sender,
         senderEmail: e.senderEmail,
-        subject: e.subject,
+        subject: shown.subject,
+        subjectOverridden: shown.overridden,
+        threadId: e.threadId,
+        accountUuid: e.accountUuid,
         snippet: e.body.replace(/<[^>]*>?/gm, '').substring(0, 110) + '…',
         date: formatRelativeTime(e.timestamp, new Date($relativeTimeTick)),
         timestamp: e.timestamp,
         isUnread: e.isUnread,
         isStarred: e.isStarred,
       isReplyLater: e.isReplyLater,
+      isSetAside: !!e.isSetAside,
         hasAttachment: false,
         labels: e.labels,
         category: e.category,
         provider: accounts.find(a => a.id === e.accountId)?.provider || 'unknown',
         accountColor: accounts.find(a => a.id === e.accountId)?.color || '#6B7280'
-      }))
+        };
+      })
   );
 
   let finalThreads = $derived(
     searchResults 
-      ? searchResults.map(e => ({
+      ? searchResults.map(e => {
+          const shown = displaySubject({ ...e, accountUuid: e.account_id, threadId: e.thread_id, subject: e.subject || '(no subject)' });
+          return {
           id: e.id,
           sender: e.sender_name || e.sender_email,
           senderEmail: e.sender_email,
-          subject: e.subject || '(no subject)',
+          subject: shown.subject,
+          subjectOverridden: shown.overridden,
+          threadId: e.thread_id,
+          accountUuid: e.account_id,
           snippet: e.snippet || '',
           date: formatRelativeTime(new Date(e.date_received * 1000).toISOString(), new Date($relativeTimeTick)),
           timestamp: new Date(e.date_received * 1000).toISOString(),
           isUnread: !e.is_read,
           isStarred: false,
       isReplyLater: false,
+      isSetAside: !!e.is_set_aside,
           hasAttachment: false,
           labels: [],
           category: classifyEmail(e)
-        }))
+          };
+        })
       : threads
   );
 
@@ -947,6 +1043,15 @@
     if (!email) return;
     const newState = !email.isReplyLater;
     allEmails = allEmails.map(e => e.id === id ? { ...e, isReplyLater: newState } : e);
+  }
+  function toggleSetAside(id: string) {
+    const email = allEmails.find(e => e.id === id);
+    if (!email) return;
+    const newState = !email.isSetAside;
+    allEmails = allEmails.map(e => e.id === id ? { ...e, isSetAside: newState } : e);
+    import('@kestrel/shared/api').then(api => api.setAsideMessage(id, newState).catch(() => {
+      allEmails = allEmails.map(e => e.id === id ? { ...e, isSetAside: !newState } : e);
+    }));
   }
   function toggleStar(id: string) {
     const email = allEmails.find(e => e.id === id);
@@ -1222,6 +1327,7 @@
       isUnread: false,
       isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
       isArchived: false,
       isTrash: false,
       isDraft: false,
@@ -1249,6 +1355,7 @@
       isUnread: false,
       isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
       isArchived: false,
       isTrash: false,
       isDraft: false,
@@ -1377,6 +1484,7 @@
       if (isTyping(e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
       if (selectedThreadId && (e.key === 'h' || e.key === 'H' || (e.key === 'R' && e.shiftKey))) { toggleReplyLater(selectedThreadId); }
+      if (selectedThreadId && (e.key === 'b' || e.key === 'B')) { toggleSetAside(selectedThreadId); }
       if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         e.preventDefault();
         advanceBatch(e.shiftKey || e.key === 'ArrowLeft' ? -1 : 1);
@@ -1654,11 +1762,14 @@
       onDelete={trash}
       onSnooze={snooze}
       onToggleStar={toggleStar}
-      onToggleReplyLater={toggleReplyLater}
+      onToggleReplyLater={toggleReplyLater} onToggleSetAside={toggleSetAside}
       onClipSelection={clipSelection}
       threadNote={activeEmail ? noteFor(activeEmail) : null}
       onSaveNote={(note) => activeEmail && saveThreadNote(activeEmail.id, note)}
       onClearNote={() => activeEmail && clearThreadNote(activeEmail.id)}
+      subjectOverride={overrideFor(activeEmail)}
+      onRenameSubject={renameSubject}
+      onClearSubject={clearSubject}
       isBatchMode={isBatchMode}
       batchIndex={batchIndex}
       batchTotal={batchQueue.length}
@@ -1736,6 +1847,7 @@
           isUnread: false,
           isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
           isArchived: false,
           isTrash: false,
           isDraft: false,
@@ -1780,6 +1892,7 @@
           isUnread: false,
           isStarred: false,
       isReplyLater: false,
+      isSetAside: false,
           isArchived: false,
           isTrash: false,
           isDraft: false,

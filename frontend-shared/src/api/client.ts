@@ -29,6 +29,9 @@ import type {
   CreateBookingPageRequest,
   UpdateBookingPageRequest,
   StarParams,
+  SetAsideParams,
+  SetSubjectRequest,
+  ThreadSubjectOverride,
   LabelParams,
   Clip,
   CreateClipRequest,
@@ -736,6 +739,14 @@ export async function setThreadNote(
   });
 }
 
+export async function setAsideMessage(id: string, is_set_aside: boolean, token?: string): Promise<void> {
+  const body: SetAsideParams = { is_set_aside };
+  await request<void, SetAsideParams>('POST', `/messages/${id}/set-aside`, {
+    token,
+    body,
+  });
+}
+
 export async function clearThreadNote(
   threadId: string,
   accountId: string,
@@ -748,8 +759,42 @@ export async function clearThreadNote(
   );
 }
 
+export async function setThreadSubject(
+  threadId: string,
+  accountId: string,
+  subject: string,
+  token?: string,
+): Promise<void> {
+  const body: SetSubjectRequest = { account_id: accountId, subject };
+  await request<void, SetSubjectRequest>('PUT', `/threads/${encodeURIComponent(threadId)}/subject`, {
+    token,
+    body,
+  });
+}
+
+export async function clearThreadSubject(
+  threadId: string,
+  accountId: string,
+  token?: string,
+): Promise<void> {
+  await request<void>(
+    'DELETE',
+    `/threads/${encodeURIComponent(threadId)}/subject?account_id=${encodeURIComponent(accountId)}`,
+    { token },
+  );
+}
+
 export async function listThreadNotes(accountId: string, token?: string): Promise<ThreadNote[]> {
   return request<ThreadNote[]>('GET', `/threads/notes?account_id=${encodeURIComponent(accountId)}`, {
+    token,
+  });
+}
+
+export async function listSubjectOverrides(
+  accountId: string,
+  token?: string,
+): Promise<ThreadSubjectOverride[]> {
+  return request<ThreadSubjectOverride[]>('GET', `/threads/overrides?account_id=${encodeURIComponent(accountId)}`, {
     token,
   });
 }

@@ -28,6 +28,7 @@
     sender: string;
     senderEmail: string;
     subject: string;
+    subjectOverridden?: boolean;
     snippet: string;
     date: string;
     timestamp?: string;
