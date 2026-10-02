@@ -1,6 +1,6 @@
 use wasmtime::component::Linker;
 use wasmtime::{Config, Engine};
-use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 pub struct WasmState {
     pub wasi: WasiCtx,
@@ -8,12 +8,11 @@ pub struct WasmState {
 }
 
 impl WasiView for WasmState {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -26,15 +25,17 @@ impl WasmEngine {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let mut config = Config::new();
         config.wasm_component_model(true);
-        config.async_support(true);
 
         let engine = Engine::new(&config)?;
         let mut linker = Linker::new(&engine);
 
         // Add WASI to the linker
-        wasmtime_wasi::add_to_linker_async(&mut linker)?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 
-        crate::plugins::bindings::KestrelPlugin::add_to_linker(&mut linker, |state| state)?;
+        crate::plugins::bindings::KestrelPlugin::add_to_linker::<
+            WasmState,
+            wasmtime::component::HasSelf<WasmState>,
+        >(&mut linker, |state| state)?;
 
         Ok(Self { engine, linker })
     }
@@ -59,7 +60,6 @@ use crate::plugins::bindings::kestrel::provider::http_client::{
     Host as HttpHost, HttpRequest, HttpResponse,
 };
 
-#[async_trait::async_trait]
 impl crate::plugins::bindings::KestrelPluginImports for WasmState {
     async fn get_client_credentials(
         &mut self,
@@ -101,7 +101,6 @@ impl crate::plugins::bindings::KestrelPluginImports for WasmState {
     }
 }
 
-#[async_trait::async_trait]
 impl HttpHost for WasmState {
     async fn request(&mut self, req: HttpRequest) -> Result<HttpResponse, String> {
         let client = reqwest::Client::new();

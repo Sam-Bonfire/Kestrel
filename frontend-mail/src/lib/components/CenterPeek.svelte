@@ -50,6 +50,7 @@
   import EventInviteCard from './EventInviteCard.svelte';
   import DOMPurify from 'dompurify';
   import { parseChecklists } from '@kestrel/shared';
+  import { sanitizeEmailBody } from '@kestrel/shared';
   import { blockRemoteImages, senderDomain, isDomainAllowed, allowSenderDomain } from '@kestrel/shared';
   import { get, set } from 'idb-keyval';
 
@@ -559,7 +560,7 @@
                       <span class="text-xs font-semibold text-white">{msg.sender}</span>
                       <span class="text-[9px] font-mono text-[var(--color-text-secondary)]" title={formatExactDateTime(msg.timestamp)}>{formatRelativeTime(msg.timestamp, new Date($relativeTimeTick))}</span>
                     </div>
-                    <p class="text-xs text-[var(--color-text-primary)] leading-relaxed">{@html msg.body}</p>
+                    <p class="text-xs text-[var(--color-text-primary)] leading-relaxed">{@html sanitizeEmailBody(msg.body)}</p>
                   </div>
                 </div>
               {/each}

@@ -141,8 +141,13 @@ fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
         return Some(token.to_string());
     }
 
-    // 3. Fallback to query parameter (needed for browser EventSource / SSE connections)
-    if let Some(query) = req.uri().query() {
+    // 3. Fallback to query parameter — SSE/EventSource only.
+    // EventSource cannot set headers and the Tauri WebView shares no cookie
+    // jar with the system browser, so the sync stream is the one route that
+    // accepts ?token=. Everywhere else it is rejected (no log/history leak).
+    if query_token_allowed(req.uri().path())
+        && let Some(query) = req.uri().query()
+    {
         for pair in query.split('&') {
             if let Some((k, v)) = pair.split_once('=')
                 && k == "token"
@@ -154,6 +159,12 @@ fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
     }
 
     None
+}
+
+/// Routes allowed to carry the session token as a `?token=` query parameter.
+/// Exactly one: the SSE sync stream (see extraction fallback above).
+fn query_token_allowed(path: &str) -> bool {
+    path == "/api/v1/sync/stream"
 }
 
 // --- JWT helpers ---
@@ -176,6 +187,7 @@ fn encode_jwt(user_id: &str, secret: &str) -> Result<String, KestrelError> {
 fn decode_jwt(token: &str, secret: &str) -> Result<Claims, KestrelError> {
     let mut validation = Validation::default();
     validation.set_audience(&["kestrel"]);
+    validation.set_issuer(&["kestrel"]);
     let data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
@@ -273,7 +285,11 @@ pub async fn token(
 
     let jwt = encode_jwt(&user.id.to_string(), &state.jwt_secret)?;
 
-    let cookie = format!("kestrel_token={}; HttpOnly; Path=/; SameSite=Lax", jwt);
+    let cookie = format!(
+        "kestrel_token={}; HttpOnly; Path=/; SameSite=Lax{}",
+        jwt,
+        cookie_secure_suffix()
+    );
 
     let response = axum::response::Response::builder()
         .header(axum::http::header::SET_COOKIE, cookie)
@@ -288,6 +304,32 @@ pub async fn token(
         .map_err(|e| KestrelError::Internal(Box::new(e)))?;
 
     Ok(response)
+}
+
+// --- POST /api/v1/auth/logout ---
+
+/// Clears the session cookie. Native clients drop their in-memory/keychain
+/// token via the shared logout routine; this endpoint ends the browser
+/// (cookie) leg of the session.
+pub async fn logout() -> Result<Response, KestrelError> {
+    let tombstone = format!(
+        "kestrel_token=; HttpOnly; Path=/; SameSite=Lax{}; Max-Age=0",
+        cookie_secure_suffix()
+    );
+    axum::response::Response::builder()
+        .header(axum::http::header::SET_COOKIE, tombstone)
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(axum::body::Body::from(r#"{"ok":true}"#))
+        .map_err(|e| KestrelError::Internal(Box::new(e)))
+}
+
+/// "; Secure" when the canonical base URL is https, else "".
+/// Mirrors how KESTREL_BASE_URL is read elsewhere in this module.
+fn cookie_secure_suffix() -> &'static str {
+    match std::env::var("KESTREL_BASE_URL") {
+        Ok(base) if base.trim_start().starts_with("https://") => "; Secure",
+        _ => "",
+    }
 }
 
 // --- GET /api/v1/auth/me ---
@@ -612,4 +654,18 @@ pub async fn callback(
 
     // Redirect back to the app via deep link
     Ok(axum::response::Redirect::to(&frontend_url).into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_query_token_scoped_to_sync_stream() {
+        assert!(query_token_allowed("/api/v1/sync/stream"));
+        assert!(!query_token_allowed("/api/v1/auth/me"));
+        assert!(!query_token_allowed("/api/v1/messages"));
+        assert!(!query_token_allowed("/api/v1/sync/stream/extra"));
+        assert!(!query_token_allowed("/api/v1/sync/trigger"));
+    }
 }

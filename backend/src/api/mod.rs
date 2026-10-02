@@ -6,6 +6,7 @@ pub mod booking_slots;
 pub mod calendars;
 pub mod clips;
 pub mod contacts;
+pub mod cors;
 pub mod health;
 pub mod labels;
 pub mod landing;

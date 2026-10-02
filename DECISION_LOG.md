@@ -433,6 +433,36 @@ None.
 
 ---
 
+## DEC-024: Defer DEC-019 — Harden Custom Auth Instead of Adopting `better-auth` Alpha
+
+- **Category:** Security / Backend
+- **Status:** Approved
+- **Date:** 2026-10-02
+- **Author:** OpenCode session (security review)
+- **Decision:** Defer the DEC-019 migration to the `better-auth` Rust port. Harden the existing Argon2 + JWT session module instead (exact-origin CORS, sanitized render seam, Secure cookie, query-token scoping, logout, issuer check).
+- **Reason:** The Rust `better-auth` crate is `1.0.0-alpha.3` with a SeaORM-only adapter story — incompatible with the dual SQLite/PostgreSQL SQLx repository traits (DEC-013) and the WASM-plugin OAuth flows. Migrating session management to alpha framework code trades reviewed, tested custom code for immature abstractions with their own advisories. The recorded DEC-019 reason (declarative engine, API keys) still stands as a goal; no API-key feature exists in the backend today to force the move.
+- **Alternatives Considered:** Immediate migration to `better-auth` 1.0.0-alpha.3; `axum-login` + `tower-sessions` stack from DEC-019.
+- **Consequences:** Backend auth stays custom; session hardening lands as incremental specs. Revisit when `better-auth` reaches stable with a SQLx adapter, or when scoped API keys become a committed feature.
+- **Affected Components:** Backend auth module, Axum middleware, frontend-shared session stores.
+- **User Approval:** Pending (proposed in security batch review)
+
+---
+
+## DEC-025: Security as Daily Practice, Not an Afterthought
+
+- **Category:** Security / Process
+- **Status:** Approved
+- **Date:** 2026-10-02
+- **Author:** OpenCode session (security review)
+- **Decision:** Security checks run on every PR, every merge to `dev`/`main`, and weekly: `cargo audit`, `pnpm audit` (high+), verified-secret scanning, and daily Dependabot patch PRs, all runnable locally via `mise run audit`. Documented in `SECURITY.md`.
+- **Reason:** The October review found 45 open advisories, no secret scanning, no code scanning, and no branch protection — debt that accrues silently. Daily gates make new issues fail the build the day they appear instead of batching into reviews.
+- **Alternatives Considered:** Ad-hoc review batches (status quo ante), full GHAS suite immediately (blocked on admin scope; tracked as manual steps in `SECURITY.md`).
+- **Consequences:** `security.yml` must stay green for merge (enforced via branch ruleset once added); Dependabot patch PRs reviewed as routine.
+- **Affected Components:** `.github/workflows/security.yml`, `.github/dependabot.yml`, `mise.toml`, `SECURITY.md`.
+- **User Approval:** Pending (proposed in security batch review)
+
+---
+
 # Change Log
 
 | Date | Change | Reason | Changed By | Affected Decisions |

@@ -42,9 +42,15 @@
                 const token = urlObj.searchParams.get('token');
                 const userId = urlObj.searchParams.get('user_id');
                 if (token && userId) {
-                  localStorage.setItem('kestrel_token', token);
-                  localStorage.setItem('kestrel_user_id', userId);
+                  // Memory + OS keychain only: never localStorage (XSS-readable).
+                  authState.token = token;
                   authState.userId = userId;
+                  try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    await invoke('set_keychain_token', { token });
+                  } catch {
+                    // Web builds have no keychain; the in-memory session stands.
+                  }
                   if (onSuccess) onSuccess();
                 }
               } catch (e) {

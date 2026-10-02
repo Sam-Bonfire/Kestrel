@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sqlx::database::{HasArguments, HasValueRef};
+use sqlx::Database;
 use sqlx::decode::Decode;
 use sqlx::encode::{Encode, IsNull};
 use sqlx::error::BoxDynError;
@@ -55,15 +55,18 @@ impl From<DbUuid> for String {
 // --- SQLite: decode from TEXT ---
 
 impl<'r> Decode<'r, Sqlite> for DbUuid {
-    fn decode(value: <Sqlite as HasValueRef<'r>>::ValueRef) -> Result<Self, BoxDynError> {
+    fn decode(value: <Sqlite as Database>::ValueRef<'r>) -> Result<Self, BoxDynError> {
         let s = <String as Decode<'r, Sqlite>>::decode(value)?;
         let uuid = Uuid::parse_str(&s)?;
         Ok(DbUuid(uuid))
     }
 }
 
-impl Encode<'_, Sqlite> for DbUuid {
-    fn encode_by_ref(&self, args: &mut <Sqlite as HasArguments<'_>>::ArgumentBuffer) -> IsNull {
+impl<'q> Encode<'q, Sqlite> for DbUuid {
+    fn encode_by_ref(
+        &self,
+        args: &mut <Sqlite as Database>::ArgumentBuffer<'q>,
+    ) -> Result<IsNull, BoxDynError> {
         <String as Encode<'_, Sqlite>>::encode(self.0.to_string(), args)
     }
 }
@@ -71,17 +74,17 @@ impl Encode<'_, Sqlite> for DbUuid {
 // --- Postgres: decode from native UUID ---
 
 impl<'r> Decode<'r, sqlx::Postgres> for DbUuid {
-    fn decode(value: <sqlx::Postgres as HasValueRef<'r>>::ValueRef) -> Result<Self, BoxDynError> {
+    fn decode(value: <sqlx::Postgres as Database>::ValueRef<'r>) -> Result<Self, BoxDynError> {
         let uuid = <Uuid as Decode<'r, sqlx::Postgres>>::decode(value)?;
         Ok(DbUuid(uuid))
     }
 }
 
-impl Encode<'_, sqlx::Postgres> for DbUuid {
+impl<'q> Encode<'q, sqlx::Postgres> for DbUuid {
     fn encode_by_ref(
         &self,
-        args: &mut <sqlx::Postgres as HasArguments<'_>>::ArgumentBuffer,
-    ) -> IsNull {
+        args: &mut <sqlx::Postgres as Database>::ArgumentBuffer<'q>,
+    ) -> Result<IsNull, BoxDynError> {
         <Uuid as Encode<'_, sqlx::Postgres>>::encode_by_ref(&self.0, args)
     }
 }

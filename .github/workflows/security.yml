@@ -1,0 +1,67 @@
+name: Daily Security
+
+# Security runs on every PR, every merge to dev/main, and weekly on schedule
+# so advisories and leaked secrets fail the build the day they appear.
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+  push:
+    branches:
+      - dev
+      - main
+  schedule:
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+
+  rust-advisories:
+    name: Cargo audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Unfixable upstream (no patch); rationale + re-check date live in
+          # audit.toml. Kestrel never exercises the RSA decryption path.
+          ignore: RUSTSEC-2023-0071
+
+  js-advisories:
+    name: pnpm audit (high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - run: pnpm audit --audit-level=high
+      - run: pnpm --recursive audit --audit-level=high
+
+  leaked-secrets:
+    name: TruffleHog (verified secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@v3.97.9
+        with:
+          extra_args: --only-verified

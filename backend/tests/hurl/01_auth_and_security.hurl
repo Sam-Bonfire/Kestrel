@@ -133,12 +133,12 @@ HTTP 200
 jsonpath "$.user_id" == "{{seeded_user_id}}"
 
 
-# 13. Alternative Token Passing: Query /me with query parameter token (for SSE/EventSource)
+# 13. Token-in-query rejected outside the SSE stream (transport hardening):
+# ?token= is honored only on /api/v1/sync/stream (EventSource cannot set
+# headers); everywhere else it must not authenticate (log/history leak).
 GET {{base_url}}/api/v1/auth/me?token={{auth_token}}
 
-HTTP 200
-[Asserts]
-jsonpath "$.user_id" == "{{seeded_user_id}}"
+HTTP 401
 
 
 # 14. Alternative Token Passing: Query /me with Cookie header
