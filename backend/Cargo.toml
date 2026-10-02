@@ -29,7 +29,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Database layer
-sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "sqlite", "postgres", "chrono", "uuid"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "sqlite", "postgres", "chrono", "uuid"] }
 
 # Async traits
 async-trait = "0.1"
@@ -43,14 +43,14 @@ thiserror = "2.0"
 
 # Auth
 argon2 = "0.5"
-jsonwebtoken = "9"
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 rand = "0.8"
 
 # Async streams
 futures = "0.3"
 tokio-stream = "0.1"
-wasmtime = "22.0.0"
-wasmtime-wasi = "22.0.0"
+wasmtime = "48"
+wasmtime-wasi = "48"
 reqwest = { version = "0.13.4", features = ["json", "form"] }
 base64 = "0.23.0"
 urlencoding = "2.1.3"

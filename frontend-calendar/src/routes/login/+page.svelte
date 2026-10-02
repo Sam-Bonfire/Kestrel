@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Button, Spinner, ErrorBanner, login, ServerConfig } from '@kestrel/shared';
+  import { Button, Spinner, ErrorBanner, login, ServerConfig, sanitizeProviderIcon } from 
+'@kestrel/shared';
 
   let email = $state('');
   let password = $state('');
@@ -115,7 +116,7 @@
             class="w-full flex items-center justify-center gap-3 p-3 rounded-lg border border-[var(--color-border-hairline)] bg-[var(--color-canvas-base)] hover:bg-[var(--color-canvas-hover)] transition-colors text-sm text-white font-medium cursor-pointer"
           >
             <span style="color: {provider.button_color}" class="w-5 h-5 inline-flex items-center justify-center">
-              {@html provider.icon_svg}
+              {@html sanitizeProviderIcon(provider.icon_svg)}
             </span>
             {provider.button_text}
           </button>

@@ -135,6 +135,7 @@
 
   // --- Contact merge/deduplication State ---
   import { findDuplicateGroups } from '../utils/merge.js';
+  import { sanitizeProviderIcon } from '../utils/html.js';
   let mergeAccountId = $state('');
   let mergeGroups: { key: string; members: { name?: string | null; email: string }[] }[] = $state([]);
   let mergeKeep: Record<string, string> = $state({});
@@ -329,7 +330,7 @@
                   >
                     <div class="flex items-center gap-3">
                       <div class="w-6 h-6 flex items-center justify-center rounded" style="color: {provider.button_color}">
-                        {@html provider.icon_svg}
+                        {@html sanitizeProviderIcon(provider.icon_svg)}
                       </div>
                       <span class="text-sm text-white">{provider.button_text}</span>
                     </div>

@@ -28,7 +28,7 @@ impl WasmPlugin {
 
         // Setup imports if needed
         // For now, we mock the client credentials import
-        let (instance, _) =
+        let instance =
             KestrelPlugin::instantiate_async(&mut store, &component, &engine.linker).await?;
 
         // Extract branding
@@ -57,7 +57,7 @@ impl WasmPlugin {
         &self,
     ) -> Result<(wasmtime::Store<WasmState>, KestrelPlugin), PluginError> {
         let mut store = self.engine.create_store();
-        let (instance, _) =
+        let instance =
             KestrelPlugin::instantiate_async(&mut store, &self.component, &self.engine.linker)
                 .await
                 .map_err(|e| PluginError(e.to_string()))?;

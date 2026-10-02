@@ -384,7 +384,7 @@
         });
 
         // Set up SSE sync listener (Task 34)
-        const eventSource = createSyncStream(localStorage.getItem('kestrel_token') || undefined);
+        const eventSource = createSyncStream(authState.token ?? undefined);
         eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);

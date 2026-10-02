@@ -2,7 +2,7 @@ use axum::Router;
 use axum::middleware;
 use axum::routing::{delete, get, post, put};
 use tokio::sync::broadcast;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use super::accounts;
@@ -12,6 +12,7 @@ use super::booking;
 use super::calendars;
 use super::clips;
 use super::contacts;
+use super::cors::is_origin_allowed;
 use super::health::health_check;
 use super::messages;
 use super::polls;
@@ -40,8 +41,13 @@ pub struct AppState {
 }
 
 pub fn create_router(state: AppState) -> Router {
+    // Exact-origin allowlist (api/cors.rs): Tauri/dev origins plus the
+    // KESTREL_BASE_URL origin and EXTRA_ALLOWED_ORIGINS. Never reflected:
+    // reflection + credentials lets any site read the API as the user.
     let cors = CorsLayer::new()
-        .allow_origin(tower_http::cors::AllowOrigin::mirror_request())
+        .allow_origin(AllowOrigin::predicate(|origin, _| {
+            is_origin_allowed(origin)
+        }))
         .allow_methods(vec![
             axum::http::Method::GET,
             axum::http::Method::POST,
@@ -101,6 +107,7 @@ pub fn create_router(state: AppState) -> Router {
     // Protected routes (auth middleware required)
     let protected = Router::new()
         .route("/api/v1/auth/callback/:provider", get(auth::callback))
+        .route("/api/v1/auth/logout", post(auth::logout))
         .route("/api/v1/accounts", get(accounts::list_accounts))
         .route("/api/v1/accounts/:id", delete(accounts::delete_account))
         .route("/api/v1/messages", get(messages::list_messages))

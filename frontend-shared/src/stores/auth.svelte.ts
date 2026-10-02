@@ -1,4 +1,4 @@
-import { getMe, createToken } from '../api/client.js';
+import { getMe, createToken, getServerUrl } from '../api/client.js';
 import { invoke } from '@tauri-apps/api/core';
 
 declare global {
@@ -76,10 +76,20 @@ export async function login(username: string, password: string) {
 }
 
 export function logout() {
+    const token = authState.token;
     // For cookies, we might need a /auth/logout endpoint to clear it, 
     // but clearing state ensures the app drops them
     authState.userId = null;
     authState.token = null;
+    if (token) {
+        // Best-effort server logout (clears the HttpOnly cookie leg).
+        // Raw fetch: must not route through the client (401 recursion).
+        fetch(`${getServerUrl()}/api/v1/auth/logout`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            credentials: 'include',
+        }).catch(() => {});
+    }
     if (window.__TAURI_INTERNALS__) {
         invoke('delete_keychain_token').catch(e => {
             console.error("Failed to delete keychain token", e);

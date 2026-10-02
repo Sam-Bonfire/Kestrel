@@ -7,3 +7,7 @@ packages:
 allowBuilds:
   esbuild: true
   svelte-preprocess: true
+# Security overrides for transitive advisories (see K-1523).
+# postcss 8.5.21 -> 8.5.28 pulls nanoid 3.3.18 (GHSA high: infinite loop).
+overrides:
+  postcss: 8.5.28

@@ -1,0 +1,10 @@
+# cargo-audit exception list. Every entry needs a reason and a re-check date.
+# Re-check by removing the entry and running `mise run audit`.
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071 (rsa Marvin timing attack): no patch exists upstream
+    # (patched = []). rsa arrives via jsonwebtoken's rust_crypto feature, but
+    # Kestrel only uses HS256/HMAC session tokens — the vulnerable RSA
+    # decryption path is never exercised. Re-check 2027-01.
+    "RUSTSEC-2023-0071",
+]

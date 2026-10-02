@@ -140,6 +140,14 @@ run = [
 description = "Install Playwright browsers for the E2E suite"
 run = "pnpm --filter @kestrel/e2e exec playwright install --with-deps chromium"
 
+[tasks.audit]
+description = "Daily security loop: RustSec advisories + high+ npm advisories (same gates as CI)"
+run = [
+    "cargo audit",
+    "pnpm audit --audit-level=high",
+    "pnpm --recursive audit --audit-level=high",
+]
+
 [tasks."db:migrate"]
 description = "Run SQLx migrations locally (requires DATABASE_URL + sqlx-cli)"
 dir = "backend"
