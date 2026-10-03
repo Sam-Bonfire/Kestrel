@@ -5,31 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Kestrel is a fast, keyboard-driven mail + calendar client for your existing Gmail and Outlook accounts. One inbox, scheduling without threads — free and open source."
+      content="Kestrel is a fast, keyboard-driven mail + calendar client for your existing accounts. One inbox, scheduling without threads — free and open source."
     />
     <meta name="theme-color" content="#0a0a0b" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Kestrel — Mail + Calendar for Gmail & Outlook" />
+    <meta property="og:title" content="Kestrel — Mail + Calendar for your existing accounts" />
     <meta
       property="og:description"
-      content="A fast mail + calendar client for your existing Gmail and Outlook accounts. One inbox, keyboard triage, free and open source."
+      content="A fast mail + calendar client for your existing accounts. One inbox, keyboard-first triage, free and open source."
     />
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Kestrel — Mail + Calendar for Gmail & Outlook" />
+    <meta name="twitter:title" content="Kestrel — Mail + Calendar for your existing accounts" />
     <meta
-      name="twitter:description"
-      content="A fast mail + calendar client for your existing Gmail and Outlook accounts. One inbox, keyboard triage, free and open source."
+      property="twitter:description"
+      content="A fast mail + calendar client for your existing accounts. One inbox, keyboard-first triage, free and open source."
     />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <title>Kestrel — Mail + Calendar for Gmail & Outlook</title>
+    <title>Kestrel — Mail + Calendar for your existing accounts</title>
     <script>
       document.documentElement.classList.add('js');
-      try {
-        var t = localStorage.getItem('kestrel-theme');
-        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
-      } catch (e) {}
+      // Landing is dark-only (the apps ship no light theme yet).
+      document.documentElement.dataset.theme = 'dark';
       // Absolute canonical + share image from the deployment origin
       // (unknown at build time on self-hosted installs).
       try {
