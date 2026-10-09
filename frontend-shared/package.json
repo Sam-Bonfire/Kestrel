@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@tanstack/query-core": "^5.104.1",
-    "@tanstack/query-persist-client-core": "^5.101.4",
+    "@tanstack/query-persist-client-core": "^5.104.1",
     "@tanstack/query-sync-storage-persister": "^5.101.4",
     "@tanstack/svelte-query": "^6.1.38",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
