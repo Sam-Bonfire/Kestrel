@@ -9,5 +9,7 @@ allowBuilds:
   svelte-preprocess: true
 # Security overrides for transitive advisories (see K-1523).
 # postcss 8.5.21 -> 8.5.28 pulls nanoid 3.3.18 (GHSA high: infinite loop).
+# tinypool 1.1.1 (via vitest 3.2.7) has GHSA-5gmw-xhrv-c9v3 + GHSA-85c8-ppgw-ccpr (critical RCE); force >=2.1.2.
 overrides:
   postcss: 8.5.28
+  tinypool: 2.1.2
