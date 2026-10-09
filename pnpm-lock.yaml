@@ -213,8 +213,8 @@ importers:
   frontend-shared:
     dependencies:
       '@tanstack/query-core':
-        specifier: ^5.101.4
-        version: 5.101.4
+        specifier: ^5.104.0
+        version: 5.104.0
       '@tanstack/query-persist-client-core':
         specifier: ^5.101.4
         version: 5.101.4
@@ -762,6 +762,9 @@ packages:
 
   '@tanstack/query-core@5.101.4':
     resolution: {integrity: sha512-gNwcvOJcRbLWPOLG/2OBm+zM+Yv+MKsXKEOWC57USuZDEsI71hEErQsiEGx5wX9rzWWkfwM0fVSPoiIFSsxfiw==}
+
+  '@tanstack/query-core@5.104.0':
+    resolution: {integrity: sha512-JrC2r/JQlXt7khBSdUpsgxNvybzOg+aITa+ARRMlP2AFo93Y8vIqz077rp+e61mJetSZ0T6AJbwW1JHer1vrPQ==}
 
   '@tanstack/query-persist-client-core@5.101.4':
     resolution: {integrity: sha512-Bmu+RfWhwYEyYZEwSeKC0gX4+KTkiEB3yO8oz9BfAY/Jfe3ndz9EnYVhihIZPmWIr8NXayF7JuraNQcrXQQCCg==}
@@ -2299,6 +2302,8 @@ snapshots:
       vite: 6.4.3(@types/node@26.4.1)(jiti@2.7.0)(lightningcss@1.32.0)
 
   '@tanstack/query-core@5.101.4': {}
+
+  '@tanstack/query-core@5.104.0': {}
 
   '@tanstack/query-persist-client-core@5.101.4':
     dependencies:
