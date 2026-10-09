@@ -115,8 +115,8 @@ dir = "frontend-shared"
 run = "pnpm test"
 
 [tasks."test:hurl"]
-description = "Execute intent-based Hurl API suites against live backend"
-run = "hurl --variable base_url=http://localhost:8080 --variable run_id=$(node -p Date.now()) backend/tests/hurl/*.hurl"
+description = "Execute intent-based Hurl API suites against live backend (portable: no shell-specific syntax)"
+run = "node scripts/run-hurl.mjs"
 
 [tasks.test]
 description = "Run fast automated tests (backend + frontend)"
