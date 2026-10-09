@@ -111,6 +111,8 @@ HTTP 200
 # 10. Ingest Microsoft Graph Webhook Handshake Validation
 POST {{base_url}}/api/webhooks/microsoft?validationToken=HandshakeValidationToken12345
 Content-Type: text/plain
+```
 validationToken=HandshakeValidationToken12345
+```
 
 HTTP 200
