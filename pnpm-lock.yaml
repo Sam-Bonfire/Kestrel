@@ -28,8 +28,8 @@ importers:
         specifier: workspace:*
         version: link:../frontend-shared
       '@tanstack/query-persist-client-core':
-        specifier: ^5.101.4
-        version: 5.101.4
+        specifier: ^5.104.1
+        version: 5.104.1
       '@tauri-apps/api':
         specifier: ^2
         version: 2.11.1
@@ -129,8 +129,8 @@ importers:
         specifier: workspace:*
         version: link:../frontend-shared
       '@tanstack/query-persist-client-core':
-        specifier: ^5.101.4
-        version: 5.101.4
+        specifier: ^5.104.1
+        version: 5.104.1
       '@tauri-apps/api':
         specifier: ^2
         version: 2.11.1
@@ -217,14 +217,14 @@ importers:
         specifier: ^5.104.1
         version: 5.104.1
       '@tanstack/query-persist-client-core':
-        specifier: ^5.101.4
-        version: 5.101.4
+        specifier: ^5.104.1
+        version: 5.104.1
       '@tanstack/query-sync-storage-persister':
-        specifier: ^5.101.4
-        version: 5.101.4
+        specifier: ^5.104.1
+        version: 5.104.1
       '@tanstack/svelte-query':
-        specifier: ^6.1.38
-        version: 6.1.38(svelte@5.57.2)
+        specifier: ^6.3.1
+        version: 6.3.1(svelte@5.57.2)
       '@tauri-apps/plugin-deep-link':
         specifier: ^2.4.9
         version: 2.4.9
@@ -815,20 +815,17 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@tanstack/query-core@5.101.4':
-    resolution: {integrity: sha512-gNwcvOJcRbLWPOLG/2OBm+zM+Yv+MKsXKEOWC57USuZDEsI71hEErQsiEGx5wX9rzWWkfwM0fVSPoiIFSsxfiw==}
-
   '@tanstack/query-core@5.104.1':
     resolution: {integrity: sha512-TiRghcrGkUTE+M4JBxvpPSpBhxvIzQairw+cksrHYGr+2uwC77yW1SY9nYxnYRYOppvucf8rEg6b5byoz4rTpw==}
 
-  '@tanstack/query-persist-client-core@5.101.4':
-    resolution: {integrity: sha512-Bmu+RfWhwYEyYZEwSeKC0gX4+KTkiEB3yO8oz9BfAY/Jfe3ndz9EnYVhihIZPmWIr8NXayF7JuraNQcrXQQCCg==}
+  '@tanstack/query-persist-client-core@5.104.1':
+    resolution: {integrity: sha512-ONiadXqe56iNrw6RESqKILpTIVG9ZMI/DageTQnrBDt/nZ6WiP4G13iIiMwJEsiO12gQ3Gychx8tcFIPw4k25g==}
 
-  '@tanstack/query-sync-storage-persister@5.101.4':
-    resolution: {integrity: sha512-G5RaevDGbq9HCe5DSNQaFZroGgHEjKTGY9e+vya26jphp+hdQaBB5jBVCoPqaR/uP0eSdt+vxwVsp2BwaoFxHw==}
+  '@tanstack/query-sync-storage-persister@5.104.1':
+    resolution: {integrity: sha512-eDsBMNds48+sjXILn0dQKu+uYwfh9tGIB+Rb0cKRdoxD22HHBMzJes5DJOhJVLUhBQbxtoFq+Hpha/Vohh14NQ==}
 
-  '@tanstack/svelte-query@6.1.38':
-    resolution: {integrity: sha512-oV5S/+uAot23p3lJChLAHr82+8ApgQMyIgroWPpN0d6Y6TlThRbLSXnhx6CoUk6AkwlCPxf9vh4SOHa0eXHiWg==}
+  '@tanstack/svelte-query@6.3.1':
+    resolution: {integrity: sha512-gyBkXdE1ZNOX6KWTumq7msd0kHHF1wLLUREb8zPxfadUUyVOy1qrgBfo8bNSf9918x0LSu2YuBDxEm7dBi9T4w==}
     peerDependencies:
       svelte: ^5.25.0
 
@@ -2323,22 +2320,20 @@ snapshots:
       tailwindcss: 4.3.3
       vite: 6.4.3(@types/node@26.4.1)(jiti@2.7.0)(lightningcss@1.32.0)
 
-  '@tanstack/query-core@5.101.4': {}
-
   '@tanstack/query-core@5.104.1': {}
 
-  '@tanstack/query-persist-client-core@5.101.4':
+  '@tanstack/query-persist-client-core@5.104.1':
     dependencies:
-      '@tanstack/query-core': 5.101.4
+      '@tanstack/query-core': 5.104.1
 
-  '@tanstack/query-sync-storage-persister@5.101.4':
+  '@tanstack/query-sync-storage-persister@5.104.1':
     dependencies:
-      '@tanstack/query-core': 5.101.4
-      '@tanstack/query-persist-client-core': 5.101.4
+      '@tanstack/query-core': 5.104.1
+      '@tanstack/query-persist-client-core': 5.104.1
 
-  '@tanstack/svelte-query@6.1.38(svelte@5.57.2)':
+  '@tanstack/svelte-query@6.3.1(svelte@5.57.2)':
     dependencies:
-      '@tanstack/query-core': 5.101.4
+      '@tanstack/query-core': 5.104.1
       svelte: 5.57.2
 
   '@tauri-apps/api@2.11.1': {}
