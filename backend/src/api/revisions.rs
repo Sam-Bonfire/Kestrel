@@ -153,7 +153,9 @@ pub async fn restore_revision(
                 "UPDATE {table} SET {}, updated_at = unixepoch() WHERE id = ?",
                 placeholders.join(", ")
             );
-            let mut query = sqlx::query(&sql);
+            // Audited: `table` and every column in `placeholders` come from the
+            // `restorable_columns` allowlist (&'static str); all values are bound.
+            let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
             for (_, value) in &assignments {
                 query = match value {
                     // SQLite stores flags as INTEGER 0/1.
@@ -181,7 +183,8 @@ pub async fn restore_revision(
                 placeholders.join(", "),
                 assignments.len() + 1
             );
-            let mut query = sqlx::query(&sql);
+            // Audited: same allowlist guarantee as the SQLite branch above.
+            let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
             for (_, value) in &assignments {
                 query = match value {
                     // Postgres has native BOOLEAN columns.

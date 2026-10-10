@@ -23,9 +23,9 @@ const MESSAGE_COLUMNS: &str = "m.id, m.account_id, m.external_id, m.thread_id, m
 #[async_trait]
 impl MessageRepository for PostgresMessageRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Message>, sqlx::Error> {
-        sqlx::query_as::<_, Message>(&format!(
+        sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(format!(
             "SELECT {MESSAGE_COLUMNS} FROM messages m WHERE m.id = $1"
-        ))
+        )))
         .bind(id)
         .fetch_optional(&self.pool)
         .await
@@ -36,9 +36,9 @@ impl MessageRepository for PostgresMessageRepository {
         account_id: Uuid,
         external_id: &str,
     ) -> Result<Option<Message>, sqlx::Error> {
-        sqlx::query_as::<_, Message>(&format!(
+        sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(format!(
             "SELECT {MESSAGE_COLUMNS} FROM messages m WHERE m.account_id = $1 AND m.external_id = $2"
-        ))
+        )))
         .bind(account_id)
         .bind(external_id)
         .fetch_optional(&self.pool)
@@ -86,7 +86,9 @@ impl MessageRepository for PostgresMessageRepository {
             param_idx
         );
 
-        let mut q = sqlx::query_as::<_, Message>(&query);
+        // Audited: `where_clause` is assembled only from hardcoded condition
+        // fragments with numbered placeholders; all values go through binds.
+        let mut q = sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(query));
         if let Some(aid) = account_id {
             q = q.bind(aid);
         }
@@ -106,7 +108,7 @@ impl MessageRepository for PostgresMessageRepository {
         query: &str,
         limit: i64,
     ) -> Result<Vec<Message>, sqlx::Error> {
-        sqlx::query_as::<_, Message>(&format!(
+        sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(format!(
             "SELECT {MESSAGE_COLUMNS} \
              FROM messages m \
              JOIN accounts a ON m.account_id = a.id \
@@ -116,7 +118,7 @@ impl MessageRepository for PostgresMessageRepository {
                   OR m.sender_email ILIKE '%' || $2 || '%' \
                   OR m.snippet ILIKE '%' || $2 || '%') \
              ORDER BY m.date_received DESC LIMIT $3"
-        ))
+        )))
         .bind(user_id)
         .bind(query)
         .bind(limit)
