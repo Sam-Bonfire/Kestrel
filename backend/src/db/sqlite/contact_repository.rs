@@ -133,7 +133,10 @@ impl ContactRepository for SqliteContactRepository {
             in_clause
         );
 
-        let mut q = sqlx::query_as::<_, Contact>(&sql);
+        // Audited: the only dynamic SQL text is `in_clause`, a comma-joined run
+        // of `?` placeholders sized by the input length. All values (account
+        // ids, LIKE patterns, limit) go through bind parameters.
+        let mut q = sqlx::query_as::<_, Contact>(sqlx::AssertSqlSafe(sql));
 
         for id in &account_ids_str {
             q = q.bind(id);

@@ -21,31 +21,31 @@ const CALENDAR_COLUMNS: &str =
 #[async_trait]
 impl CalendarRepository for SqliteCalendarRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Calendar>, sqlx::Error> {
-        sqlx::query_as::<_, Calendar>(&format!(
+        sqlx::query_as::<_, Calendar>(sqlx::AssertSqlSafe(format!(
             "SELECT {CALENDAR_COLUMNS} FROM calendars c WHERE c.id = ?"
-        ))
+        )))
         .bind(id.to_string())
         .fetch_optional(&self.pool)
         .await
     }
 
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Calendar>, sqlx::Error> {
-        sqlx::query_as::<_, Calendar>(&format!(
+        sqlx::query_as::<_, Calendar>(sqlx::AssertSqlSafe(format!(
             "SELECT {CALENDAR_COLUMNS} FROM calendars c WHERE c.account_id = ? ORDER BY c.is_primary DESC, c.name"
-        ))
+        )))
         .bind(account_id.to_string())
         .fetch_all(&self.pool)
         .await
     }
 
     async fn list_by_user(&self, user_id: Uuid) -> Result<Vec<Calendar>, sqlx::Error> {
-        sqlx::query_as::<_, Calendar>(&format!(
+        sqlx::query_as::<_, Calendar>(sqlx::AssertSqlSafe(format!(
             "SELECT {CALENDAR_COLUMNS} \
              FROM calendars c \
              JOIN accounts a ON c.account_id = a.id \
              WHERE a.user_id = ? \
              ORDER BY c.is_primary DESC, c.name"
-        ))
+        )))
         .bind(user_id.to_string())
         .fetch_all(&self.pool)
         .await

@@ -43,27 +43,27 @@ impl BookingPageRepository for SqliteBookingRepository {
     }
 
     async fn list_by_user(&self, user_id: Uuid) -> Result<Vec<BookingPage>, sqlx::Error> {
-        sqlx::query_as::<_, BookingPage>(&format!(
+        sqlx::query_as::<_, BookingPage>(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM booking_pages WHERE user_id = ? ORDER BY created_at"
-        ))
+        )))
         .bind(user_id.to_string())
         .fetch_all(&self.pool)
         .await
     }
 
     async fn find_by_slug(&self, slug: &str) -> Result<Option<BookingPage>, sqlx::Error> {
-        sqlx::query_as::<_, BookingPage>(&format!(
+        sqlx::query_as::<_, BookingPage>(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM booking_pages WHERE slug = ?"
-        ))
+        )))
         .bind(slug)
         .fetch_optional(&self.pool)
         .await
     }
 
     async fn find_by_id(&self, id: Uuid) -> Result<Option<BookingPage>, sqlx::Error> {
-        sqlx::query_as::<_, BookingPage>(&format!(
+        sqlx::query_as::<_, BookingPage>(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM booking_pages WHERE id = ?"
-        ))
+        )))
         .bind(id.to_string())
         .fetch_optional(&self.pool)
         .await

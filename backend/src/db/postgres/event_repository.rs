@@ -22,9 +22,9 @@ const EVENT_COLUMNS: &str = "e.id, e.account_id, e.calendar_id, e.external_id, e
 #[async_trait]
 impl EventRepository for PostgresEventRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<CalendarEvent>, sqlx::Error> {
-        sqlx::query_as::<_, CalendarEvent>(&format!(
+        sqlx::query_as::<_, CalendarEvent>(sqlx::AssertSqlSafe(format!(
             "SELECT {EVENT_COLUMNS} FROM calendar_events e WHERE e.id = $1"
-        ))
+        )))
         .bind(id)
         .fetch_optional(&self.pool)
         .await
@@ -35,9 +35,9 @@ impl EventRepository for PostgresEventRepository {
         account_id: Uuid,
         external_id: &str,
     ) -> Result<Option<CalendarEvent>, sqlx::Error> {
-        sqlx::query_as::<_, CalendarEvent>(&format!(
+        sqlx::query_as::<_, CalendarEvent>(sqlx::AssertSqlSafe(format!(
             "SELECT {EVENT_COLUMNS} FROM calendar_events e WHERE e.account_id = $1 AND e.external_id = $2"
-        ))
+        )))
         .bind(account_id)
         .bind(external_id)
         .fetch_optional(&self.pool)
@@ -52,14 +52,14 @@ impl EventRepository for PostgresEventRepository {
         calendar_id: Option<Uuid>,
     ) -> Result<Vec<CalendarEvent>, sqlx::Error> {
         if let Some(calendar_id) = calendar_id {
-            sqlx::query_as::<_, CalendarEvent>(&format!(
+            sqlx::query_as::<_, CalendarEvent>(sqlx::AssertSqlSafe(format!(
                 "SELECT {EVENT_COLUMNS} \
                  FROM calendar_events e \
                  JOIN accounts a ON e.account_id = a.id \
                  WHERE a.user_id = $1 AND e.end_time >= $2 AND e.start_time <= $3 \
                  AND e.calendar_id = $4 \
                  ORDER BY e.start_time"
-            ))
+            )))
             .bind(user_id)
             .bind(start_time)
             .bind(end_time)
@@ -67,13 +67,13 @@ impl EventRepository for PostgresEventRepository {
             .fetch_all(&self.pool)
             .await
         } else {
-            sqlx::query_as::<_, CalendarEvent>(&format!(
+            sqlx::query_as::<_, CalendarEvent>(sqlx::AssertSqlSafe(format!(
                 "SELECT {EVENT_COLUMNS} \
                  FROM calendar_events e \
                  JOIN accounts a ON e.account_id = a.id \
                  WHERE a.user_id = $1 AND e.end_time >= $2 AND e.start_time <= $3 \
                  ORDER BY e.start_time"
-            ))
+            )))
             .bind(user_id)
             .bind(start_time)
             .bind(end_time)

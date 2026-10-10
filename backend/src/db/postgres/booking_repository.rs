@@ -43,27 +43,27 @@ impl BookingPageRepository for PostgresBookingRepository {
     }
 
     async fn list_by_user(&self, user_id: Uuid) -> Result<Vec<BookingPage>, sqlx::Error> {
-        sqlx::query_as::<_, BookingPage>(&format!(
+        sqlx::query_as::<_, BookingPage>(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM booking_pages WHERE user_id = $1 ORDER BY created_at"
-        ))
+        )))
         .bind(user_id)
         .fetch_all(&self.pool)
         .await
     }
 
     async fn find_by_slug(&self, slug: &str) -> Result<Option<BookingPage>, sqlx::Error> {
-        sqlx::query_as::<_, BookingPage>(&format!(
+        sqlx::query_as::<_, BookingPage>(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM booking_pages WHERE slug = $1"
-        ))
+        )))
         .bind(slug)
         .fetch_optional(&self.pool)
         .await
     }
 
     async fn find_by_id(&self, id: Uuid) -> Result<Option<BookingPage>, sqlx::Error> {
-        sqlx::query_as::<_, BookingPage>(&format!(
+        sqlx::query_as::<_, BookingPage>(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM booking_pages WHERE id = $1"
-        ))
+        )))
         .bind(id)
         .fetch_optional(&self.pool)
         .await

@@ -22,9 +22,9 @@ const MESSAGE_COLUMNS: &str = "m.id, m.account_id, m.external_id, m.thread_id, m
 #[async_trait]
 impl MessageRepository for SqliteMessageRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Message>, sqlx::Error> {
-        sqlx::query_as::<_, Message>(&format!(
+        sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(format!(
             "SELECT {MESSAGE_COLUMNS} FROM messages m WHERE m.id = ?"
-        ))
+        )))
         .bind(id.to_string())
         .fetch_optional(&self.pool)
         .await
@@ -35,9 +35,9 @@ impl MessageRepository for SqliteMessageRepository {
         account_id: Uuid,
         external_id: &str,
     ) -> Result<Option<Message>, sqlx::Error> {
-        sqlx::query_as::<_, Message>(&format!(
+        sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(format!(
             "SELECT {MESSAGE_COLUMNS} FROM messages m WHERE m.account_id = ? AND m.external_id = ?"
-        ))
+        )))
         .bind(account_id.to_string())
         .bind(external_id)
         .fetch_optional(&self.pool)
@@ -82,7 +82,10 @@ impl MessageRepository for SqliteMessageRepository {
              WHERE {where_clause} ORDER BY m.date_received DESC LIMIT ?"
         );
 
-        let mut q = sqlx::query_as::<_, Message>(&query);
+        // Audited: `where_clause` is assembled only from hardcoded condition
+        // fragments ("m.is_deleted = 0", "m.account_id = ?", ...). All runtime
+        // values (account id, folder pattern, cursor, limit) go through binds.
+        let mut q = sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(query));
         for val in &bind_values {
             q = q.bind(val);
         }
@@ -96,14 +99,14 @@ impl MessageRepository for SqliteMessageRepository {
         query: &str,
         limit: i64,
     ) -> Result<Vec<Message>, sqlx::Error> {
-        sqlx::query_as::<_, Message>(&format!(
+        sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(format!(
             "SELECT {MESSAGE_COLUMNS} \
              FROM messages m \
              JOIN accounts a ON m.account_id = a.id \
              JOIN messages_fts fts ON m.rowid = fts.rowid \
              WHERE a.user_id = ? AND messages_fts MATCH ? \
              ORDER BY m.date_received DESC LIMIT ?"
-        ))
+        )))
         .bind(user_id.to_string())
         .bind(query)
         .bind(limit)

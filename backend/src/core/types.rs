@@ -65,7 +65,7 @@ impl<'r> Decode<'r, Sqlite> for DbUuid {
 impl<'q> Encode<'q, Sqlite> for DbUuid {
     fn encode_by_ref(
         &self,
-        args: &mut <Sqlite as Database>::ArgumentBuffer<'q>,
+        args: &mut <Sqlite as Database>::ArgumentBuffer,
     ) -> Result<IsNull, BoxDynError> {
         <String as Encode<'_, Sqlite>>::encode(self.0.to_string(), args)
     }
@@ -83,7 +83,7 @@ impl<'r> Decode<'r, sqlx::Postgres> for DbUuid {
 impl<'q> Encode<'q, sqlx::Postgres> for DbUuid {
     fn encode_by_ref(
         &self,
-        args: &mut <sqlx::Postgres as Database>::ArgumentBuffer<'q>,
+        args: &mut <sqlx::Postgres as Database>::ArgumentBuffer,
     ) -> Result<IsNull, BoxDynError> {
         <Uuid as Encode<'_, sqlx::Postgres>>::encode_by_ref(&self.0, args)
     }
