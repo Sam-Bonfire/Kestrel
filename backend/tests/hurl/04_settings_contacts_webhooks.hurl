@@ -92,7 +92,8 @@ Content-Type: application/json
 
 HTTP 200
 [Asserts]
-jsonpath "$.status" == "triggered"
+jsonpath "$.status" == "ok"
+jsonpath "$.message" contains "Synced"
 
 
 # 9. Ingest Google PubSub Webhook notification

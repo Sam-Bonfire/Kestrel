@@ -77,13 +77,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (sync_job_tx, sync_job_rx) = tokio::sync::mpsc::channel::<uuid::Uuid>(1024);
 
+    let auth_rate_limit_max = config.auth_rate_limit_max;
     let state = AppState {
         db: db.clone(),
         jwt_secret: config.jwt_secret,
         plugin_manager,
         sync_tx: sync_tx.clone(),
         sync_job_tx,
-        auth_rate_limiter: RateLimiter::new(10, std::time::Duration::from_secs(60)),
+        auth_rate_limiter: RateLimiter::new(
+            auth_rate_limit_max,
+            std::time::Duration::from_secs(60),
+        ),
         general_rate_limiter: RateLimiter::new(100, std::time::Duration::from_secs(60)),
     };
 

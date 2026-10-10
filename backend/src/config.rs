@@ -6,6 +6,8 @@ pub struct Config {
     pub bind_addr: String,
     /// Opt-in local crash reports (KESTREL_CRASH_LOG=1). Nothing leaves the machine.
     pub crash_log: bool,
+    /// Max auth requests per minute per client (AUTH_RATE_LIMIT_MAX, default 10).
+    pub auth_rate_limit_max: u64,
 }
 
 impl Config {
@@ -30,12 +32,17 @@ impl Config {
             get_var("KESTREL_CRASH_LOG").as_deref(),
             Some("1") | Some("true")
         );
+        let auth_rate_limit_max = get_var("AUTH_RATE_LIMIT_MAX")
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(10);
 
         Config {
             database_url,
             jwt_secret,
             bind_addr,
             crash_log,
+            auth_rate_limit_max,
         }
     }
 
@@ -112,6 +119,25 @@ mod tests {
         assert_eq!(config.bind_addr, "0.0.0.0:8080");
         assert_eq!(config.jwt_secret.len(), 32);
         assert!(!config.crash_log);
+        assert_eq!(config.auth_rate_limit_max, 10);
+    }
+
+    #[test]
+    fn test_auth_rate_limit_max_override() {
+        let mut envs = HashMap::new();
+        envs.insert("AUTH_RATE_LIMIT_MAX".to_string(), "60".to_string());
+        let config = Config::from_env_getter(|k| envs.get(k).cloned());
+        assert_eq!(config.auth_rate_limit_max, 60);
+    }
+
+    #[test]
+    fn test_auth_rate_limit_max_invalid_falls_back_to_default() {
+        for bad in ["0", "-5", "unlimited", ""] {
+            let mut envs = HashMap::new();
+            envs.insert("AUTH_RATE_LIMIT_MAX".to_string(), bad.to_string());
+            let config = Config::from_env_getter(|k| envs.get(k).cloned());
+            assert_eq!(config.auth_rate_limit_max, 10);
+        }
     }
 
     #[test]

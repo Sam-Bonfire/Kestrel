@@ -17,8 +17,8 @@ token: jsonpath "$.token"
 user_id: jsonpath "$.user_id"
 
 
-# 2. List messages (Default pagination: page 1, 20 per page)
-GET {{base_url}}/api/v1/messages?page=1&per_page=20
+# 2. List messages (cursor pagination: default limit 50)
+GET {{base_url}}/api/v1/messages?limit=20
 Authorization: Bearer {{token}}
 
 HTTP 200
@@ -32,10 +32,11 @@ jsonpath "$.messages[0].sender_email" exists
 msg_1_id: jsonpath "$.messages[0].id"
 msg_2_id: jsonpath "$.messages[1].id"
 msg_1_thread_id: jsonpath "$.messages[0].thread_id"
+page2_cursor: jsonpath "$.next_cursor"
 
 
-# 3. List messages with page 2 offset and small page size
-GET {{base_url}}/api/v1/messages?page=2&per_page=5
+# 3. List messages with small page size via cursor
+GET {{base_url}}/api/v1/messages?limit=5&cursor={{page2_cursor}}
 Authorization: Bearer {{token}}
 
 HTTP 200
@@ -45,7 +46,7 @@ jsonpath "$.messages" count <= 5
 
 
 # 4. Filter messages by folder: 'inbox'
-GET {{base_url}}/api/v1/messages?folder=inbox&per_page=10
+GET {{base_url}}/api/v1/messages?folder=inbox&limit=10
 Authorization: Bearer {{token}}
 
 HTTP 200
@@ -54,7 +55,7 @@ jsonpath "$.messages" isCollection
 
 
 # 5. Filter messages by virtual folder: 'trash'
-GET {{base_url}}/api/v1/messages?folder=trash&per_page=10
+GET {{base_url}}/api/v1/messages?folder=trash&limit=10
 Authorization: Bearer {{token}}
 
 HTTP 200
@@ -124,10 +125,22 @@ jsonpath "$" isCollection
 
 
 # 12. Patch Label Metadata (Color & Name)
+GET {{base_url}}/api/v1/accounts
+Authorization: Bearer {{token}}
+
+HTTP 200
+[Asserts]
+jsonpath "$[0].id" exists
+[Captures]
+acct_id: jsonpath "$[0].id"
+
+
+# 12b. Upsert label for the demo account
 PATCH {{base_url}}/api/v1/labels
 Authorization: Bearer {{token}}
 Content-Type: application/json
 {
+  "account_id": "{{acct_id}}",
   "name": "PROJECT_ROADMAP",
   "color": "#FF5722",
   "icon": "folder"
@@ -190,7 +203,8 @@ Authorization: Bearer {{token}}
 
 HTTP 200
 [Asserts]
-jsonpath "$.messages" isCollection
+jsonpath "$.results" isCollection
+jsonpath "$.total" >= 1
 
 
 # 19. Full-Text Search: Query with no matches returns empty collection
@@ -199,7 +213,8 @@ Authorization: Bearer {{token}}
 
 HTTP 200
 [Asserts]
-jsonpath "$.messages" isCollection
+jsonpath "$.results" isCollection
+jsonpath "$.total" == 0
 
 
 # 20. Bulk Action: Archive multiple messages simultaneously
@@ -220,7 +235,7 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 {
   "message_ids": ["{{msg_1_id}}", "{{msg_2_id}}"],
-  "action": "star",
+  "action": "toggle_star",
   "action_value": true
 }
 
