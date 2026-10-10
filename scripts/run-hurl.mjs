@@ -17,9 +17,18 @@ if (files.length === 0) {
 }
 
 const runId = Date.now().toString();
+// --no-cookie-store: the login endpoint sets an HttpOnly session cookie and
+// hurl would otherwise replay it, silently authenticating the "no credentials"
+// negative tests. Credential transport is covered explicitly (Bearer + Cookie).
 const result = spawnSync(
   'hurl',
-  ['--variable', 'base_url=http://localhost:8080', `--variable=run_id=${runId}`, ...files],
+  [
+    '--no-cookie-store',
+    '--variable',
+    'base_url=http://localhost:8080',
+    `--variable=run_id=${runId}`,
+    ...files,
+  ],
   { stdio: 'inherit' },
 );
 process.exit(result.status ?? 1);
