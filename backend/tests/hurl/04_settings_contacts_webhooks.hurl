@@ -92,7 +92,8 @@ Content-Type: application/json
 
 HTTP 200
 [Asserts]
-jsonpath "$.status" == "triggered"
+jsonpath "$.status" == "ok"
+jsonpath "$.message" contains "Synced"
 
 
 # 9. Ingest Google PubSub Webhook notification
@@ -111,6 +112,8 @@ HTTP 200
 # 10. Ingest Microsoft Graph Webhook Handshake Validation
 POST {{base_url}}/api/webhooks/microsoft?validationToken=HandshakeValidationToken12345
 Content-Type: text/plain
+```
 validationToken=HandshakeValidationToken12345
+```
 
 HTTP 200

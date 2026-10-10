@@ -70,7 +70,9 @@ Content-Type: application/json
   "password": "SuperSecurePassword2026!"
 }
 
-HTTP 400
+HTTP 409
+[Asserts]
+jsonpath "$.error" contains "already exists"
 
 
 # 7. Negative Test: Login with incorrect password
