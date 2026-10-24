@@ -244,7 +244,20 @@
     if (availabilityOn) refreshAvailability();
   });
 
-  import { parseKestrelDeepLink } from '@kestrel/shared';
+  import {
+    parseKestrelDeepLink,
+    registerNotificationCategories,
+    sendDesktopNotification,
+    type NotificationCategory,
+  } from '@kestrel/shared';
+
+  const CALENDAR_NOTIFICATION_CATEGORY: NotificationCategory = {
+    id: 'event_actions',
+    actions: [
+      { id: 'snooze', title: 'Snooze 10m' },
+      { id: 'dismiss', title: 'Dismiss' },
+    ],
+  };
   import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
   import { parseNaturalEvent, shiftTime } from '@kestrel/shared';
   import { findConflicts, nextFreeSlot, parseTimeToMinutes } from '@kestrel/shared';
@@ -291,9 +304,7 @@
     });
     markBriefingShown();
     if ((window as any).__TAURI_INTERNALS__) {
-      import('@tauri-apps/plugin-notification')
-        .then(({ sendNotification }) => sendNotification({ title: briefing.title, body: briefing.body }))
-        .catch(() => {});
+      void sendDesktopNotification({ title: briefing.title, body: briefing.body });
     } else {
       showToast(`${briefing.title}\n${briefing.body}`, 'info');
     }
@@ -301,12 +312,11 @@
 
   onMount(() => {
     initAuth();
+    void registerNotificationCategories([CALENDAR_NOTIFICATION_CATEGORY]);
     setPomodoroCompleteHandler((phase) => {
       const body = phase === 'work' ? 'Focus session complete — time for a break.' : 'Break over — back to focus.';
       if ((window as any).__TAURI_INTERNALS__) {
-        import('@tauri-apps/plugin-notification')
-          .then(({ sendNotification }) => sendNotification({ title: 'Pomodoro', body }))
-          .catch(() => {});
+        void sendDesktopNotification({ title: 'Pomodoro', body });
       }
       showToast(body, 'success');
     });
@@ -464,8 +474,7 @@
         }).catch(() => {});
       }
 
-      import('@tauri-apps/plugin-notification').then(({ sendNotification }) => {
-
+      {
         const checkUpcomingEvents = () => {
           const now = new Date();
           events.forEach(ev => {
@@ -477,11 +486,11 @@
             const isSnoozeUp = snoozedEvents[ev.id] && now.getTime() > snoozedEvents[ev.id] && snoozedEvents[ev.id] !== Number.MAX_SAFE_INTEGER;
 
             if (is10MinWarning || isSnoozeUp) {
-              sendNotification({
+              void sendDesktopNotification({
                 id: parseInt(ev.id.replace(/[^0-9]/g, ''), 10) || Date.now(),
-
                 title: `Upcoming: ${ev.title}`,
                 body: `Starts at ${ev.startTime} ${ev.location ? `in ${ev.location}` : ''}`,
+                actionTypeId: 'event_actions',
               });
               if (isSnoozeUp) {
                 delete snoozedEvents[ev.id]; // clear snooze
@@ -494,7 +503,7 @@
 
         const interval = setInterval(checkUpcomingEvents, 60000);
         return () => clearInterval(interval);
-      }).catch(() => {});
+      }
     }
   });
 

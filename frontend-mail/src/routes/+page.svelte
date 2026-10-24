@@ -19,7 +19,7 @@
   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
   import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
-  import { registerNotificationCategories } from '$lib/notifications';
+  import { registerNotificationCategories, sendMailNotification } from '$lib/notifications';
   import { mailStore } from '$lib/stores/mailStore.svelte.js';
   import { getCustomViews, saveCustomView, deleteCustomView, updateCustomView } from '$lib/utils/customViews';
   import { inboxCategory } from '$lib/utils/inboxCategory';
@@ -29,9 +29,7 @@
   function announcePomodoroPhase(phase: string) {
     const body = phase === 'work' ? 'Focus session complete — time for a break.' : 'Break over — back to focus.';
     if ((window as any).__TAURI_INTERNALS__) {
-      import('@tauri-apps/plugin-notification')
-        .then(({ sendNotification }) => sendNotification({ title: 'Pomodoro', body }))
-        .catch(() => {});
+      void sendMailNotification({ title: 'Pomodoro', body });
     } else {
       console.info('[Pomodoro]', body);
     }
@@ -52,9 +50,7 @@
     const briefing = buildDailyBriefing({ events: [], unreadCount: unread });
     markBriefingShown();
     if ((window as any).__TAURI_INTERNALS__) {
-      import('@tauri-apps/plugin-notification')
-        .then(({ sendNotification }) => sendNotification({ title: briefing.title, body: briefing.body }))
-        .catch(() => {});
+      void sendMailNotification({ title: briefing.title, body: briefing.body });
     } else {
       console.info('[Briefing]', briefing.title, briefing.body);
     }
@@ -422,14 +418,10 @@
               
               // Trigger Tauri native notification (Task 35)
               if (data.type === 'new_mail') {
-                import('@tauri-apps/plugin-notification').then(({ sendNotification }) => {
-                  sendNotification({
-                    title: 'New Email Received',
-                    body: data.subject || 'You have a new message',
-                    actionTypeId: 'new_email_actions'
-                  });
-                }).catch(() => {
-                  // Ignore if Tauri is not available (e.g. running in browser)
+                void sendMailNotification({
+                  title: 'New Email Received',
+                  body: data.subject || 'You have a new message',
+                  actionTypeId: 'new_email_actions'
                 });
               }
             }
