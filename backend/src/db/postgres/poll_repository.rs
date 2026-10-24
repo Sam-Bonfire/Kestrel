@@ -33,7 +33,7 @@ impl EventPollRepository for PostgresPollRepository {
         };
         sqlx::query(
             "INSERT INTO event_polls (id, event_id, question, options_json, created_at)
-             VALUES ($1, $2, $3, $4, $5)",
+             VALUES ($1, $2, $3, $4::JSONB, $5)",
         )
         .bind(poll.id.0)
         .bind(poll.event_id.0)
@@ -48,7 +48,7 @@ impl EventPollRepository for PostgresPollRepository {
 
     async fn list_polls(&self, event_id: Uuid) -> Result<Vec<EventPollWithVotes>, sqlx::Error> {
         let polls = sqlx::query_as::<_, EventPoll>(
-            "SELECT id, event_id, question, options_json, created_at
+            "SELECT id, event_id, question, options_json::TEXT as options_json, created_at
              FROM event_polls WHERE event_id = $1 ORDER BY created_at",
         )
         .bind(event_id)

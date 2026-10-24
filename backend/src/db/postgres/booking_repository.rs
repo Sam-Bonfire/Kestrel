@@ -110,7 +110,7 @@ impl BookingPageRepository for PostgresBookingRepository {
              description, location, start_time, end_time, is_all_day, recurrence_rules, \
              organizer_email, organizer_name, attendees, status, has_conflict, \
              created_at, updated_at) \
-             SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18 \
+             SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::JSONB, $15, $16, $17, $18 \
              WHERE NOT EXISTS ( \
                SELECT 1 FROM calendar_events \
                WHERE calendar_id = $19 AND end_time > $20 AND start_time < $21 \
