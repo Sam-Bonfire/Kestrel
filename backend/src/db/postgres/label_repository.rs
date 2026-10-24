@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use uuid::Uuid;
 
 use crate::core::models::Label;
 use crate::core::repository::LabelRepository;
@@ -36,5 +37,18 @@ impl LabelRepository for PostgresLabelRepository {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn list_by_accounts(&self, account_ids: &[Uuid]) -> Result<Vec<Label>, sqlx::Error> {
+        if account_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        sqlx::query_as::<_, Label>(
+            "SELECT id, account_id, name, color, icon, created_at, updated_at \
+             FROM labels WHERE account_id = ANY($1) ORDER BY name",
+        )
+        .bind(account_ids)
+        .fetch_all(&self.pool)
+        .await
     }
 }

@@ -7,7 +7,7 @@ use serde::Serialize;
 use super::auth::AuthUser;
 use super::router::AppState;
 use crate::core::error::KestrelError;
-use crate::core::repository::HistoricalRevisionRepository;
+use crate::core::repository::{EventRepository, HistoricalRevisionRepository, MessageRepository};
 use crate::db::pool::DbPool;
 use crate::db::postgres::revision_repository::PostgresRevisionRepository;
 use crate::db::sqlite::revision_repository::SqliteRevisionRepository;
@@ -87,9 +87,65 @@ enum RestorableValue {
     Text(String),
 }
 
+/// Reject restores whose target resource belongs to another user.
+async fn require_resource_ownership(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    resource_type: &str,
+    resource_id: uuid::Uuid,
+) -> Result<(), KestrelError> {
+    use crate::db::postgres::event_repository::PostgresEventRepository;
+    use crate::db::postgres::message_repository::PostgresMessageRepository;
+    use crate::db::sqlite::event_repository::SqliteEventRepository;
+    use crate::db::sqlite::message_repository::SqliteMessageRepository;
+
+    let account_id = match resource_type {
+        "message" => {
+            let owner = match &state.db {
+                DbPool::Sqlite(pool) => {
+                    SqliteMessageRepository::new(pool.clone())
+                        .find_by_id(resource_id)
+                        .await?
+                }
+                DbPool::Postgres(pool) => {
+                    PostgresMessageRepository::new(pool.clone())
+                        .find_by_id(resource_id)
+                        .await?
+                }
+            };
+            owner.map(|m| m.account_id.0)
+        }
+        "calendar_event" => {
+            let owner = match &state.db {
+                DbPool::Sqlite(pool) => {
+                    SqliteEventRepository::new(pool.clone())
+                        .find_by_id(resource_id)
+                        .await?
+                }
+                DbPool::Postgres(pool) => {
+                    PostgresEventRepository::new(pool.clone())
+                        .find_by_id(resource_id)
+                        .await?
+                }
+            };
+            owner.map(|e| e.account_id.0)
+        }
+        _ => None,
+    };
+
+    let account_id =
+        account_id.ok_or_else(|| KestrelError::NotFound("Resource not found".to_string()))?;
+
+    if !super::calendars::verify_account_ownership(state, user_id, account_id).await? {
+        return Err(KestrelError::NotFound("Resource not found".to_string()));
+    }
+
+    Ok(())
+}
+
 pub async fn restore_revision(
     State(state): State<AppState>,
-    AuthUser { user_id: _ }: AuthUser,
+    AuthUser { user_id }: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<RestoreResponse>, KestrelError> {
     let revision_id = id
@@ -111,6 +167,14 @@ pub async fn restore_revision(
 
     let revision =
         revision.ok_or_else(|| KestrelError::NotFound("Revision not found".to_string()))?;
+
+    require_resource_ownership(
+        &state,
+        user_id,
+        &revision.resource_type,
+        revision.resource_id.0,
+    )
+    .await?;
 
     let (table, columns) = restorable_columns(&revision.resource_type).ok_or_else(|| {
         KestrelError::BadRequest(format!(

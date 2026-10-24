@@ -41,6 +41,7 @@ pub trait MessageRepository: Send + Sync {
     ) -> Result<Option<Message>, sqlx::Error>;
     async fn list(
         &self,
+        user_id: Uuid,
         account_id: Option<Uuid>,
         folder: Option<&str>,
         cursor: Option<&str>,
@@ -108,6 +109,10 @@ pub trait EventRepository: Send + Sync {
 #[async_trait]
 pub trait LabelRepository: Send + Sync {
     async fn upsert(&self, label: &crate::core::models::Label) -> Result<(), sqlx::Error>;
+    async fn list_by_accounts(
+        &self,
+        account_ids: &[Uuid],
+    ) -> Result<Vec<crate::core::models::Label>, sqlx::Error>;
 }
 
 #[async_trait]

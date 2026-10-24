@@ -191,11 +191,15 @@ async fn list_messages_from_db(
     match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteMessageRepository::new(pool.clone());
-            Ok(repo.list(account_id, folder, cursor, limit).await?)
+            Ok(repo
+                .list(user_id, account_id, folder, cursor, limit)
+                .await?)
         }
         DbPool::Postgres(pool) => {
             let repo = PostgresMessageRepository::new(pool.clone());
-            Ok(repo.list(account_id, folder, cursor, limit).await?)
+            Ok(repo
+                .list(user_id, account_id, folder, cursor, limit)
+                .await?)
         }
     }
 }

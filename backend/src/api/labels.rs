@@ -21,11 +21,12 @@ pub struct UpdateLabelRequest {
 
 pub async fn update_label(
     State(state): State<AppState>,
-    AuthUser { .. }: AuthUser,
+    AuthUser { user_id }: AuthUser,
     Json(payload): Json<UpdateLabelRequest>,
 ) -> Result<Json<Label>, KestrelError> {
-    // Basic verification: user must own the account. This can be complex depending on repo,
-    // assuming they are allowed for now or implement an account check.
+    if !super::calendars::verify_account_ownership(&state, user_id, payload.account_id).await? {
+        return Err(KestrelError::NotFound("Account not found".to_string()));
+    }
 
     let label = Label {
         id: crate::core::types::DbUuid(Uuid::new_v4()),
@@ -52,10 +53,49 @@ pub async fn update_label(
 }
 
 pub async fn list_labels(
-    State(_state): State<AppState>,
-    AuthUser { user_id: _ }: AuthUser,
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
 ) -> Result<Json<Vec<Label>>, KestrelError> {
-    // In a real app we'd fetch accounts for the user, then get labels.
-    // Here we'll return empty for now, or you can implement list logic across accounts.
-    Ok(Json(vec![]))
+    use crate::core::repository::AccountRepository;
+    use crate::db::pool::DbPool;
+
+    let account_ids: Vec<Uuid> = match &state.db {
+        DbPool::Sqlite(pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_user_id(user_id)
+            .await?
+            .into_iter()
+            .map(|a| a.id.0)
+            .collect()
+        }
+        DbPool::Postgres(pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.jwt_secret.clone(),
+            )
+            .find_by_user_id(user_id)
+            .await?
+            .into_iter()
+            .map(|a| a.id.0)
+            .collect()
+        }
+    };
+
+    let labels = match &state.db {
+        DbPool::Sqlite(pool) => {
+            SqliteLabelRepository::new(pool.clone())
+                .list_by_accounts(&account_ids)
+                .await?
+        }
+        DbPool::Postgres(pool) => {
+            PostgresLabelRepository::new(pool.clone())
+                .list_by_accounts(&account_ids)
+                .await?
+        }
+    };
+
+    Ok(Json(labels))
 }

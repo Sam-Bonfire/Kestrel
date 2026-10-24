@@ -361,37 +361,126 @@ pub async fn trigger_sync(
 
 // --- K-046: GET /api/v1/sync/stream — SSE ---
 
+fn event_account_id(event: &SyncEvent) -> Option<&str> {
+    match event {
+        SyncEvent::SyncStarted { account_id, .. }
+        | SyncEvent::SyncProgress { account_id, .. }
+        | SyncEvent::SyncComplete { account_id, .. }
+        | SyncEvent::SyncError { account_id, .. }
+        | SyncEvent::AuthRevocation { account_id, .. } => Some(account_id),
+        SyncEvent::MessageUnsnoozed { .. } => None,
+    }
+}
+
+async fn user_account_ids(
+    state: &AppState,
+    user_id: Uuid,
+) -> Result<std::collections::HashSet<String>, sqlx::Error> {
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            let ids = sqlx::query_scalar::<_, String>("SELECT id FROM accounts WHERE user_id = ?")
+                .bind(user_id.to_string())
+                .fetch_all(pool)
+                .await?;
+            Ok(ids.into_iter().collect())
+        }
+        DbPool::Postgres(pool) => {
+            let ids = sqlx::query_scalar::<_, Uuid>("SELECT id FROM accounts WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_all(pool)
+                .await?;
+            Ok(ids.into_iter().map(|id| id.to_string()).collect())
+        }
+    }
+}
+
+async fn message_belongs_to_user(
+    state: &AppState,
+    user_id: Uuid,
+    message_id: &str,
+) -> Result<bool, sqlx::Error> {
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM messages m JOIN accounts a ON m.account_id = a.id \
+                 WHERE m.id = ? AND a.user_id = ?",
+            )
+            .bind(message_id)
+            .bind(user_id.to_string())
+            .fetch_one(pool)
+            .await?;
+            Ok(count > 0)
+        }
+        DbPool::Postgres(pool) => {
+            let Ok(message_id) = Uuid::parse_str(message_id) else {
+                return Ok(false);
+            };
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM messages m JOIN accounts a ON m.account_id = a.id \
+                 WHERE m.id = $1 AND a.user_id = $2",
+            )
+            .bind(message_id)
+            .bind(user_id)
+            .fetch_one(pool)
+            .await?;
+            Ok(count > 0)
+        }
+    }
+}
+
+async fn event_is_visible(
+    state: &AppState,
+    user_id: Uuid,
+    account_ids: &std::collections::HashSet<String>,
+    event: &SyncEvent,
+) -> bool {
+    match event_account_id(event) {
+        Some(account_id) => account_ids.contains(account_id),
+        None => match event {
+            SyncEvent::MessageUnsnoozed { message_id, .. } => {
+                message_belongs_to_user(state, user_id, message_id)
+                    .await
+                    .unwrap_or(false)
+            }
+            _ => false,
+        },
+    }
+}
+
 pub async fn sync_stream(
     State(state): State<AppState>,
-    AuthUser { user_id: _ }: AuthUser,
+    AuthUser { user_id }: AuthUser,
 ) -> Sse<impl futures::Stream<Item = Result<Event, Infallible>>> {
     let rx = state.sync_tx.subscribe();
+    let account_ids = user_account_ids(&state, user_id).await.unwrap_or_default();
 
-    let stream = futures::stream::unfold(rx, move |mut rx| {
-        async move {
-            match rx.recv().await {
-                Ok(event) => {
-                    // Filter events relevant to this user
-                    let data = serde_json::to_string(&event).unwrap_or_default();
-                    let event_type = match &event {
-                        SyncEvent::SyncStarted { .. } => "sync_started",
-                        SyncEvent::SyncProgress { .. } => "sync_progress",
-                        SyncEvent::SyncComplete { .. } => "sync_complete",
-                        SyncEvent::SyncError { .. } => "sync_error",
-                        SyncEvent::AuthRevocation { .. } => "auth_revocation",
-                        SyncEvent::MessageUnsnoozed { .. } => "message_unsnoozed",
-                    };
-                    let sse_event = Event::default().event(event_type).data(data);
-                    Some((Ok(sse_event), rx))
+    let stream = futures::stream::unfold(
+        (rx, state, account_ids, user_id),
+        |(mut rx, state, account_ids, user_id)| async move {
+            loop {
+                match rx.recv().await {
+                    Ok(event) => {
+                        if !event_is_visible(&state, user_id, &account_ids, &event).await {
+                            continue;
+                        }
+                        let data = serde_json::to_string(&event).unwrap_or_default();
+                        let event_type = match &event {
+                            SyncEvent::SyncStarted { .. } => "sync_started",
+                            SyncEvent::SyncProgress { .. } => "sync_progress",
+                            SyncEvent::SyncComplete { .. } => "sync_complete",
+                            SyncEvent::SyncError { .. } => "sync_error",
+                            SyncEvent::AuthRevocation { .. } => "auth_revocation",
+                            SyncEvent::MessageUnsnoozed { .. } => "message_unsnoozed",
+                        };
+                        let sse_event = Event::default().event(event_type).data(data);
+                        return Some((Ok(sse_event), (rx, state, account_ids, user_id)));
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => return None,
                 }
-                Err(broadcast::error::RecvError::Lagged(_)) => {
-                    // Skip lagged messages
-                    Some((Ok(Event::default().data("")), rx))
-                }
-                Err(broadcast::error::RecvError::Closed) => None,
             }
-        }
-    });
+        },
+    );
 
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
@@ -683,7 +772,7 @@ async fn get_all_accounts_with_tokens(
             // For now we use a raw query
             let accounts = sqlx::query_as::<_, crate::core::models::Account>(
                 "SELECT id, user_id, provider, provider_account_id, display_name, \
-                 access_token, refresh_token, token_expires_at, created_at, updated_at \
+                 access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
                  FROM accounts WHERE access_token IS NOT NULL",
             )
             .fetch_all(pool)
@@ -693,7 +782,7 @@ async fn get_all_accounts_with_tokens(
         DbPool::Postgres(pool) => {
             let accounts = sqlx::query_as::<_, crate::core::models::Account>(
                 "SELECT id, user_id, provider, provider_account_id, display_name, \
-                 access_token, refresh_token, token_expires_at, created_at, updated_at \
+                 access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
                  FROM accounts WHERE access_token IS NOT NULL",
             )
             .fetch_all(pool)
