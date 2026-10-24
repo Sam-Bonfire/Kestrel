@@ -1,4 +1,4 @@
-import { authState, logout } from '../stores/auth.svelte.js';
+﻿import { authState, logout } from '../stores/auth.svelte.js';
 export * from './generated/types.js';
 import type {
   Account,
@@ -134,7 +134,7 @@ interface RequestOptions<B = unknown> extends Omit<RequestInit, 'method' | 'body
   body?: B;
 }
 
-// ── Internal helpers ─────────────────────────────────────────────
+// â”€â”€ Internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildHeaders(token?: string): HeadersInit {
   const headers: Record<string, string> = {
@@ -227,7 +227,7 @@ export async function replayOfflineQueue(): Promise<void> {
   }
 }
 
-// ── Search (FTS5) ───────────────────────────────────────────
+// â”€â”€ Search (FTS5) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function searchMessages(query: string, limit?: number): Promise<SearchResponse> {
   const q = new URLSearchParams();
@@ -238,7 +238,7 @@ export async function searchMessages(query: string, limit?: number): Promise<Sea
   return request<SearchResponse>('GET', `/search?${q.toString()}`);
 }
 
-// ── Types ───────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface HealthResponse {
   status: 'ok';
@@ -310,13 +310,7 @@ export interface CalendarEvent {
   location: string;
 }
 
-export interface EventSearchResult {
-  query: string;
-  events: CalendarEvent[];
-  total: number;
-}
-
-// ── Auth endpoints ──────────────────────────────────────────────
+// â”€â”€ Auth endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getHealth(): Promise<HealthResponse> {
   return request<HealthResponse>('GET', '/health');
@@ -356,7 +350,7 @@ export function getCallbackUrl(): string {
   return `${getApiBase()}/auth/callback`;
 }
 
-// ── Account endpoints ───────────────────────────────────────────
+// â”€â”€ Account endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listAccounts(token?: string): Promise<Account[]> {
   return request<Account[]>('GET', '/accounts', { token });
@@ -369,7 +363,7 @@ export async function deleteAccount(
   return request<void>('DELETE', `/accounts/${accountId}`, { token });
 }
 
-// ── Provider endpoints ──────────────────────────────────────────
+// â”€â”€ Provider endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getProviders(
   token?: string,
@@ -377,7 +371,7 @@ export async function getProviders(
   return request<ProviderBranding[]>('GET', '/providers', { token });
 }
 
-// ── Message endpoints ───────────────────────────────────────────
+// â”€â”€ Message endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getMessages(
   token?: string,
@@ -451,7 +445,7 @@ export async function blockSender(
   });
 }
 
-// ── Vacation auto-responder ────────────────────────────────────
+// â”€â”€ Vacation auto-responder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface VacationSettings {
   enabled: boolean;
@@ -529,7 +523,7 @@ export async function importContacts(
   });
 }
 
-// ── Contacts endpoints ─────────────────────────────────────────
+// â”€â”€ Contacts endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function searchContacts(
   q: string,
@@ -553,7 +547,7 @@ export async function updateContactNotes(
   });
 }
 
-// ── Event polls ────────────────────────────────────────────────
+// â”€â”€ Event polls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface EventPollVote {
   voter_email: string;
@@ -599,7 +593,7 @@ export async function voteEventPoll(
   });
 }
 
-// ── Booking pages ────────────────────────────────────────────
+// â”€â”€ Booking pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listBookingPages(token?: string): Promise<BookingPage[]> {
   return request<BookingPage[]>('GET', '/booking-pages', { token });
@@ -639,7 +633,7 @@ export async function deleteBookingPage(pageId: string, token?: string): Promise
   return request<void>('DELETE', `/booking-pages/${pageId}`, { token });
 }
 
-// ── Team availability ──────────────────────────────────────────
+// â”€â”€ Team availability â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface BusyBlock {
   email: string;
@@ -826,7 +820,7 @@ export async function bulkAction(
   });
 }
 
-// ── Search & Attachments ────────────────────────────────────────────
+// â”€â”€ Search & Attachments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function searchMessagesByToken(
   query: string,
@@ -836,17 +830,7 @@ export async function searchMessagesByToken(
   return request<SearchResult>('GET', `/search?${params}`, { token });
 }
 
-export async function searchEvents(
-  query: string,
-  token?: string,
-): Promise<EventSearchResult> {
-  const params = new URLSearchParams({ q: query });
-  return request<EventSearchResult>('GET', `/search/events?${params}`, {
-    token,
-  });
-}
-
-// ── Attachment redirect ─────────────────────────────────────────
+// â”€â”€ Attachment redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function getAttachmentRedirectUrl(
   messageId: string,
@@ -877,7 +861,7 @@ export async function downloadAttachment(
   return res.arrayBuffer();
 }
 
-// ── Sync endpoints ──────────────────────────────────────────────
+// â”€â”€ Sync endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function createSyncStream(token?: string): EventSource {
   const base = getApiBase();
@@ -892,7 +876,7 @@ export async function triggerSync(accountId?: string, token?: string): Promise<v
   return request<void>('POST', '/sync/trigger', { token, body: { account_id: accountId ?? null } });
 }
 
-// ── Calendar endpoints ──────────────────────────────────────────
+// â”€â”€ Calendar endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listCalendars(token?: string): Promise<CalendarListResponse> {
   return request<CalendarListResponse>('GET', '/calendars', { token });
@@ -959,7 +943,7 @@ export const apiClient = {
   delete: <T = unknown>(path: string) => request<T>('DELETE', path.replace('/api/v1', '')),
 };
 
-// ── Settings ──────────────────────────────────────────────
+// â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getSettings(): Promise<SettingsPayload> {
   const base = getApiBase().replace('/api/v1', '');

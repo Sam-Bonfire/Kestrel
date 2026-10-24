@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   API_BASE,
   getApiBase,
@@ -32,6 +32,36 @@ import {
   getVacation,
   setVacation,
   queryFreebusy,
+  listCalendars,
+  getCalendars,
+  getEvents,
+  rsvpExternal,
+  markAsRead,
+  archiveMessage,
+  snoozeMessage,
+  trashMessage,
+  toggleStar,
+  muteMessage,
+  reportPhishing,
+  blockSender,
+  updateLabels,
+  setAsideMessage,
+  bulkAction,
+  listClips,
+  createClip,
+  deleteClip,
+  listThreadNotes,
+  listSubjectOverrides,
+  setThreadNote,
+  clearThreadNote,
+  setThreadSubject,
+  clearThreadSubject,
+  listBookingPages,
+  getBookingPage,
+  createBookingPage,
+  updateBookingPage,
+  rotateBookingSlug,
+  deleteBookingPage,
 } from './client.js';
 import type {
   CreateEventRequest,
@@ -512,6 +542,62 @@ describe('API Client & Contract Validation', () => {
         })
       );
     });
+  });
+
+
+  describe('endpoint contract', () => {
+    const cases: Array<{
+      name: string;
+      call: () => Promise<unknown>;
+      method: string;
+      path: string;
+    }> = [
+      { name: 'markAsRead', call: () => markAsRead('m1'), method: 'POST', path: '/messages/m1/read' },
+      { name: 'archiveMessage', call: () => archiveMessage('m1'), method: 'POST', path: '/messages/m1/archive' },
+      { name: 'snoozeMessage', call: () => snoozeMessage('m1'), method: 'POST', path: '/messages/m1/snooze' },
+      { name: 'trashMessage', call: () => trashMessage('m1'), method: 'POST', path: '/messages/m1/trash' },
+      { name: 'muteMessage', call: () => muteMessage('m1'), method: 'POST', path: '/messages/m1/mute' },
+      { name: 'reportPhishing', call: () => reportPhishing('m1'), method: 'POST', path: '/messages/m1/report-phishing' },
+      { name: 'toggleStar', call: () => toggleStar('m1', true), method: 'POST', path: '/messages/m1/star' },
+      { name: 'updateLabels', call: () => updateLabels('m1', ['Work']), method: 'POST', path: '/messages/m1/labels' },
+      { name: 'setAsideMessage', call: () => setAsideMessage('m1', true), method: 'POST', path: '/messages/m1/set-aside' },
+      { name: 'bulkAction', call: () => bulkAction(['m1'], 'archive'), method: 'POST', path: '/messages/bulk' },
+      { name: 'blockSender', call: () => blockSender('x@y.com'), method: 'POST', path: '/senders/block' },
+      { name: 'listClips', call: () => listClips(), method: 'GET', path: '/clips' },
+      { name: 'createClip', call: () => createClip('a1', 'm1', 'snippet'), method: 'POST', path: '/clips' },
+      { name: 'deleteClip', call: () => deleteClip('c1'), method: 'DELETE', path: '/clips/c1' },
+      { name: 'listThreadNotes', call: () => listThreadNotes('a1'), method: 'GET', path: '/threads/notes?account_id=a1' },
+      { name: 'listSubjectOverrides', call: () => listSubjectOverrides('a1'), method: 'GET', path: '/threads/overrides?account_id=a1' },
+      { name: 'setThreadNote', call: () => setThreadNote('t1', 'a1', 'note'), method: 'PUT', path: '/threads/t1/notes' },
+      { name: 'clearThreadNote', call: () => clearThreadNote('t1', 'a1'), method: 'DELETE', path: '/threads/t1/notes?account_id=a1' },
+      { name: 'setThreadSubject', call: () => setThreadSubject('t1', 'a1', 'Subj'), method: 'PUT', path: '/threads/t1/subject' },
+      { name: 'clearThreadSubject', call: () => clearThreadSubject('t1', 'a1'), method: 'DELETE', path: '/threads/t1/subject?account_id=a1' },
+      { name: 'listBookingPages', call: () => listBookingPages(), method: 'GET', path: '/booking-pages' },
+      { name: 'getBookingPage', call: () => getBookingPage('b1'), method: 'GET', path: '/booking-pages/b1' },
+      { name: 'rotateBookingSlug', call: () => rotateBookingSlug('b1'), method: 'POST', path: '/booking-pages/b1/rotate' },
+      { name: 'deleteBookingPage', call: () => deleteBookingPage('b1'), method: 'DELETE', path: '/booking-pages/b1' },
+      { name: 'getEvents', call: () => getEvents(undefined, '2026-01-01', '2026-01-31'), method: 'GET', path: '/events?start=2026-01-01&end=2026-01-31' },
+      { name: 'rsvpExternal', call: () => rsvpExternal('e1', 'accepted'), method: 'POST', path: '/events/rsvp_external' },
+      { name: 'listCalendars', call: () => listCalendars(), method: 'GET', path: '/calendars' },
+    ];
+
+    for (const c of cases) {
+      it(`${c.name} calls ${c.method} ${c.path}`, async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+        });
+
+        await c.call();
+
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        const calls = (globalThis.fetch as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
+        const [url, init] = calls[0];
+        expect(url).toBe(`${API_BASE}${c.path}`);
+        expect(init.method).toBe(c.method);
+      });
+    }
   });
 
   describe('team availability', () => {

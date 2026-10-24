@@ -1,4 +1,4 @@
-export {
+﻿export {
   ApiError,
   replayOfflineQueue,
   getHealth,
@@ -20,7 +20,6 @@ export {
   updateLabels,
   bulkAction,
   searchMessages,
-  searchEvents,
   getAttachmentRedirectUrl,
   createSyncStream,
   triggerSync,
@@ -47,7 +46,6 @@ export type {
   SearchResult,
   Calendar,
   CalendarEvent,
-  EventSearchResult,
   Snippet,
   Signature,
 } from './client.js';
