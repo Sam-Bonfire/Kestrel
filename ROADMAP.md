@@ -34,16 +34,17 @@ This document tracks the current feature status and planned work for Kestrel.
 | Inbox UI with threading | ✅ Done | Keyboard-driven (J/K navigation) |
 | Email body rendering | ✅ Done | Sandboxed iframe |
 | Compose modal | ✅ Done | Account/from selection |
-| Labels and folders | ✅ Done | Inbox, Sent, Drafts, Archive, Trash |
+| Drafts | 📋 Planned | No server persistence or autosave today (K-1627) |
+| Labels and folders | ✅ Done | Inbox, Sent, Archive, Trash (Drafts has no persistence yet - K-1627) |
 | Search | ✅ Done | Full-text search via API |
 | Command palette (Cmd+K) | ✅ Done | Quick actions and navigation |
 | Keyboard shortcuts | ✅ Done | Vim-style navigation |
 | Peek panel (split view) | ✅ Done | Notion-style sliding panel |
-| Gmail sync (live) | ✅ Done | Real Gmail API via WASM plugin (mail + calendar fetch, send, mutate) |
-| Outlook sync (live) | ✅ Done | Real Microsoft Graph via WASM plugin (mail + calendar fetch, send, mutate) |
-| SMTP/API email sending | 📋 Planned | Currently mocked |
-| Attachment handling | ✅ Done | Downloads via Tauri fs to OS download dir; browser fallback |
-| Snooze | 📋 Planned | Currently mocked as archive |
+| Gmail sync (live) | ✅ Done | Real Gmail API via WASM plugin (mail + calendar fetch, send; flags and labels are local-only until K-1624) |
+| Outlook sync (live) | ✅ Done | Real Microsoft Graph via WASM plugin (mail + calendar fetch, send; flags and labels are local-only until K-1624) |
+| SMTP/API email sending | 📋 Planned | OAuth send works; SMTP submission arrives with the IMAP/SMTP plugin (K-1620) |
+| Attachment handling | 📋 Planned | SQLite only; Postgres returns 500; bytes stream from the provider, no CDN (K-1626); clients cache locally for offline (K-1567) |
+| Snooze | ✅ Done | Backend wakeup worker + SSE re-notify; duration defaults |
 | Rich text signatures | 📋 Planned | Basic textarea only |
 
 ## Calendar Client
@@ -62,6 +63,7 @@ This document tracks the current feature status and planned work for Kestrel.
 | Outlook Calendar sync | ✅ Done | Real Microsoft Graph Calendar API via WASM plugin |
 | Drag-to-create events | ✅ Done | Week/day/N-day timeline: drag on empty slot to create |
 | Drag-to-resize events | ✅ Done | Week/day/N-day timeline: drag selected event's bottom edge |
+| Meeting invites and RSVP | 📋 Planned | Inbound ICS handling and responses (K-1628) |
 
 ## Desktop & Mobile
 
@@ -99,10 +101,12 @@ This document tracks the current feature status and planned work for Kestrel.
 | Outlook WASM plugin | ✅ Done | OAuth flow, mail sync/send, calendar fetch + mutate implemented |
 | SSE real-time sync stream | ✅ Done | `/api/sync/stream` endpoint |
 | Background sync daemon | ✅ Done | Configurable interval |
+| Incremental sync cursors | 📋 Planned | Sync always sends cursor None; no delta or deletion reconciliation (K-1625) |
+| Two-way action sync | 📋 Planned | Flags, labels, move and delete are local-only today (K-1624) |
 | Push notifications (FCM/APNs) | 📋 Planned | |
-| Contact address book | 💡 Exploring | |
+| Contact address book | 📋 Planned | CardDAV sync plus autocomplete (K-1623) |
 | CalDAV server exposure | 💡 Exploring | Long-term roadmap (DEC-022) |
-| Custom IMAP providers | 💡 Exploring | Via WASM plugin |
+| Custom IMAP providers | 📋 Planned | IMAP/SMTP as a WASM plugin (K-1620) |
 
 ---
 

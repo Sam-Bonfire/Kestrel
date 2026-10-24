@@ -751,7 +751,7 @@ async fn soft_delete_event_from_db(state: &AppState, event_id: Uuid) -> Result<(
 
 // --- Ownership verification helpers ---
 
-async fn verify_account_ownership(
+pub(crate) async fn verify_account_ownership(
     state: &AppState,
     user_id: Uuid,
     account_id: Uuid,

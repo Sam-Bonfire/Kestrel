@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use uuid::Uuid;
 
 use crate::core::models::Label;
 use crate::core::repository::LabelRepository;
@@ -36,5 +37,23 @@ impl LabelRepository for SqliteLabelRepository {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn list_by_accounts(&self, account_ids: &[Uuid]) -> Result<Vec<Label>, sqlx::Error> {
+        if account_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = vec!["?"; account_ids.len()].join(", ");
+        let query = format!(
+            "SELECT id, account_id, name, color, icon, created_at, updated_at \
+             FROM labels WHERE account_id IN ({placeholders}) ORDER BY name"
+        );
+        // Audited: placeholders are generated from the account count only;
+        // every value goes through a bind.
+        let mut q = sqlx::query_as::<_, Label>(sqlx::AssertSqlSafe(query));
+        for id in account_ids {
+            q = q.bind(id.to_string());
+        }
+        q.fetch_all(&self.pool).await
     }
 }

@@ -46,14 +46,15 @@ impl MessageRepository for SqliteMessageRepository {
 
     async fn list(
         &self,
+        user_id: Uuid,
         account_id: Option<Uuid>,
         folder: Option<&str>,
         cursor: Option<&str>,
         limit: i64,
     ) -> Result<Vec<Message>, sqlx::Error> {
         let limit = limit.min(50);
-        let mut conditions = vec!["m.is_deleted = 0".to_string()];
-        let mut bind_values: Vec<String> = Vec::new();
+        let mut conditions = vec!["m.is_deleted = 0".to_string(), "a.user_id = ?".to_string()];
+        let mut bind_values: Vec<String> = vec![user_id.to_string()];
 
         if let Some(account_id) = account_id {
             conditions.push("m.account_id = ?".to_string());
@@ -79,6 +80,7 @@ impl MessageRepository for SqliteMessageRepository {
         let where_clause = conditions.join(" AND ");
         let query = format!(
             "SELECT {MESSAGE_COLUMNS} FROM messages m \
+             JOIN accounts a ON m.account_id = a.id \
              WHERE {where_clause} ORDER BY m.date_received DESC LIMIT ?"
         );
 

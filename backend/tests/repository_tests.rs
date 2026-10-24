@@ -157,7 +157,7 @@ async fn test_message_repository_crud_and_queries() {
 
     // 3. List messages with account_id filter
     let list = repo
-        .list(Some(account.id.0), None, None, 10)
+        .list(user.id.0, Some(account.id.0), None, None, 10)
         .await
         .expect("list failed");
     assert_eq!(list.len(), 2);
@@ -194,6 +194,59 @@ async fn test_message_repository_crud_and_queries() {
         .expect("find failed")
         .unwrap();
     assert_eq!(deleted.is_deleted, true);
+}
+
+#[tokio::test]
+async fn test_message_list_is_scoped_to_owner() {
+    let pool = setup_test_db().await;
+    let sqlite_pool = get_sqlite_pool(&pool);
+    let repo = SqliteMessageRepository::new(sqlite_pool);
+
+    let user_a = seed_user(&pool, "scoped_a@kestrel.dev").await;
+    let user_b = seed_user(&pool, "scoped_b@kestrel.dev").await;
+    let account_a = seed_account(&pool, user_a.id.0, "gmail", "A Mail").await;
+    let account_b = seed_account(&pool, user_b.id.0, "gmail", "B Mail").await;
+
+    seed_message(
+        &pool,
+        account_a.id.0,
+        "For A",
+        "a@corp.com",
+        "body",
+        Some("inbox"),
+        false,
+    )
+    .await;
+    seed_message(
+        &pool,
+        account_b.id.0,
+        "For B",
+        "b@corp.com",
+        "body",
+        Some("inbox"),
+        false,
+    )
+    .await;
+
+    let list_a = repo
+        .list(user_a.id.0, None, None, None, 50)
+        .await
+        .expect("list A failed");
+    assert_eq!(list_a.len(), 1);
+    assert_eq!(list_a[0].subject.as_deref(), Some("For A"));
+
+    let list_b = repo
+        .list(user_b.id.0, None, None, None, 50)
+        .await
+        .expect("list B failed");
+    assert_eq!(list_b.len(), 1);
+    assert_eq!(list_b[0].subject.as_deref(), Some("For B"));
+
+    let cross = repo
+        .list(user_a.id.0, Some(account_b.id.0), None, None, 50)
+        .await
+        .expect("cross list failed");
+    assert!(cross.is_empty());
 }
 
 #[tokio::test]

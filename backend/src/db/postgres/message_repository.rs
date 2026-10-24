@@ -18,7 +18,7 @@ impl PostgresMessageRepository {
 const MESSAGE_COLUMNS: &str = "m.id, m.account_id, m.external_id, m.thread_id, m.subject, m.sender_name, m.sender_email, \
      m.recipients::TEXT as recipients, m.date_sent, m.date_received, m.snippet, m.body_text, m.body_html, \
      m.labels::TEXT as labels, m.is_read, m.is_archived, m.is_deleted, m.has_attachments, m.snoozed_until, \
-     m.is_set_aside, m.created_at, m.updated_at";
+     m.is_set_aside, m.has_conflict, m.created_at, m.updated_at";
 
 #[async_trait]
 impl MessageRepository for PostgresMessageRepository {
@@ -47,14 +47,18 @@ impl MessageRepository for PostgresMessageRepository {
 
     async fn list(
         &self,
+        user_id: Uuid,
         account_id: Option<Uuid>,
         folder: Option<&str>,
         cursor: Option<&str>,
         limit: i64,
     ) -> Result<Vec<Message>, sqlx::Error> {
         let limit = limit.min(50);
-        let mut conditions = vec!["m.is_deleted = FALSE".to_string()];
-        let mut param_idx = 1;
+        let mut conditions = vec!["m.is_deleted = FALSE", "a.user_id = $1"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let mut param_idx = 2;
 
         if account_id.is_some() {
             conditions.push(format!("m.account_id = ${}", param_idx));
@@ -82,13 +86,14 @@ impl MessageRepository for PostgresMessageRepository {
         let where_clause = conditions.join(" AND ");
         let query = format!(
             "SELECT {MESSAGE_COLUMNS} FROM messages m \
+             JOIN accounts a ON m.account_id = a.id \
              WHERE {where_clause} ORDER BY m.date_received DESC LIMIT ${}",
             param_idx
         );
 
         // Audited: `where_clause` is assembled only from hardcoded condition
         // fragments with numbered placeholders; all values go through binds.
-        let mut q = sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(query));
+        let mut q = sqlx::query_as::<_, Message>(sqlx::AssertSqlSafe(query)).bind(user_id);
         if let Some(aid) = account_id {
             q = q.bind(aid);
         }
@@ -131,7 +136,7 @@ impl MessageRepository for PostgresMessageRepository {
             "INSERT INTO messages (id, account_id, external_id, thread_id, subject, sender_name, \
              sender_email, recipients, date_sent, date_received, snippet, body_text, body_html, \
              labels, is_read, is_archived, is_deleted, has_attachments, snoozed_until, is_set_aside, has_conflict, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::JSONB, $9, $10, $11, $12, $13, $14::JSONB, $15, $16, $17, $18, $19, $20, $21, $22, $23) \
              ON CONFLICT (account_id, external_id) DO UPDATE SET \
              thread_id = EXCLUDED.thread_id, subject = EXCLUDED.subject, \
              sender_name = EXCLUDED.sender_name, sender_email = EXCLUDED.sender_email, \

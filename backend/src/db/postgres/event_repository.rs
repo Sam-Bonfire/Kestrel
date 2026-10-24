@@ -17,7 +17,7 @@ impl PostgresEventRepository {
 
 const EVENT_COLUMNS: &str = "e.id, e.account_id, e.calendar_id, e.external_id, e.title, e.description, e.location, \
      e.start_time, e.end_time, e.is_all_day, e.recurrence_rules, e.organizer_email, \
-     e.organizer_name, e.attendees::TEXT as attendees, e.status, e.created_at, e.updated_at";
+     e.organizer_name, e.attendees::TEXT as attendees, e.status, e.has_conflict, e.created_at, e.updated_at";
 
 #[async_trait]
 impl EventRepository for PostgresEventRepository {
@@ -87,7 +87,7 @@ impl EventRepository for PostgresEventRepository {
             "INSERT INTO calendar_events (id, account_id, calendar_id, external_id, title, description, \
              location, start_time, end_time, is_all_day, recurrence_rules, organizer_email, \
              organizer_name, attendees, status, has_conflict, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::JSONB, $15, $16, $17, $18) \
              ON CONFLICT (account_id, external_id) DO UPDATE SET \
              calendar_id = EXCLUDED.calendar_id, title = EXCLUDED.title, \
              description = EXCLUDED.description, location = EXCLUDED.location, \
@@ -112,6 +112,7 @@ impl EventRepository for PostgresEventRepository {
         .bind(&event.organizer_name)
         .bind(&event.attendees)
         .bind(&event.status)
+        .bind(event.has_conflict)
         .bind(event.created_at)
         .bind(event.updated_at)
         .execute(&self.pool)
