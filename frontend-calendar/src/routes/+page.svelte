@@ -384,70 +384,50 @@
   $effect(() => {
     if (authState.isAuthenticated) {
       import('@kestrel/shared/api').then(({ getEvents }) => {
-        import('rrule').then(({ RRule }) => {
-          // Fetch events for the current month roughly
-          const now = new Date();
-          const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-          const end = new Date(now.getFullYear(), now.getMonth() + 2, 1).toISOString();
-          getEvents(start, end).then((res: any) => {
-            if (res && res.events && res.events.length > 0) {
-              const expandedEvents: any[] = [];
-              res.events.forEach((e: any) => {
-                const baseEvent = {
-                  id: e.id,
-                  title: e.title || 'Untitled Event',
-                  date: new Date(e.start_time * 1000).toISOString().split('T')[0],
-                  startTime: new Date(e.start_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                  endTime: new Date(e.end_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                  color: 'blue',
-                  location: e.location,
-                  description: e.description,
-                  calendarId: accounts[0]?.calendars[0]?.id || '1a',
-                  category: 'Work',
-                  priority: 'None',
-                  status: 'Scheduled',
-                  organizer: e.organizer_email || 'Unknown',
-                  attendees: e.attendees ? JSON.parse(e.attendees) : [],
-                  rsvpStatus: 'maybe'
-                };
-
-                if (e.rrule) {
-                  try {
-                    const rule = RRule.fromString(e.rrule);
-                    const occurrences = rule.between(new Date(start), new Date(end), true);
-                    occurrences.forEach((occ: Date, index: number) => {
-                      expandedEvents.push({
-                        ...baseEvent,
-                        id: `${e.id}-${index}`, // unique ID for the instance
-                        date: occ.toISOString().split('T')[0]
-                      });
-                    });
-                  } catch (err) {
-                    console.error('Failed to parse rrule for event:', e.id, err);
-                    expandedEvents.push(baseEvent);
-                  }
-                } else {
-                  expandedEvents.push(baseEvent);
-                }
-              });
-              events = expandedEvents;
-              if (pendingDeepLinkEventId) {
-                if (resolveDeepLinkEvent(pendingDeepLinkEventId)) {
-                  pendingDeepLinkEventId = null;
-                } else {
-                  showToast('Event not found — it may have been deleted or not synced yet', 'error');
-                  pendingDeepLinkEventId = null;
-                }
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+        const end = new Date(now.getFullYear(), now.getMonth() + 2, 1).toISOString();
+        // The backend expands recurrence rules for this window and returns one
+        // entry per occurrence with a deterministic occurrence_id.
+        getEvents(start, end).then((res: any) => {
+          if (res && Array.isArray(res.events) && res.events.length > 0) {
+            const parseAttendees = (raw: unknown): any[] => {
+              if (typeof raw !== 'string' || !raw) return [];
+              try { return JSON.parse(raw); } catch { return []; }
+            };
+            events = res.events.map((e: any) => ({
+              id: e.occurrence_id || e.id,
+              title: e.title || 'Untitled Event',
+              date: new Date(e.start_time * 1000).toISOString().split('T')[0],
+              startTime: new Date(e.start_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+              endTime: new Date(e.end_time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+              color: e.calendar_color || 'blue',
+              location: e.location,
+              description: e.description,
+              calendarId: e.calendar_id || accounts[0]?.calendars[0]?.id || '1a',
+              category: 'Work',
+              priority: 'None',
+              status: 'Scheduled',
+              organizer: e.organizer_name || e.organizer_email || 'Unknown',
+              attendees: parseAttendees(e.attendees),
+              rsvpStatus: 'maybe'
+            }));
+            if (pendingDeepLinkEventId) {
+              if (resolveDeepLinkEvent(pendingDeepLinkEventId)) {
+                pendingDeepLinkEventId = null;
+              } else {
+                showToast('Event not found — it may have been deleted or not synced yet', 'error');
+                pendingDeepLinkEventId = null;
               }
-              eventsFromBackend = true;
-            } else if (res && Array.isArray(res.events)) {
-              // Authenticated but nothing stored: drop bundled samples
-              // (K-1468), keep anything created this session.
-              events = events.filter((ev: any) => !SAMPLE_EVENT_IDS.has(String(ev.id)));
-              eventsFromBackend = true;
             }
-          }).catch(console.error);
-        });
+            eventsFromBackend = true;
+          } else if (res && Array.isArray(res.events)) {
+            // Authenticated but nothing stored: drop bundled samples
+            // (K-1468), keep anything created this session.
+            events = events.filter((ev: any) => !SAMPLE_EVENT_IDS.has(String(ev.id)));
+            eventsFromBackend = true;
+          }
+        }).catch(console.error);
       });
     }
   });

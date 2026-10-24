@@ -576,7 +576,7 @@ describe('API Client & Contract Validation', () => {
       { name: 'getBookingPage', call: () => getBookingPage('b1'), method: 'GET', path: '/booking-pages/b1' },
       { name: 'rotateBookingSlug', call: () => rotateBookingSlug('b1'), method: 'POST', path: '/booking-pages/b1/rotate' },
       { name: 'deleteBookingPage', call: () => deleteBookingPage('b1'), method: 'DELETE', path: '/booking-pages/b1' },
-      { name: 'getEvents', call: () => getEvents(undefined, '2026-01-01', '2026-01-31'), method: 'GET', path: '/events?start=2026-01-01&end=2026-01-31' },
+      { name: 'getEvents', call: () => getEvents('2026-01-01T00:00:00Z', '2026-01-31T00:00:00Z'), method: 'GET', path: '/events?start_time=1767225600&end_time=1769817600' },
       { name: 'rsvpExternal', call: () => rsvpExternal('e1', 'accepted'), method: 'POST', path: '/events/rsvp_external' },
       { name: 'listCalendars', call: () => listCalendars(), method: 'GET', path: '/calendars' },
     ];

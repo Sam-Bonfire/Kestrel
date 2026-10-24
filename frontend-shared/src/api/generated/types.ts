@@ -209,10 +209,17 @@ export type EventPollWithVotes = {
 
 export type EventSummary = {
 	id: string,
+	occurrence_id: string,
 	account_id: string,
 	calendar_id: string,
 	external_id: string,
 	title: string,
+	description: string | null,
+	organizer_email: string | null,
+	organizer_name: string | null,
+	attendees: string | null,
+	rrule: string | null,
+	calendar_color: string | null,
 	start_time: number | null,
 	end_time: number | null,
 	is_all_day: boolean,
