@@ -69,6 +69,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = plugin_manager.load_all().await {
         tracing::warn!("Failed to load plugins: {}", e);
     }
+    for plugin in plugin_manager.plugins() {
+        if crate::api::webhooks::resolve_webhook_secret(&plugin.id, |key| std::env::var(key).ok())
+            .is_none()
+        {
+            tracing::warn!(
+                "Webhook secret missing for provider '{}': set WEBHOOK_SECRET or a provider-specific key",
+                plugin.id
+            );
+        }
+    }
 
     let plugin_manager = Arc::new(tokio::sync::RwLock::new(plugin_manager));
 
