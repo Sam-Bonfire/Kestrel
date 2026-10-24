@@ -785,7 +785,11 @@ impl exports::kestrel::provider::webhook_handler::Guest for OutlookPlugin {
         let mut email = String::new();
 
         for notification in payload.value {
-            if notification.client_state.as_deref() != Some(webhook_secret.as_str()) {
+            if !notification
+                .client_state
+                .as_deref()
+                .is_some_and(|state| constant_time_eq(state, &webhook_secret))
+            {
                 return Err("Unauthorized".to_string());
             }
 
@@ -857,5 +861,38 @@ mod tests {
             OutlookPlugin::handle_webhook(secret, query, payload.as_bytes().to_vec()).unwrap();
         assert_eq!(result.status, 202);
         assert_eq!(result.account_identifier.unwrap(), "test@outlook.com");
+    }
+}
+
+/// Compare two secrets without early exit so response timing does not leak
+/// how many leading bytes matched.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter()
+        .zip(b)
+        .fold(0u8, |acc, (left, right)| acc | (left ^ right))
+        == 0
+}
+
+#[cfg(test)]
+mod constant_time_tests {
+    use super::constant_time_eq;
+
+    #[test]
+    fn matches_equal_secrets() {
+        assert!(constant_time_eq("s3cret", "s3cret"));
+    }
+
+    #[test]
+    fn rejects_different_secrets() {
+        assert!(!constant_time_eq("s3cret", "s3cres"));
+    }
+
+    #[test]
+    fn rejects_different_lengths() {
+        assert!(!constant_time_eq("s3cret", "s3cret-longer"));
     }
 }

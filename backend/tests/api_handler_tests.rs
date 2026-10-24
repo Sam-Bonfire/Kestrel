@@ -833,10 +833,11 @@ async fn test_multi_tenant_isolation() {
 
 #[tokio::test]
 async fn test_webhooks_ingestion() {
+    // Without a loaded provider plugin the endpoint must not claim success:
+    // unknown providers return 404 instead of a spoofable 200.
     let state = create_test_state().await;
     let app = create_router(state);
 
-    // 1. Google PubSub webhook
     let google_payload = json!({
         "message": {
             "data": "eyJlbWFpbEFkZHJlc3MiOiJkZW1vQGxvY2FsIiwiaGlzdG9yeUlkIjoiMTIzNCJ9",
@@ -845,7 +846,6 @@ async fn test_webhooks_ingestion() {
     });
 
     let res = app
-        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -856,21 +856,7 @@ async fn test_webhooks_ingestion() {
         )
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
-    // 2. Microsoft Graph validation token handshake
-    let res = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/webhooks/microsoft?validationToken=testValidationToken999")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -1518,4 +1504,24 @@ async fn test_outbox_replay_backs_off_on_failure() {
     .unwrap();
     assert_eq!(row.0, 1);
     assert!(row.1 > chrono::Utc::now().timestamp());
+}
+
+#[tokio::test]
+async fn test_unknown_webhook_provider_returns_404() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/webhooks/not-a-provider")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }

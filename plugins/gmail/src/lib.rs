@@ -813,7 +813,7 @@ impl exports::kestrel::provider::webhook_handler::Guest for GmailPlugin {
             .iter()
             .find(|(k, _)| k == "token")
             .map(|(_, v)| v.as_str());
-        if token != Some(webhook_secret.as_str()) {
+        if !token.is_some_and(|candidate| constant_time_eq(candidate, &webhook_secret)) {
             return Err("Unauthorized".to_string());
         }
 
@@ -875,5 +875,38 @@ mod tests {
         let query = vec![("token".to_string(), "wrong".to_string())];
         let result = GmailPlugin::handle_webhook(secret, query, vec![]);
         assert!(result.is_err());
+    }
+}
+
+/// Compare two secrets without early exit so response timing does not leak
+/// how many leading bytes matched.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter()
+        .zip(b)
+        .fold(0u8, |acc, (left, right)| acc | (left ^ right))
+        == 0
+}
+
+#[cfg(test)]
+mod constant_time_tests {
+    use super::constant_time_eq;
+
+    #[test]
+    fn matches_equal_secrets() {
+        assert!(constant_time_eq("s3cret", "s3cret"));
+    }
+
+    #[test]
+    fn rejects_different_secrets() {
+        assert!(!constant_time_eq("s3cret", "s3cres"));
+    }
+
+    #[test]
+    fn rejects_different_lengths() {
+        assert!(!constant_time_eq("s3cret", "s3cret-longer"));
     }
 }

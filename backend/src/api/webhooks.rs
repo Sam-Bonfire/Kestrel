@@ -8,15 +8,45 @@ use crate::core::repository::AccountRepository;
 
 // --- Generic Router ---
 
+const SHARED_WEBHOOK_SECRET_ENV: &str = "WEBHOOK_SECRET";
+
+/// Environment key for a provider-specific secret, e.g. `WEBHOOK_SECRET_GOOGLE_MAIL`
+/// for provider `google-mail`.
+pub(crate) fn provider_secret_env_key(provider: &str) -> String {
+    let mut key = String::from("WEBHOOK_SECRET_");
+    for c in provider.chars() {
+        key.push(if c.is_ascii_alphanumeric() {
+            c.to_ascii_uppercase()
+        } else {
+            '_'
+        });
+    }
+    key
+}
+
+/// Resolve the webhook secret for a provider.
+///
+/// Provider-specific keys win. The shared `WEBHOOK_SECRET` remains as a
+/// backwards-compatible fallback for existing self-hosters.
+pub(crate) fn resolve_webhook_secret(
+    provider: &str,
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Option<String> {
+    [
+        provider_secret_env_key(provider),
+        SHARED_WEBHOOK_SECRET_ENV.to_string(),
+    ]
+    .into_iter()
+    .filter_map(|key| lookup(&key))
+    .find(|value| !value.trim().is_empty())
+}
+
 pub async fn handle_generic_webhook(
     State(state): State<AppState>,
     Path(provider): Path<String>,
     Query(query_params): Query<HashMap<String, String>>,
     body: Option<axum::body::Bytes>,
 ) -> Result<impl IntoResponse, KestrelError> {
-    let expected_secret = std::env::var("WEBHOOK_SECRET")
-        .unwrap_or_else(|_| "kestrel_webhook_secret_default".to_string());
-
     let plugin_manager = state.plugin_manager.read().await;
     let plugin = match plugin_manager
         .find_by_id(&provider)
@@ -28,9 +58,20 @@ pub async fn handle_generic_webhook(
                 "Webhook received for unknown or unloaded provider plugin: {}",
                 provider
             );
-            return Ok(axum::http::StatusCode::OK.into_response());
+            return Err(KestrelError::NotFound(
+                "Webhook endpoint not found".to_string(),
+            ));
         }
     };
+
+    let expected_secret = resolve_webhook_secret(&provider, |key| std::env::var(key).ok())
+        .ok_or_else(|| {
+            tracing::error!(
+                "Webhook secret not configured for provider '{}'; rejecting delivery",
+                provider
+            );
+            KestrelError::Unavailable("Webhook secret not configured".to_string())
+        })?;
 
     let bytes = body.map(|b| b.to_vec()).unwrap_or_default();
 
@@ -120,4 +161,58 @@ pub async fn handle_generic_webhook(
     }
 
     Ok(response.into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lookup<'a>(map: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |key| {
+            map.iter()
+                .find(|(candidate, _)| *candidate == key)
+                .map(|(_, value)| value.to_string())
+        }
+    }
+
+    #[test]
+    fn provider_specific_secret_wins_over_shared() {
+        let map = [
+            ("WEBHOOK_SECRET", "shared"),
+            ("WEBHOOK_SECRET_GOOGLE_MAIL", "per-provider"),
+        ];
+        assert_eq!(
+            resolve_webhook_secret("google-mail", lookup(&map)).as_deref(),
+            Some("per-provider")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_shared_secret() {
+        let map = [("WEBHOOK_SECRET", "shared")];
+        assert_eq!(
+            resolve_webhook_secret("gmail", lookup(&map)).as_deref(),
+            Some("shared")
+        );
+    }
+
+    #[test]
+    fn ignores_blank_secrets() {
+        let map = [("WEBHOOK_SECRET", "  "), ("WEBHOOK_SECRET_GMAIL", "")];
+        assert_eq!(resolve_webhook_secret("gmail", lookup(&map)), None);
+    }
+
+    #[test]
+    fn missing_secret_fails_closed() {
+        assert_eq!(resolve_webhook_secret("gmail", lookup(&[])), None);
+    }
+
+    #[test]
+    fn provider_key_is_normalized() {
+        assert_eq!(
+            provider_secret_env_key("google-mail"),
+            "WEBHOOK_SECRET_GOOGLE_MAIL"
+        );
+        assert_eq!(provider_secret_env_key("Outlook"), "WEBHOOK_SECRET_OUTLOOK");
+    }
 }
