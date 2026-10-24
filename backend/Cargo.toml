@@ -60,3 +60,4 @@ specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono", "uuid", "co
 specta-typescript = "0.0.12"
 specta-serde = "0.0.12"
 specta-util = "0.0.12"
+rrule = "0.14.0"

@@ -1,4 +1,4 @@
-mod common;
+﻿mod common;
 
 use axum::{
     body::Body,
@@ -406,6 +406,23 @@ async fn test_calendar_and_event_full_lifecycle() {
     let events = list_json["events"].as_array().unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["title"], "Architecture Deep-Dive");
+    assert_eq!(
+        events[0]["description"],
+        "Discuss Rust Axum & Specta architecture"
+    );
+    assert_eq!(events[0]["calendar_color"], "#4F46E5");
+    assert!(
+        events[0]["attendees"]
+            .as_str()
+            .unwrap()
+            .contains("lead@kestrel.dev")
+    );
+    assert!(
+        events[0]["occurrence_id"]
+            .as_str()
+            .unwrap()
+            .starts_with(event_id.as_str())
+    );
 
     // 4. Update the event
     let update_payload = json!({

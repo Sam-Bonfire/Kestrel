@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use chrono::Utc;
+use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -162,10 +162,17 @@ fn default_end_time() -> i64 {
 #[derive(Serialize, specta::Type)]
 pub struct EventSummary {
     pub id: Uuid,
+    pub occurrence_id: String,
     pub account_id: Uuid,
     pub calendar_id: Uuid,
     pub external_id: String,
     pub title: String,
+    pub description: Option<String>,
+    pub organizer_email: Option<String>,
+    pub organizer_name: Option<String>,
+    pub attendees: Option<String>,
+    pub rrule: Option<String>,
+    pub calendar_color: Option<String>,
     #[specta(type = f64)]
     pub start_time: i64,
     #[specta(type = f64)]
@@ -197,28 +204,98 @@ pub async fn list_events(
     )
     .await?;
 
-    let total = events.len();
+    let colors: std::collections::HashMap<Uuid, Option<String>> =
+        list_calendars_from_db(&state, user_id)
+            .await?
+            .into_iter()
+            .map(|c| (c.id.0, c.color))
+            .collect();
+
     let summaries: Vec<EventSummary> = events
         .into_iter()
-        .map(|e| EventSummary {
-            id: e.id.0,
-            account_id: e.account_id.0,
-            calendar_id: e.calendar_id.0,
-            external_id: e.external_id,
-            title: e.title,
-            start_time: e.start_time,
-            end_time: e.end_time,
-            is_all_day: e.is_all_day,
-            location: e.location,
-            status: e.status,
-            has_conflict: e.has_conflict,
+        .flat_map(|e| {
+            let color = colors.get(&e.calendar_id.0).cloned().flatten();
+            event_occurrences(&e, params.start_time, params.end_time)
+                .into_iter()
+                .map(|(start, end)| EventSummary {
+                    id: e.id.0,
+                    occurrence_id: format!("{}:{}", e.id.0, start),
+                    account_id: e.account_id.0,
+                    calendar_id: e.calendar_id.0,
+                    external_id: e.external_id.clone(),
+                    title: e.title.clone(),
+                    description: e.description.clone(),
+                    organizer_email: e.organizer_email.clone(),
+                    organizer_name: e.organizer_name.clone(),
+                    attendees: e.attendees.clone(),
+                    rrule: e.recurrence_rules.clone(),
+                    calendar_color: color.clone(),
+                    start_time: start,
+                    end_time: end,
+                    is_all_day: e.is_all_day,
+                    location: e.location.clone(),
+                    status: e.status.clone(),
+                    has_conflict: e.has_conflict,
+                })
+                .collect::<Vec<_>>()
         })
         .collect();
 
     Ok(Json(EventListResponse {
+        total: summaries.len(),
         events: summaries,
-        total,
     }))
+}
+
+fn overlaps(start: i64, end: i64, window_start: i64, window_end: i64) -> bool {
+    end >= window_start && start <= window_end
+}
+
+/// Expand one event into the occurrences that intersect the requested window.
+///
+/// ponytail: expansion treats the stored start timestamp as UTC wall clock.
+/// Rules carrying a TZID are parsed by `rrule`, but a bare FREQ rule expands in
+/// UTC, so DST shifts need the provider to supply `DTSTART;TZID=...`.
+fn event_occurrences(event: &CalendarEvent, window_start: i64, window_end: i64) -> Vec<(i64, i64)> {
+    let duration = (event.end_time - event.start_time).max(0);
+    let base = (event.start_time, event.start_time + duration);
+    let non_recurring = || {
+        if overlaps(base.0, base.1, window_start, window_end) {
+            vec![base]
+        } else {
+            Vec::new()
+        }
+    };
+
+    let Some(rule) = event
+        .recurrence_rules
+        .as_deref()
+        .map(str::trim)
+        .filter(|r| !r.is_empty() && r.to_ascii_uppercase().contains("FREQ="))
+    else {
+        return non_recurring();
+    };
+
+    let (Some(dt_start), Some(dt_end)) = (
+        rrule::Tz::UTC.timestamp_opt(event.start_time, 0).single(),
+        rrule::Tz::UTC.timestamp_opt(window_end, 0).single(),
+    ) else {
+        return non_recurring();
+    };
+
+    let Ok(set) = rrule::RRuleSet::new(dt_start).set_from_string(rule) else {
+        return non_recurring();
+    };
+
+    set.before(dt_end)
+        .all_unchecked()
+        .into_iter()
+        .map(|occurrence| {
+            let start = occurrence.timestamp();
+            (start, start + duration)
+        })
+        .filter(|(start, end)| overlaps(*start, *end, window_start, window_end))
+        .collect()
 }
 
 async fn list_events_from_db(
@@ -796,4 +873,69 @@ pub(crate) async fn verify_event_ownership(
         return Err(KestrelError::NotFound("Event not found".to_string()));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::types::DbUuid;
+
+    fn event(start_time: i64, end_time: i64, rrule: Option<&str>) -> CalendarEvent {
+        CalendarEvent {
+            id: DbUuid::from(Uuid::new_v4()),
+            account_id: DbUuid::from(Uuid::new_v4()),
+            calendar_id: DbUuid::from(Uuid::new_v4()),
+            external_id: "ext".to_string(),
+            title: "Standup".to_string(),
+            description: None,
+            location: None,
+            start_time,
+            end_time,
+            is_all_day: false,
+            recurrence_rules: rrule.map(str::to_string),
+            organizer_email: None,
+            organizer_name: None,
+            attendees: None,
+            status: None,
+            has_conflict: false,
+            created_at: start_time,
+            updated_at: start_time,
+        }
+    }
+
+    #[test]
+    fn weekly_rule_expands_into_window() {
+        let start = 1_700_000_000;
+        let ev = event(start, start + 1800, Some("FREQ=WEEKLY;COUNT=4"));
+
+        let occurrences = event_occurrences(&ev, start - 86400, start + 14 * 86400);
+
+        assert_eq!(occurrences.len(), 3);
+        assert_eq!(occurrences[0], (start, start + 1800));
+        assert_eq!(occurrences[1].0 - start, 7 * 86400);
+        assert_eq!(occurrences[2].0 - start, 14 * 86400);
+    }
+
+    #[test]
+    fn non_recurring_event_outside_window_is_dropped() {
+        let start = 1_700_000_000;
+        let ev = event(start, start + 1800, None);
+
+        assert!(event_occurrences(&ev, start + 86400, start + 2 * 86400).is_empty());
+        assert_eq!(
+            event_occurrences(&ev, start - 60, start + 60),
+            vec![(start, start + 1800)]
+        );
+    }
+
+    #[test]
+    fn malformed_rule_falls_back_to_single_occurrence() {
+        let start = 1_700_000_000;
+        let ev = event(start, start + 1800, Some("not a rule"));
+
+        assert_eq!(
+            event_occurrences(&ev, start - 60, start + 60),
+            vec![(start, start + 1800)]
+        );
+    }
 }

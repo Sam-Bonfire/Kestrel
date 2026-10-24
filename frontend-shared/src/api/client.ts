@@ -6,6 +6,7 @@ import type {
   Contact,
   CreateEventRequest,
   CreateEventResponse,
+  EventListResponse,
   UpdateEventRequest,
   EventDetail,
   SettingsPayload,
@@ -889,16 +890,16 @@ export async function getCalendars(
 }
 
 export async function getEvents(
-  token?: string,
   start?: string,
   end?: string,
-): Promise<CalendarEvent[]> {
+  token?: string,
+): Promise<EventListResponse> {
   const params = new URLSearchParams();
-  if (start) params.set('start', start);
-  if (end) params.set('end', end);
+  if (start) params.set('start_time', String(Math.floor(new Date(start).getTime() / 1000)));
+  if (end) params.set('end_time', String(Math.floor(new Date(end).getTime() / 1000)));
   const qs = params.toString();
   const path = qs ? `/events?${qs}` : '/events';
-  return request<CalendarEvent[]>('GET', path, { token });
+  return request<EventListResponse>('GET', path, { token });
 }
 
 export async function createEvent(
