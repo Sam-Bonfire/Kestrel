@@ -1,4 +1,4 @@
-export {
+﻿export {
   colors,
   tagColors,
   typography,
@@ -33,7 +33,6 @@ export {
   archiveMessage,
   trashMessage,
   searchMessages,
-  searchEvents,
   getAttachmentRedirectUrl,
   createSyncStream,
   triggerSync,
@@ -56,7 +55,6 @@ export type {
   SearchResult,
   Calendar,
   CalendarEvent,
-  EventSearchResult,
   Snippet,
   Signature,
 } from './api/index.js';
