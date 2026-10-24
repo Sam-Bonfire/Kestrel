@@ -15,6 +15,7 @@
     "updater:default",
     "notification:default",
     "notification:allow-register-listener",
+    "deep-link:default",
     "http:default",
     "fs:default",
     "fs:allow-download-write",

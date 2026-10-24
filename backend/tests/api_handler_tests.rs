@@ -1,4 +1,4 @@
-﻿mod common;
+mod common;
 
 use axum::{
     body::Body,

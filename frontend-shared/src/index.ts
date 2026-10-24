@@ -205,6 +205,14 @@ export {
   type KestrelDeepLink,
 } from './utils/deepLinks.js';
 export {
+  ensureNotificationPermission,
+  registerNotificationCategories,
+  sendDesktopNotification,
+  type DesktopNotification,
+  type NotificationAction,
+  type NotificationCategory,
+} from './utils/notifications.js';
+export {
   firstTimeSenders,
   approveSender,
   loadScreened,
