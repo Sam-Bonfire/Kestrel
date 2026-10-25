@@ -1,0 +1,29 @@
+# cargo-audit exception list. Every entry needs a reason and a re-check date.
+# Re-check by removing the entry and running `mise run audit`.
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0367/0368/0369 (zip 4: SUID/SGID bit preservation and two
+    # symlink-target escapes via ZipArchive::extract): transitive via
+    # tauri-plugin-updater 2.14, whose `zip` feature also gates the Linux
+    # tar/flate2 updater path behind it, so the feature cannot be disabled
+    # without breaking Linux in-app updates; upstream still pins zip ^4.
+    # zip is target-gated to Windows desktop builds, where the updater
+    # verifies the minisign signature of the artifact before installing and
+    # never extracts attacker-controlled archives. Re-check 2027-01 (or when
+    # tauri-plugin-updater moves to zip >= 9).
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+    # RUSTSEC-2026-0391/0398/0403/0410 (zstd 0.13 / zstd-safe 7 / zstd-sys 2.0:
+    # context-reuse plaintext leak and wasm32-only allocator shim corruption):
+    # transitive via wasmtime's `cache` feature (compresses locally produced
+    # compiled artifacts); backend pins wasmtime = "48" and a runtime major
+    # bump is its own task. 0391 needs one shared context across
+    # separate users' streams — the cache has a single-use context. 0410
+    # affects wasm32 targets only — the server builds native. Re-check
+    # 2027-01 (or when the wasmtime 48 line ships zstd >= 0.14.3).
+    "RUSTSEC-2026-0391",
+    "RUSTSEC-2026-0398",
+    "RUSTSEC-2026-0403",
+    "RUSTSEC-2026-0410",
+]

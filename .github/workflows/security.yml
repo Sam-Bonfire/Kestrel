@@ -1,11 +1,11 @@
 name: Daily Security
 
-# Security runs on every PR, every merge to dev/main, and weekly on schedule
-# so advisories and leaked secrets fail the build the day they appear.
+# Security runs on main-PRs, every merge to dev/main, and weekly. dev-PRs
+# skip it: the same gates run post-merge on push to dev, and PR validation
+# (preview.yml) covers the pre-merge loop there.
 on:
   pull_request:
     branches:
-      - dev
       - main
   push:
     branches:
@@ -34,9 +34,10 @@ jobs:
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Unfixable upstream (no patch); rationale + re-check date live in
-          # audit.toml. Kestrel never exercises the RSA decryption path.
-          ignore: RUSTSEC-2023-0071
+          # Unfixable upstream; rationale + re-check dates live in
+          # .cargo/audit.toml (mirrored here — this action only honors its
+          # `ignore` input, not the project config file).
+          ignore: RUSTSEC-2026-0367,RUSTSEC-2026-0368,RUSTSEC-2026-0369,RUSTSEC-2026-0391,RUSTSEC-2026-0398,RUSTSEC-2026-0403,RUSTSEC-2026-0410
 
   js-advisories:
     name: pnpm audit (high+)
