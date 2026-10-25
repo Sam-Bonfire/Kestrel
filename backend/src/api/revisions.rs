@@ -214,7 +214,7 @@ pub async fn restore_revision(
                 .map(|(c, _)| format!("{c} = ?"))
                 .collect();
             let sql = format!(
-                "UPDATE {table} SET {}, updated_at = unixepoch() WHERE id = ?",
+                "UPDATE {table} SET {}, has_conflict = 0, updated_at = unixepoch() WHERE id = ?",
                 placeholders.join(", ")
             );
             // Audited: `table` and every column in `placeholders` come from the
@@ -243,7 +243,7 @@ pub async fn restore_revision(
                 .map(|(i, (c, _))| format!("{c} = ${}", i + 1))
                 .collect();
             let sql = format!(
-                "UPDATE {table} SET {}, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id = ${}",
+                "UPDATE {table} SET {}, has_conflict = FALSE, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id = ${}",
                 placeholders.join(", "),
                 assignments.len() + 1
             );

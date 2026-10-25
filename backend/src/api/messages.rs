@@ -53,6 +53,7 @@ pub struct MessageSummary {
     pub has_attachments: bool,
     pub is_set_aside: bool,
     pub labels: Option<String>,
+    pub has_conflict: bool,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -78,6 +79,7 @@ pub struct MessageDetail {
     pub is_deleted: bool,
     pub has_attachments: bool,
     pub is_set_aside: bool,
+    pub has_conflict: bool,
     #[specta(type = f64)]
     pub created_at: i64,
     #[specta(type = f64)]
@@ -153,6 +155,7 @@ pub async fn list_messages(
             has_attachments: m.has_attachments,
             is_set_aside: m.is_set_aside,
             labels: m.labels,
+            has_conflict: m.has_conflict,
         })
         .collect();
 
@@ -270,6 +273,7 @@ pub async fn get_message(
         is_deleted: msg.is_deleted,
         has_attachments: msg.has_attachments,
         is_set_aside: msg.is_set_aside,
+        has_conflict: msg.has_conflict,
         created_at: msg.created_at,
         updated_at: msg.updated_at,
     }))

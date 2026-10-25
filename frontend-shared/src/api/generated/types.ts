@@ -271,6 +271,7 @@ export type MessageDetail = {
 	is_deleted: boolean,
 	has_attachments: boolean,
 	is_set_aside: boolean,
+	has_conflict: boolean,
 	created_at: number | null,
 	updated_at: number | null,
 };
@@ -303,6 +304,7 @@ export type MessageSummary = {
 	has_attachments: boolean,
 	is_set_aside: boolean,
 	labels: string | null,
+	has_conflict: boolean,
 };
 
 export type NotificationPrefs = {
