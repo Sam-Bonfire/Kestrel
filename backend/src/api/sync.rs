@@ -14,7 +14,8 @@ use uuid::Uuid;
 use super::auth::AuthUser;
 use super::router::AppState;
 use crate::core::error::KestrelError;
-use crate::core::repository::AccountRepository;
+use crate::core::models::HistoricalRevision;
+use crate::core::repository::{AccountRepository, HistoricalRevisionRepository};
 use crate::db::pool::DbPool;
 use crate::db::postgres::account_repository::PostgresAccountRepository;
 use crate::db::sqlite::account_repository::SqliteAccountRepository;
@@ -799,6 +800,82 @@ fn should_apply_remote_message(local_date_received: i64, remote_date_received: i
     remote_date_received >= local_date_received
 }
 
+/// A row counts as locally edited once anything bumped `updated_at` past its
+/// creation time (every API mutation does).
+fn is_locally_modified(created_at: i64, updated_at: i64) -> bool {
+    updated_at > created_at
+}
+
+fn message_content_differs(
+    existing: &crate::core::models::Message,
+    remote: &crate::plugins::traits::MessagePayload,
+) -> bool {
+    existing.subject != remote.subject
+        || existing.sender_name != remote.sender_name
+        || existing.sender_email != remote.sender_email
+        || existing.recipients != remote.recipients
+        || existing.date_sent != remote.date_sent
+        || existing.date_received != remote.date_received
+        || existing.snippet != remote.snippet
+        || existing.labels != remote.labels
+        || existing.is_read != remote.is_read
+}
+
+fn event_content_differs(
+    existing: &crate::core::models::CalendarEvent,
+    remote: &crate::plugins::traits::EventPayload,
+) -> bool {
+    existing.title != remote.title
+        || existing.description != remote.description
+        || existing.location != remote.location
+        || existing.start_time != remote.start_time
+        || existing.end_time != remote.end_time
+        || existing.is_all_day != remote.is_all_day
+        || existing.recurrence_rules != remote.recurrence_rules
+        || existing.organizer_email != remote.organizer_email
+        || existing.organizer_name != remote.organizer_name
+        || existing.attendees != remote.attendees
+        || existing.status != remote.status
+}
+
+/// Keep the version the remote sync is about to overwrite so it can be
+/// restored, and mark the live row as conflicted.
+async fn snapshot_conflict<T: Serialize>(
+    repo: &dyn HistoricalRevisionRepository,
+    resource_type: &str,
+    resource_id: Uuid,
+    local: &T,
+) {
+    let payload = match serde_json::to_string(local) {
+        Ok(payload) => payload,
+        Err(err) => {
+            tracing::warn!(%err, resource_type, "Could not serialize conflicting row");
+            return;
+        }
+    };
+    let revision_number = match repo
+        .get_latest_revision_number(resource_type, resource_id)
+        .await
+    {
+        Ok(latest) => latest + 1,
+        Err(err) => {
+            tracing::warn!(%err, resource_type, "Could not read latest revision number");
+            return;
+        }
+    };
+    let revision = HistoricalRevision {
+        id: Uuid::new_v4().into(),
+        resource_type: resource_type.to_string(),
+        resource_id: resource_id.into(),
+        serialized_payload: payload,
+        revision_number,
+        created_at: Utc::now().timestamp(),
+    };
+    if let Err(err) = repo.create(&revision).await {
+        tracing::warn!(%err, resource_type, "Could not persist conflict revision");
+    }
+}
+
 /// K-038: LWW conflict resolution — sync messages from a provider account.
 pub async fn sync_account_messages(
     state: &AppState,
@@ -857,6 +934,15 @@ pub async fn sync_account_messages(
         ),
     };
 
+    let revision_repo: Box<dyn HistoricalRevisionRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::revision_repository::SqliteRevisionRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::revision_repository::PostgresRevisionRepository::new(pool.clone()),
+        ),
+    };
+
     let blocked_senders = filter_repo
         .get_blocked_senders(account.user_id.0)
         .await
@@ -880,6 +966,16 @@ pub async fn sync_account_messages(
             }
             None => true,
         };
+
+        let conflict = should_upsert
+            && existing.as_ref().is_some_and(|m| {
+                !m.has_conflict
+                    && is_locally_modified(m.created_at, m.updated_at)
+                    && message_content_differs(m, &payload)
+            });
+        if conflict && let Some(local) = &existing {
+            snapshot_conflict(revision_repo.as_ref(), "message", local.id.0, local).await;
+        }
 
         if should_upsert {
             // Upsert contact for the sender
@@ -948,6 +1044,7 @@ pub async fn sync_account_messages(
                     m.updated_at = chrono::Utc::now().timestamp();
                     m.labels = payload.labels;
                     m.is_read = payload.is_read;
+                    m.has_conflict = m.has_conflict || conflict;
                     m
                 }
                 None => {
@@ -1103,6 +1200,15 @@ pub async fn sync_account_calendars(
         ),
     };
 
+    let revision_repo: Box<dyn HistoricalRevisionRepository> = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => Box::new(
+            crate::db::sqlite::revision_repository::SqliteRevisionRepository::new(pool.clone()),
+        ),
+        crate::db::pool::DbPool::Postgres(pool) => Box::new(
+            crate::db::postgres::revision_repository::PostgresRevisionRepository::new(pool.clone()),
+        ),
+    };
+
     for payload in events {
         if let Some(ref email) = payload.organizer_email {
             let contact = crate::core::models::Contact {
@@ -1161,6 +1267,15 @@ pub async fn sync_account_calendars(
             .find_by_external_id(account.id.0, &payload.external_id)
             .await?;
 
+        let conflict = existing.as_ref().is_some_and(|e| {
+            !e.has_conflict
+                && is_locally_modified(e.created_at, e.updated_at)
+                && event_content_differs(e, &payload)
+        });
+        if conflict && let Some(local) = &existing {
+            snapshot_conflict(revision_repo.as_ref(), "calendar_event", local.id.0, local).await;
+        }
+
         match existing {
             Some(mut e) => {
                 e.title = payload.title;
@@ -1175,6 +1290,7 @@ pub async fn sync_account_calendars(
                 e.attendees = payload.attendees;
                 e.status = payload.status;
                 e.updated_at = Utc::now().timestamp();
+                e.has_conflict = e.has_conflict || conflict;
                 event_repo.upsert(&e).await?;
             }
             None => {
@@ -1218,12 +1334,14 @@ pub async fn sync_account_calendars(
 
 #[cfg(test)]
 mod tests {
+    use super::{event_content_differs, is_locally_modified, message_content_differs};
     use crate::api::router::AppState;
     use crate::api::sync::{TokenRefresher, ensure_valid_token};
     use crate::core::models::Account;
     use crate::db::pool::DbPool;
     use std::sync::Arc;
     use tokio::sync::RwLock;
+    use uuid::Uuid;
 
     struct MockTokenRefresher {
         should_succeed: bool,
@@ -1500,6 +1618,107 @@ mod tests {
             msg_count += 1;
         }
         assert_eq!(msg_count, 4);
+    }
+
+    fn sample_message() -> crate::core::models::Message {
+        crate::core::models::Message {
+            id: Uuid::new_v4().into(),
+            account_id: Uuid::new_v4().into(),
+            external_id: "ext-1".to_string(),
+            thread_id: "thread-1".to_string(),
+            subject: Some("Subject".to_string()),
+            sender_name: Some("Sender".to_string()),
+            sender_email: "sender@example.com".to_string(),
+            recipients: r#"["me@example.com"]"#.to_string(),
+            date_sent: 100,
+            date_received: 200,
+            snippet: Some("snippet".to_string()),
+            body_text: None,
+            body_html: None,
+            labels: Some(r#"["inbox"]"#.to_string()),
+            is_read: false,
+            is_archived: false,
+            is_deleted: false,
+            has_attachments: false,
+            snoozed_until: None,
+            is_set_aside: false,
+            has_conflict: false,
+            created_at: 1_000,
+            updated_at: 2_000,
+        }
+    }
+
+    fn sample_payload() -> crate::plugins::traits::MessagePayload {
+        crate::plugins::traits::MessagePayload {
+            id: "ext-1".to_string(),
+            external_id: "ext-1".to_string(),
+            thread_id: "thread-1".to_string(),
+            subject: Some("Subject".to_string()),
+            sender_name: Some("Sender".to_string()),
+            sender_email: "sender@example.com".to_string(),
+            recipients: r#"["me@example.com"]"#.to_string(),
+            date_sent: 100,
+            date_received: 200,
+            snippet: Some("snippet".to_string()),
+            labels: Some(r#"["inbox"]"#.to_string()),
+            is_read: false,
+        }
+    }
+
+    #[test]
+    fn test_conflict_needs_local_edit_and_remote_change() {
+        let local = sample_message();
+        let mut remote = sample_payload();
+
+        assert!(!message_content_differs(&local, &remote));
+        assert!(is_locally_modified(local.created_at, local.updated_at));
+        assert!(!is_locally_modified(local.created_at, local.created_at));
+
+        remote.subject = Some("Remote subject".to_string());
+        assert!(message_content_differs(&local, &remote));
+    }
+
+    #[test]
+    fn test_event_content_comparison_ignores_unchanged_payload() {
+        let local = crate::core::models::CalendarEvent {
+            id: Uuid::new_v4().into(),
+            account_id: Uuid::new_v4().into(),
+            calendar_id: Uuid::new_v4().into(),
+            external_id: "ev-1".to_string(),
+            title: "Standup".to_string(),
+            description: None,
+            location: Some("Room".to_string()),
+            start_time: 100,
+            end_time: 200,
+            is_all_day: false,
+            recurrence_rules: None,
+            organizer_email: None,
+            organizer_name: None,
+            attendees: None,
+            status: Some("confirmed".to_string()),
+            has_conflict: false,
+            created_at: 1_000,
+            updated_at: 2_000,
+        };
+        let mut remote = crate::plugins::traits::EventPayload {
+            id: "ev-1".to_string(),
+            external_id: "ev-1".to_string(),
+            title: "Standup".to_string(),
+            description: None,
+            location: Some("Room".to_string()),
+            start_time: 100,
+            end_time: 200,
+            is_all_day: false,
+            recurrence_rules: None,
+            organizer_email: None,
+            organizer_name: None,
+            attendees: None,
+            status: Some("confirmed".to_string()),
+        };
+
+        assert!(!event_content_differs(&local, &remote));
+        remote.start_time = 300;
+        assert!(event_content_differs(&local, &remote));
     }
 
     #[test]

@@ -905,7 +905,7 @@ async fn test_revision_restore_message() {
         _ => panic!("Expected SQLite pool in test suite"),
     };
     let revision_id = uuid::Uuid::new_v4();
-    SqliteRevisionRepository::new(pool)
+    SqliteRevisionRepository::new(pool.clone())
         .create(&HistoricalRevision {
             id: DbUuid::from(revision_id),
             resource_type: "message".to_string(),
@@ -918,6 +918,12 @@ async fn test_revision_restore_message() {
             revision_number: 1,
             created_at: chrono::Utc::now().timestamp(),
         })
+        .await
+        .unwrap();
+
+    sqlx::query("UPDATE messages SET has_conflict = 1 WHERE id = ?")
+        .bind(msg.id.0.to_string())
+        .execute(&pool)
         .await
         .unwrap();
 
@@ -962,6 +968,8 @@ async fn test_revision_restore_message() {
     let msg_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(msg_json["subject"], "Restored Subject");
     assert_eq!(msg_json["is_read"], true);
+    // Restoring resolves the conflict flagged by sync.
+    assert_eq!(msg_json["has_conflict"], false);
 
     // 3. Unknown revision id returns 404
     let res = app
