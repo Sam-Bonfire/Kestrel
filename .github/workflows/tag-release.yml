@@ -1,5 +1,8 @@
 name: Tag Release
 
+# Labels main with the next semantic version. Publishing is a separate,
+# explicit step: afterwards, run "Production Phase" manually with the tag
+# (releases are manual-only — no automatic release on tag or branch push).
 on:
   workflow_dispatch:
     inputs:

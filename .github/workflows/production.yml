@@ -1,17 +1,16 @@
 name: Production Phase (Release Deployment)
 
 on:
-  workflow_run:
-    workflows: ["Tag Release"]
-    types: [completed]
-  push:
-    tags:
-      - "v*"
+  # Releases are manual-only (repo policy): a human either runs "Tag
+  # Release" and then dispatches this workflow with the tag, or dispatches
+  # it directly against main to pick up the newest v* tag. No branch
+  # pushes, merges, or tag pushes start this pipeline implicitly.
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag to release (e.g., v1.1.0)'
+        description: 'Tag to release (e.g., v1.1.0); REQUIRED unless the newest v* tag on main is the intended release'
         required: false
+        default: ''
 
 concurrency:
   group: production-${{ github.event.inputs.tag_name || github.ref }}
@@ -235,8 +234,9 @@ jobs:
         id: docker_tag
         run: |
           TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
-          # workflow_run events resolve ref_name to a branch: fall back to the
-          # newest version tag (same rule as the release step below).
+          # A dispatch that omitted tag_name resolves ref_name to the default
+          # branch: fall back to the newest version tag (same rule as the
+          # release step below).
           if [[ "$TAG" != v* ]]; then
             git fetch --tags --force
             TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
@@ -589,8 +589,8 @@ jobs:
       - name: Publish GitHub Release
         run: |
           TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
-          # workflow_run events resolve ref_name to a branch (e.g. "main"),
-          # which previously published releases literally titled "Release main".
+          # A dispatch without tag_name resolves ref_name to a branch (e.g.
+          # "main"), which previously published releases titled "Release main".
           # Fall back to the newest version tag; refuse anything else.
           # NOTE: version-sorted, not `git describe`: several tags can share one
           # commit (e.g. an empty re-tag), and describe picks ambiguously.

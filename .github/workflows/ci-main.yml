@@ -7,7 +7,6 @@ on:
   pull_request:
     branches:
       - main
-      - dev
 
 concurrency:
   group: ci-main-${{ github.ref }}
@@ -74,7 +73,12 @@ jobs:
     name: Validate Backend
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
+    # hurl links libxml2.so.2, which exists only in libxml2 2.9 (Ubuntu
+    # <= 24.04). From 25.10 the package ships only the ABI-broken
+    # libxml2.so.16 and `libxml2` is purely virtual, so the runtime step
+    # below cannot install it (launchpad bug 2125555). Pin this runner until
+    # hurl ships a static build or a libxml2.so.16-compatible release.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -110,6 +114,9 @@ jobs:
         with:
           install: true
           cache: true
+
+      - name: Install Hurl runtime library
+        run: sudo apt-get update && sudo apt-get install -y libxml2
 
       - name: Run Backend Checks
         id: backend_checks
