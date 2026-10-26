@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
-    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-updater": "^2.11.0",
     "jsdom": "30.1.2",
     "lucide-svelte": "^0.469.0",
