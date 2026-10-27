@@ -43,14 +43,16 @@ async fn account_token(
         crate::db::pool::DbPool::Sqlite(pool) => Box::new(
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
-            ),
+                state.vault_secret.clone(),
+            )
+            .with_fallback_key(state.vault_old_secret.clone()),
         ),
         crate::db::pool::DbPool::Postgres(pool) => Box::new(
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
-            ),
+                state.vault_secret.clone(),
+            )
+            .with_fallback_key(state.vault_old_secret.clone()),
         ),
     };
     let account = account_repo

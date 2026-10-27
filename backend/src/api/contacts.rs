@@ -38,8 +38,9 @@ pub async fn search_contacts(
                 Box::new(
                     crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                         pool.clone(),
-                        state.jwt_secret.clone(),
-                    ),
+                        state.vault_secret.clone(),
+                    )
+                    .with_fallback_key(state.vault_old_secret.clone()),
                 ),
                 Box::new(
                     crate::db::sqlite::contact_repository::SqliteContactRepository::new(
@@ -51,8 +52,9 @@ pub async fn search_contacts(
                 Box::new(
                     crate::db::postgres::account_repository::PostgresAccountRepository::new(
                         pool.clone(),
-                        state.jwt_secret.clone(),
-                    ),
+                        state.vault_secret.clone(),
+                    )
+                    .with_fallback_key(state.vault_old_secret.clone()),
                 ),
                 Box::new(
                     crate::db::postgres::contact_repository::PostgresContactRepository::new(
@@ -92,8 +94,9 @@ fn repos(state: &AppState) -> (Box<dyn AccountRepository>, Box<dyn ContactReposi
             Box::new(
                 crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                     pool.clone(),
-                    state.jwt_secret.clone(),
-                ),
+                    state.vault_secret.clone(),
+                )
+                .with_fallback_key(state.vault_old_secret.clone()),
             ),
             Box::new(
                 crate::db::sqlite::contact_repository::SqliteContactRepository::new(pool.clone()),
@@ -103,8 +106,9 @@ fn repos(state: &AppState) -> (Box<dyn AccountRepository>, Box<dyn ContactReposi
             Box::new(
                 crate::db::postgres::account_repository::PostgresAccountRepository::new(
                     pool.clone(),
-                    state.jwt_secret.clone(),
-                ),
+                    state.vault_secret.clone(),
+                )
+                .with_fallback_key(state.vault_old_secret.clone()),
             ),
             Box::new(
                 crate::db::postgres::contact_repository::PostgresContactRepository::new(
@@ -243,14 +247,16 @@ pub async fn update_contact_notes(
         crate::db::pool::DbPool::Sqlite(pool) => Box::new(
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
-            ),
+                state.vault_secret.clone(),
+            )
+            .with_fallback_key(state.vault_old_secret.clone()),
         ),
         crate::db::pool::DbPool::Postgres(pool) => Box::new(
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
-            ),
+                state.vault_secret.clone(),
+            )
+            .with_fallback_key(state.vault_old_secret.clone()),
         ),
     };
     let owned = account_repo
@@ -288,8 +294,9 @@ async fn user_repos(state: &AppState) -> (Box<dyn AccountRepository>, Box<dyn Co
             Box::new(
                 crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                     pool.clone(),
-                    state.jwt_secret.clone(),
-                ),
+                    state.vault_secret.clone(),
+                )
+                .with_fallback_key(state.vault_old_secret.clone()),
             ),
             Box::new(
                 crate::db::sqlite::contact_repository::SqliteContactRepository::new(pool.clone()),
@@ -299,8 +306,9 @@ async fn user_repos(state: &AppState) -> (Box<dyn AccountRepository>, Box<dyn Co
             Box::new(
                 crate::db::postgres::account_repository::PostgresAccountRepository::new(
                     pool.clone(),
-                    state.jwt_secret.clone(),
-                ),
+                    state.vault_secret.clone(),
+                )
+                .with_fallback_key(state.vault_old_secret.clone()),
             ),
             Box::new(
                 crate::db::postgres::contact_repository::PostgresContactRepository::new(

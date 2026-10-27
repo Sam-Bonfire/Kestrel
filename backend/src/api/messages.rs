@@ -305,11 +305,13 @@ async fn find_account_from_db(
 
     match &state.db {
         DbPool::Sqlite(pool) => {
-            let repo = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone());
+            let repo = SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone());
             Ok(repo.find_by_id(account_id).await?)
         }
         DbPool::Postgres(pool) => {
-            let repo = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone());
+            let repo = PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone());
             Ok(repo.find_by_id(account_id).await?)
         }
     }
@@ -491,12 +493,14 @@ async fn verify_account_ownership(
 
     match &state.db {
         DbPool::Sqlite(pool) => {
-            let repo = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone());
+            let repo = SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone());
             let account = repo.find_by_id(account_id).await?;
             Ok(account.map(|a| *a.user_id == user_id).unwrap_or(false))
         }
         DbPool::Postgres(pool) => {
-            let repo = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone());
+            let repo = PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone());
             let account = repo.find_by_id(account_id).await?;
             Ok(account.map(|a| *a.user_id == user_id).unwrap_or(false))
         }
@@ -742,16 +746,18 @@ pub async fn download_attachment(
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(msg.account_id.0)
             .await?
         }
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(msg.account_id.0)
             .await?
         }
@@ -984,16 +990,18 @@ pub async fn send_message(
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(payload.account_id)
             .await?
         }
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(payload.account_id)
             .await?
         }

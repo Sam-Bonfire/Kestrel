@@ -153,11 +153,14 @@ pub async fn ensure_valid_token(
     // 5 minutes = 300 seconds
     let threshold = now + 300;
 
-    let needs_refresh =
-        account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
+    let needs_refresh = account.access_token.is_none()
+        || account.token_expires_at.is_none()
+        || account.token_expires_at.unwrap() < threshold;
 
     if !needs_refresh {
-        return Ok(account.access_token.clone().unwrap());
+        if let Some(ref token) = account.access_token {
+            return Ok(token.clone());
+        }
     }
 
     match refresher.refresh(account).await {
@@ -173,7 +176,7 @@ pub async fn ensure_valid_token(
                 match &state.db {
                     DbPool::Sqlite(pool) => {
                         if let Err(e) =
-                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
                                 .update_tokens_and_error(
                                     account.id.0,
                                     Some(access_token),
@@ -187,7 +190,7 @@ pub async fn ensure_valid_token(
                     }
                     DbPool::Postgres(pool) => {
                         if let Err(e) =
-                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
                                 .update_tokens_and_error(
                                     account.id.0,
                                     Some(access_token),
@@ -207,7 +210,7 @@ pub async fn ensure_valid_token(
                 match &state.db {
                     DbPool::Sqlite(pool) => {
                         if let Err(e) =
-                            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
                                 .update_tokens_and_error(
                                     account.id.0,
                                     account.access_token.as_deref(),
@@ -221,7 +224,7 @@ pub async fn ensure_valid_token(
                     }
                     DbPool::Postgres(pool) => {
                         if let Err(e) =
-                            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                            PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
                                 .update_tokens_and_error(
                                     account.id.0,
                                     account.access_token.as_deref(),
@@ -256,7 +259,7 @@ pub async fn ensure_valid_token(
             match &state.db {
                 DbPool::Sqlite(pool) => {
                     if let Err(e) =
-                        SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                        SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 account.access_token.as_deref(),
@@ -270,7 +273,7 @@ pub async fn ensure_valid_token(
                 }
                 DbPool::Postgres(pool) => {
                     if let Err(e) =
-                        PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+                        PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
                             .update_tokens_and_error(
                                 account.id.0,
                                 account.access_token.as_deref(),
@@ -639,13 +642,15 @@ pub fn start_sync_daemon(
                             let db_account = match &state.db {
                                 DbPool::Sqlite(pool) => {
                                     crate::core::repository::AccountRepository::find_by_id(
-                                        &crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone()),
+                                        &crate::db::sqlite::account_repository::SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                                            .with_fallback_key(state.vault_old_secret.clone()),
                                         account_id
                                     ).await
                                 }
                                 DbPool::Postgres(pool) => {
                                     crate::core::repository::AccountRepository::find_by_id(
-                                        &crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone()),
+                                        &crate::db::postgres::account_repository::PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                                            .with_fallback_key(state.vault_old_secret.clone()),
                                         account_id
                                     ).await
                                 }
@@ -752,11 +757,13 @@ pub async fn list_user_accounts(
 ) -> Result<Vec<crate::core::models::Account>, KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
-            let repo = SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone());
+            let repo = SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
         DbPool::Postgres(pool) => {
-            let repo = PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone());
+            let repo = PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone());
             Ok(repo.find_by_user_id(user_id).await?)
         }
     }
@@ -765,29 +772,61 @@ pub async fn list_user_accounts(
 async fn get_all_accounts_with_tokens(
     state: &AppState,
 ) -> Result<Vec<crate::core::models::Account>, KestrelError> {
-    // For now, we list all accounts. In production, this would use a
-    // dedicated query for accounts with non-expired tokens.
     match &state.db {
         DbPool::Sqlite(pool) => {
-            // List all accounts — a proper impl would filter by token presence
-            // For now we use a raw query
-            let accounts = sqlx::query_as::<_, crate::core::models::Account>(
+            let mut accounts = sqlx::query_as::<_, crate::core::models::Account>(
                 "SELECT id, user_id, provider, provider_account_id, display_name, \
                  access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
                  FROM accounts WHERE access_token IS NOT NULL",
             )
             .fetch_all(pool)
             .await?;
+            for acc in accounts.iter_mut() {
+                if let Some(ref at) = acc.access_token {
+                    acc.access_token = crate::core::crypto::decrypt_with_fallback(
+                        at,
+                        &state.vault_secret,
+                        state.vault_old_secret.as_deref(),
+                    )
+                    .ok();
+                }
+                if let Some(ref rt) = acc.refresh_token {
+                    acc.refresh_token = crate::core::crypto::decrypt_with_fallback(
+                        rt,
+                        &state.vault_secret,
+                        state.vault_old_secret.as_deref(),
+                    )
+                    .ok();
+                }
+            }
             Ok(accounts)
         }
         DbPool::Postgres(pool) => {
-            let accounts = sqlx::query_as::<_, crate::core::models::Account>(
+            let mut accounts = sqlx::query_as::<_, crate::core::models::Account>(
                 "SELECT id, user_id, provider, provider_account_id, display_name, \
                  access_token, refresh_token, token_expires_at, sync_error, created_at, updated_at \
                  FROM accounts WHERE access_token IS NOT NULL",
             )
             .fetch_all(pool)
             .await?;
+            for acc in accounts.iter_mut() {
+                if let Some(ref at) = acc.access_token {
+                    acc.access_token = crate::core::crypto::decrypt_with_fallback(
+                        at,
+                        &state.vault_secret,
+                        state.vault_old_secret.as_deref(),
+                    )
+                    .ok();
+                }
+                if let Some(ref rt) = acc.refresh_token {
+                    acc.refresh_token = crate::core::crypto::decrypt_with_fallback(
+                        rt,
+                        &state.vault_secret,
+                        state.vault_old_secret.as_deref(),
+                    )
+                    .ok();
+                }
+            }
             Ok(accounts)
         }
     }
@@ -1426,6 +1465,8 @@ mod tests {
         AppState {
             db: DbPool::Sqlite(pool),
             jwt_secret: "test_secret".to_string(),
+            vault_secret: "test_vault_secret".to_string(),
+            vault_old_secret: None,
             plugin_manager: Arc::new(RwLock::new(crate::plugins::manager::PluginManager::new())),
             sync_tx,
             sync_job_tx,
@@ -1494,7 +1535,7 @@ mod tests {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
             },
-            "test_secret".to_string(),
+            state.vault_secret.clone(),
         );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
@@ -1536,7 +1577,7 @@ mod tests {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
             },
-            "test_secret".to_string(),
+            state.vault_secret.clone(),
         );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await
@@ -1583,7 +1624,7 @@ mod tests {
                 DbPool::Sqlite(pool) => pool.clone(),
                 _ => unreachable!(),
             },
-            "test_secret".to_string(),
+            state.vault_secret.clone(),
         );
         crate::core::repository::AccountRepository::create(&repo, &account)
             .await

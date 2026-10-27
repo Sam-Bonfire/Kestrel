@@ -581,7 +581,7 @@ pub async fn callback(
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
             .create(&account)
             .await
@@ -589,7 +589,7 @@ pub async fn callback(
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
             .create(&account)
             .await

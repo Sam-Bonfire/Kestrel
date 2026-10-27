@@ -91,6 +91,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState {
         db: db.clone(),
         jwt_secret: config.jwt_secret,
+        vault_secret: config.vault_secret.clone(),
+        vault_old_secret: config.vault_old_secret,
         plugin_manager,
         sync_tx: sync_tx.clone(),
         sync_job_tx,
@@ -106,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     start_outbox_worker(
         db.clone(),
         state.plugin_manager.clone(),
-        state.jwt_secret.clone(),
+        state.vault_secret.clone(),
     );
     crate::api::token_worker::start_token_worker(state.clone());
 

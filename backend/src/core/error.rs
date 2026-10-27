@@ -30,6 +30,8 @@ pub enum KestrelError {
     BadGateway(String),
     #[error("Service unavailable: {0}")]
     Unavailable(String),
+    #[error("Re-authentication required: {0}")]
+    ReauthRequired(String),
     #[error("Internal error: {0}")]
     Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -40,6 +42,7 @@ impl IntoResponse for KestrelError {
             KestrelError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             KestrelError::NotFound(_) => StatusCode::NOT_FOUND,
             KestrelError::Unauthorized => StatusCode::UNAUTHORIZED,
+            KestrelError::ReauthRequired(_) => StatusCode::UNAUTHORIZED,
             KestrelError::Forbidden(_) => StatusCode::FORBIDDEN,
             KestrelError::Conflict(_) => StatusCode::CONFLICT,
             KestrelError::BadRequest(_) => StatusCode::BAD_REQUEST,
@@ -48,9 +51,15 @@ impl IntoResponse for KestrelError {
             KestrelError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        let body = axum::Json(serde_json::json!({
-            "error": self.to_string(),
-        }));
+        let body = match &self {
+            KestrelError::ReauthRequired(msg) => axum::Json(serde_json::json!({
+                "error": msg,
+                "reauth_required": true,
+            })),
+            _ => axum::Json(serde_json::json!({
+                "error": self.to_string(),
+            })),
+        };
 
         (status, body).into_response()
     }

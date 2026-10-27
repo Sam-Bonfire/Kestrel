@@ -26,6 +26,8 @@ async fn create_test_state() -> AppState {
     AppState {
         db,
         jwt_secret,
+        vault_secret: TEST_SECRET.to_string(),
+        vault_old_secret: None,
         plugin_manager,
         sync_tx,
         sync_job_tx,
@@ -1169,6 +1171,8 @@ async fn create_test_state_with_stub() -> AppState {
     AppState {
         db,
         jwt_secret,
+        vault_secret: TEST_SECRET.to_string(),
+        vault_old_secret: None,
         plugin_manager,
         sync_tx,
         sync_job_tx,
@@ -1456,6 +1460,8 @@ async fn state_with_scripted_provider(fail_send: bool) -> AppState {
     AppState {
         db,
         jwt_secret: TEST_SECRET.to_string(),
+        vault_secret: TEST_SECRET.to_string(),
+        vault_old_secret: None,
         plugin_manager: Arc::new(RwLock::new(manager)),
         sync_tx: broadcast::channel(100).0,
         sync_job_tx: tokio::sync::mpsc::channel(100).0,

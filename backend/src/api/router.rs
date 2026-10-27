@@ -32,6 +32,8 @@ use crate::plugins::manager::PluginManager;
 pub struct AppState {
     pub db: crate::db::pool::DbPool,
     pub jwt_secret: String,
+    pub vault_secret: String,
+    pub vault_old_secret: Option<String>,
     pub plugin_manager: std::sync::Arc<tokio::sync::RwLock<PluginManager>>,
     pub sync_tx: broadcast::Sender<SyncEvent>,
     #[allow(dead_code)]

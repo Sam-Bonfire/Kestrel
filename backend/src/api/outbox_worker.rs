@@ -20,10 +20,10 @@ pub fn backoff_delay_secs(retry_count: i32) -> i64 {
     (BASE_DELAY_SECS << retry_count.min(10)).min(MAX_DELAY_SECS)
 }
 
-pub fn start_outbox_worker(db: DbPool, plugins: Arc<RwLock<PluginManager>>, jwt_secret: String) {
+pub fn start_outbox_worker(db: DbPool, plugins: Arc<RwLock<PluginManager>>, vault_secret: String) {
     tokio::spawn(async move {
         loop {
-            if let Err(e) = process_outbox_once(&db, &plugins, &jwt_secret).await {
+            if let Err(e) = process_outbox_once(&db, &plugins, &vault_secret).await {
                 tracing::error!("Outbox worker encountered an error: {}", e);
             }
             sleep(Duration::from_secs(60)).await;
@@ -35,7 +35,7 @@ pub fn start_outbox_worker(db: DbPool, plugins: Arc<RwLock<PluginManager>>, jwt_
 pub async fn process_outbox_once(
     db: &DbPool,
     plugins: &Arc<RwLock<PluginManager>>,
-    jwt_secret: &str,
+    vault_secret: &str,
 ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
     let now = chrono::Utc::now().timestamp();
     let items: Vec<OfflineQueueItem> = match db {
@@ -63,7 +63,7 @@ pub async fn process_outbox_once(
 
     let mut replayed = 0;
     for item in items {
-        match replay_item(db, plugins, jwt_secret, &item, now).await {
+        match replay_item(db, plugins, vault_secret, &item, now).await {
             Ok(true) => replayed += 1,
             Ok(false) => {}
             Err(e) => tracing::error!("Outbox replay of row {} failed: {}", item.id, e),
@@ -76,7 +76,7 @@ pub async fn process_outbox_once(
 async fn replay_item(
     db: &DbPool,
     plugins: &Arc<RwLock<PluginManager>>,
-    jwt_secret: &str,
+    vault_secret: &str,
     item: &OfflineQueueItem,
     now: i64,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
@@ -110,7 +110,7 @@ async fn replay_item(
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                jwt_secret.to_string(),
+                vault_secret.to_string(),
             )
             .find_by_id(request.account_id)
             .await?
@@ -118,7 +118,7 @@ async fn replay_item(
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                jwt_secret.to_string(),
+                vault_secret.to_string(),
             )
             .find_by_id(request.account_id)
             .await?

@@ -17,12 +17,14 @@ pub async fn list_accounts(
 ) -> Result<Json<Vec<crate::core::models::Account>>, KestrelError> {
     let accounts = match &state.db {
         DbPool::Sqlite(pool) => {
-            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+            SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone())
                 .find_by_user_id(user_id)
                 .await?
         }
         DbPool::Postgres(pool) => {
-            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+            PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone())
                 .find_by_user_id(user_id)
                 .await?
         }
@@ -53,14 +55,16 @@ async fn find_account(
     match &state.db {
         DbPool::Sqlite(pool) => Ok(SqliteAccountRepository::new(
             pool.clone(),
-            state.jwt_secret.clone(),
+            state.vault_secret.clone(),
         )
+        .with_fallback_key(state.vault_old_secret.clone())
         .find_by_id(account_id)
         .await?),
         DbPool::Postgres(pool) => Ok(PostgresAccountRepository::new(
             pool.clone(),
-            state.jwt_secret.clone(),
+            state.vault_secret.clone(),
         )
+        .with_fallback_key(state.vault_old_secret.clone())
         .find_by_id(account_id)
         .await?),
     }
@@ -69,12 +73,14 @@ async fn find_account(
 async fn delete_account_cascade(state: &AppState, account_id: Uuid) -> Result<(), KestrelError> {
     match &state.db {
         DbPool::Sqlite(pool) => {
-            SqliteAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+            SqliteAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone())
                 .delete(account_id)
                 .await?;
         }
         DbPool::Postgres(pool) => {
-            PostgresAccountRepository::new(pool.clone(), state.jwt_secret.clone())
+            PostgresAccountRepository::new(pool.clone(), state.vault_secret.clone())
+                .with_fallback_key(state.vault_old_secret.clone())
                 .delete(account_id)
                 .await?;
         }
