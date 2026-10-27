@@ -255,6 +255,8 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:${{ steps.docker_tag.outputs.TAG }}
             ghcr.io/${{ steps.repo_owner.outputs.OWNER }}/kestrel-backend:latest
+          # Naming policy: image is the -backend deployment identity; the
+          # executable it runs is kestrel-server (see backend/Cargo.toml).
 
   build-mail:
     name: Build Mail (${{ matrix.os }})
@@ -311,17 +313,18 @@ jobs:
       - name: Build Mail Desktop App
         run: mise run build:frontend-mail
 
-      - name: Upload Windows MSI & EXE
+      - name: Upload Windows Installer (NSIS only)
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v7
         with:
+          # Release-policy fix (see naming PR): users get exactly one Windows
+          # installer. NSIS is the updater-integrated format, so the .msi (and
+          # its sig/json) stay build-internal: they still get produced by
+          # targets:"all" and remain in the staging runs, but never publish.
           name: release-mail-windows-packages
           path: |
-            target/release/bundle/msi/*Mail*.msi
             target/release/bundle/nsis/*Mail*.exe
-            target/release/bundle/msi/*.sig
             target/release/bundle/nsis/*.sig
-            target/release/bundle/msi/*.json
             target/release/bundle/nsis/*.json
           retention-days: 7
 
@@ -398,13 +401,29 @@ jobs:
       - name: Build Mail Android App
         run: mise run build:frontend-mail:android
 
+      - name: Rename Android artifacts (release assets carry product + version)
+        run: |
+          # Generic gradle names (app-<flavor>-release.apk / .aab) carry no
+          # product or version. Rename for the release list the same way the
+          # publish step derives the newest v* tag.
+          git fetch --tags --force
+          TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          dst="release-android"
+          mkdir -p "$dst"
+          find frontend-mail/src-tauri/gen/android -type f \( -name '*.apk' -o -name '*.aab' \) | while read -r f; do
+            base="$(basename "$f")"; ext="${base##*.}"
+            flavor="$(echo "$base" | sed -E 's/^app-(.*)-release\.(apk|aab)$/\1/')"
+            [ "$flavor" = "$base" ] && flavor="$(basename "$(dirname "$f")")"
+            cp "$f" "$dst/Kestrel-Mail-$TAG-$flavor.$ext"
+          done
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v7
         with:
           name: release-mail-android-apk
           path: |
-            frontend-mail/src-tauri/gen/android/**/release/*.apk
-            frontend-mail/src-tauri/gen/android/**/release/*.aab
+            release-android/*.apk
+            release-android/*.aab
           retention-days: 7
 
   build-calendar:
@@ -549,13 +568,28 @@ jobs:
       - name: Build Calendar Android App
         run: mise run build:frontend-calendar:android
 
+      - name: Rename Android artifacts (release assets carry product + version)
+        run: |
+          # Same rename policy as the Mail Android job: gradle's generic
+          # app-<flavor>-release names become branded release asset names.
+          git fetch --tags --force
+          TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          dst="release-android"
+          mkdir -p "$dst"
+          find frontend-calendar/src-tauri/gen/android -type f \( -name '*.apk' -o -name '*.aab' \) | while read -r f; do
+            base="$(basename "$f")"; ext="${base##*.}"
+            flavor="$(echo "$base" | sed -E 's/^app-(.*)-release\.(apk|aab)$/\1/')"
+            [ "$flavor" = "$base" ] && flavor="$(basename "$(dirname "$f")")"
+            cp "$f" "$dst/Kestrel-Calendar-$TAG-$flavor.$ext"
+          done
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v7
         with:
           name: release-calendar-android-apk
           path: |
-            frontend-calendar/src-tauri/gen/android/**/release/*.apk
-            frontend-calendar/src-tauri/gen/android/**/release/*.aab
+            release-android/*.apk
+            release-android/*.aab
           retention-days: 7
 
   create-github-release:
