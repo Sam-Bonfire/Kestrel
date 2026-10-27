@@ -454,12 +454,38 @@ None.
 - **Status:** Approved
 - **Date:** 2026-10-02
 - **Author:** OpenCode session (security review)
-- **Decision:** Security checks run on every PR, every merge to `dev`/`main`, and weekly: `cargo audit`, `pnpm audit` (high+), verified-secret scanning, and daily Dependabot patch PRs, all runnable locally via `mise run audit`. Documented in `SECURITY.md`.
+- **Decision:** Security checks run on every PR, every merge to `dev`/`main`, and weekly: `cargo audit`, `pnpm audit` (high+), verified-secret scanning, and daily Dependabot patch PRs, all runnable locally via `mise run audit`. Documented in `SECURITY.md`. (Trigger scope later narrowed by DEC-026: dev-PRs run validation only; audits run on merges and weekly.)
 - **Reason:** The October review found 45 open advisories, no secret scanning, no code scanning, and no branch protection — debt that accrues silently. Daily gates make new issues fail the build the day they appear instead of batching into reviews.
 - **Alternatives Considered:** Ad-hoc review batches (status quo ante), full GHAS suite immediately (blocked on admin scope; tracked as manual steps in `SECURITY.md`).
 - **Consequences:** `security.yml` must stay green for merge (enforced via branch ruleset once added); Dependabot patch PRs reviewed as routine.
 - **Affected Components:** `.github/workflows/security.yml`, `.github/dependabot.yml`, `mise.toml`, `SECURITY.md`.
 - **User Approval:** Pending (proposed in security batch review)
+
+## DEC-026: Three-Stage Trigger Separation (PR Validation vs Dev Validation vs Main Gate)
+
+- **Category:** Infrastructure / Process
+- **Status:** Approved
+- **Date:** 2026-10-25
+- **Author:** User-directed restructure (reviewer loop)
+- **Decision:** Workflows fire by stage, never duplicated: a PR targeting `dev` runs only PR validation (`preview.yml`); after merge, pushes to `dev` run dev validation (`staging.yml` + `security.yml` audits); PRs targeting `main` and pushes to `main` run the full main gate (`ci-main.yml` + `security.yml`). The `pull_request: branches: [dev]` trigger on `ci-main.yml` added in passing by #204 (2026-10-25) is removed, as are `security.yml`'s dev-PR triggers.
+- **Reason:** Full validation suites were running twice per change (pre-merge on dev-PRs and post-merge via staging), doubling CI time and blurring stage roles; the `- dev` PR trigger entered through an unrelated feature PR without a decision record.
+- **Alternatives Considered:** Keeping security audits on dev-PRs (rejected: the same audits run on push to `dev` immediately, so a window of one merge without pre-merge audits was accepted); converting shared validate jobs to reusable `workflow_call` composites (recommended follow-up, not this decision).
+- **Consequences:** Branch protection has no required checks on `dev`, so no gate orphaned; `staging.yml`'s `promote-to-main` auto fast-forward still exists — future drift to watch (if main gating is desired per-merge, that job should become a PR).
+- **Affected Components:** `.github/workflows/ci-main.yml`, `.github/workflows/preview.yml`, `.github/workflows/staging.yml`, `.github/workflows/security.yml`.
+- **User Approval:** Approved (explicit pipeline policy request)
+
+## DEC-027: Releases Are Manual-Only
+
+- **Category:** Deployment / Process
+- **Status:** Approved
+- **Date:** 2026-10-26
+- **Author:** User-directed restructure (reviewer loop)
+- **Decision:** `production.yml` ("Production Phase") fires only on `workflow_dispatch`. The automatic legs — `workflow_run` on "Tag Release" completion and `push: tags: v*` — are removed. Publishing a release is always two explicit manual steps: dispatch "Tag Release" to place the semantic tag, then dispatch "Production Phase" (optionally naming the tag; it falls back to the newest `v*` tag reachable from the branch, never to a branch name).
+- **Reason:** Merges to `main` (including the automatic dev→main fast-forward) must never start a release implicitly; a locally pushed or scripted `v*` tag would have silently started a full build-and-publish pipeline.
+- **Alternatives Considered:** Keep the `workflow_run` chain so Tag Release auto-publishes (rejected: one click between tag and release leaves no review point before artifacts are public).
+- **Consequences:** Tag pushes alone create no releases; forgotten production dispatch means a tagged but unreleased commit (acceptable: releases should be deliberate).
+- **Affected Components:** `.github/workflows/production.yml`, `.github/workflows/tag-release.yml`.
+- **User Approval:** Approved (explicit policy request)
 
 ---
 
@@ -479,3 +505,5 @@ None.
 | 2026-07-18 | Document logical multi-tenancy partitioning | Introduce basic user partitions to schemas and accounts | Antigravity AI | DEC-016 |
 | 2026-07-18 | Document VCS Selection | Standardize on Jujutsu (jj) version control | Antigravity AI | DEC-017 |
 | 2026-07-18 | Add dynamic provider branding | Allow WASM plugins to define custom buttons/banners | Antigravity AI | DEC-018 |
+| 2026-10-26 | Record pipeline trigger separation decision | Document user-directed 3-stage trigger policy (PR-validate / dev-validate / main gate) | GLM reviewer loop | DEC-026 |
+| 2026-10-26 | Record manual-only release policy | Document that no merge or tag push ever starts a release implicitly | GLM reviewer loop | DEC-027 |
