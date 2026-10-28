@@ -23,6 +23,21 @@ fn default_search_limit() -> i64 {
     20
 }
 
+/// FTS5 query syntax problems are client errors, not server failures.
+fn search_error(e: sqlx::Error) -> KestrelError {
+    if let sqlx::Error::Database(db) = &e {
+        let message = db.message();
+        if message.contains("fts5:")
+            || message.contains("unterminated string")
+            || message.contains("no such column")
+            || message.contains("unknown special query")
+        {
+            return KestrelError::BadRequest("Invalid search query".to_string());
+        }
+    }
+    KestrelError::Database(e)
+}
+
 #[derive(Serialize, specta::Type)]
 pub struct SearchResult {
     pub id: Uuid,
@@ -59,16 +74,27 @@ pub async fn search_messages(
         ));
     }
 
+    // shortcut: length bound only, deep FTS5 complexity limits if abuse shows up
+    if params.q.len() > 256 {
+        return Err(KestrelError::BadRequest(
+            "Search query is too long".to_string(),
+        ));
+    }
+
     let limit = params.limit.clamp(1, 50);
 
     let messages = match &state.db {
         DbPool::Sqlite(pool) => {
             let repo = SqliteMessageRepository::new(pool.clone());
-            repo.search(user_id, &params.q, limit).await?
+            repo.search(user_id, &params.q, limit)
+                .await
+                .map_err(search_error)?
         }
         DbPool::Postgres(pool) => {
             let repo = PostgresMessageRepository::new(pool.clone());
-            repo.search(user_id, &params.q, limit).await?
+            repo.search(user_id, &params.q, limit)
+                .await
+                .map_err(search_error)?
         }
     };
 
