@@ -63,8 +63,9 @@ pub async fn list_labels(
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_user_id(user_id)
             .await?
             .into_iter()
@@ -74,8 +75,9 @@ pub async fn list_labels(
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_user_id(user_id)
             .await?
             .into_iter()

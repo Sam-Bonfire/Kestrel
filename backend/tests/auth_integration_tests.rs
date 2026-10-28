@@ -25,6 +25,8 @@ async fn test_auth_registration_and_token_flow() {
     let state = AppState {
         db,
         jwt_secret,
+        vault_secret: "super_secret_vault_key_for_testing_12345".to_string(),
+        vault_old_secret: None,
         plugin_manager,
         sync_tx,
         sync_job_tx,

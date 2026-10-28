@@ -38,16 +38,18 @@ async fn verify_account_owner(
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(account_id)
             .await?
         }
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(account_id)
             .await?
         }

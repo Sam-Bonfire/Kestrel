@@ -23,6 +23,8 @@ async fn create_test_state() -> AppState {
     AppState {
         db,
         jwt_secret: common::TEST_SECRET.to_string(),
+        vault_secret: common::TEST_SECRET.to_string(),
+        vault_old_secret: None,
         plugin_manager,
         sync_tx,
         sync_job_tx,

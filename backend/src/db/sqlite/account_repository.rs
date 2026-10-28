@@ -8,11 +8,59 @@ use crate::core::repository::AccountRepository;
 pub struct SqliteAccountRepository {
     pool: SqlitePool,
     master_key: String,
+    fallback_key: Option<String>,
 }
 
 impl SqliteAccountRepository {
     pub fn new(pool: SqlitePool, master_key: String) -> Self {
-        Self { pool, master_key }
+        Self {
+            pool,
+            master_key,
+            fallback_key: None,
+        }
+    }
+
+    pub fn with_fallback_key(mut self, fallback_key: Option<String>) -> Self {
+        self.fallback_key = fallback_key;
+        self
+    }
+
+    fn decrypt_account_tokens(&self, acc: &mut Account) {
+        let mut decrypt_err = false;
+        if let Some(ref at) = acc.access_token {
+            match crate::core::crypto::decrypt_with_fallback(
+                at,
+                &self.master_key,
+                self.fallback_key.as_deref(),
+            ) {
+                Ok(decrypted) => acc.access_token = Some(decrypted),
+                Err(_) => {
+                    acc.access_token = None;
+                    decrypt_err = true;
+                }
+            }
+        }
+        if let Some(ref rt) = acc.refresh_token {
+            match crate::core::crypto::decrypt_with_fallback(
+                rt,
+                &self.master_key,
+                self.fallback_key.as_deref(),
+            ) {
+                Ok(decrypted) => acc.refresh_token = Some(decrypted),
+                Err(_) => {
+                    acc.refresh_token = None;
+                    decrypt_err = true;
+                }
+            }
+        }
+        if decrypt_err {
+            acc.sync_error = Some("reauth_required".to_string());
+            tracing::warn!(
+                "Vault decryption failed for account {} (provider: {}): marked reauth_required",
+                acc.id.0,
+                acc.provider
+            );
+        }
     }
 }
 
@@ -29,18 +77,7 @@ impl AccountRepository for SqliteAccountRepository {
         .await?;
 
         if let Some(ref mut acc) = account {
-            if let Some(ref at) = acc.access_token {
-                acc.access_token = Some(
-                    crate::core::crypto::decrypt(at, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
-            if let Some(ref rt) = acc.refresh_token {
-                acc.refresh_token = Some(
-                    crate::core::crypto::decrypt(rt, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
+            self.decrypt_account_tokens(acc);
         }
 
         Ok(account)
@@ -57,18 +94,7 @@ impl AccountRepository for SqliteAccountRepository {
         .await?;
 
         for acc in accounts.iter_mut() {
-            if let Some(ref at) = acc.access_token {
-                acc.access_token = Some(
-                    crate::core::crypto::decrypt(at, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
-            if let Some(ref rt) = acc.refresh_token {
-                acc.refresh_token = Some(
-                    crate::core::crypto::decrypt(rt, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
+            self.decrypt_account_tokens(acc);
         }
 
         Ok(accounts)
@@ -90,18 +116,7 @@ impl AccountRepository for SqliteAccountRepository {
         .await?;
 
         if let Some(ref mut acc) = account {
-            if let Some(ref at) = acc.access_token {
-                acc.access_token = Some(
-                    crate::core::crypto::decrypt(at, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
-            if let Some(ref rt) = acc.refresh_token {
-                acc.refresh_token = Some(
-                    crate::core::crypto::decrypt(rt, &self.master_key)
-                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                );
-            }
+            self.decrypt_account_tokens(acc);
         }
 
         Ok(account)

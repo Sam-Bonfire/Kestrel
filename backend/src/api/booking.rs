@@ -97,16 +97,18 @@ async fn owned_calendar(
         DbPool::Sqlite(pool) => {
             crate::db::sqlite::account_repository::SqliteAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(cal.account_id.0)
             .await?
         }
         DbPool::Postgres(pool) => {
             crate::db::postgres::account_repository::PostgresAccountRepository::new(
                 pool.clone(),
-                state.jwt_secret.clone(),
+                state.vault_secret.clone(),
             )
+            .with_fallback_key(state.vault_old_secret.clone())
             .find_by_id(cal.account_id.0)
             .await?
         }
