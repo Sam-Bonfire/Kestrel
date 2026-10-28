@@ -59,7 +59,7 @@
 
     <form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="space-y-4">
       <!-- Host URL Selection directly on the Login screen -->
-      <ServerConfig class="pb-2 border-b border-[var(--color-border-hairline)]" />
+      <ServerConfig collapsed class="pb-2 border-b border-[var(--color-border-hairline)]" />
 
       <div>
         <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] mb-2">
