@@ -58,6 +58,10 @@ export default defineConfig({
     __KESTREL_DOCKER_IMAGE__: JSON.stringify(envOr('KESTREL_DOCKER_IMAGE', '')),
     __KESTREL_CONTACT_EMAIL__: JSON.stringify(envOr('KESTREL_CONTACT_EMAIL', '')),
     __KESTREL_IOS_TESTFLIGHT__: JSON.stringify(envOr('KESTREL_IOS_TESTFLIGHT', '')),
+    // Forms ingest is optional: an empty endpoint disables site forms without
+    // failing the build (see docs/SELFHOST.md for the payload contract).
+    __KESTREL_FORMS_ENDPOINT__: JSON.stringify(envOr('FORMS_ENDPOINT', '')),
+    __KESTREL_FORMS_TOKEN__: JSON.stringify(envOr('FORMS_TOKEN', '')),
   },
   resolve: {
     alias: {

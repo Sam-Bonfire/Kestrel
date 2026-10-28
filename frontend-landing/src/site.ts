@@ -20,6 +20,11 @@ export const site = {
   contactEmail: __KESTREL_CONTACT_EMAIL__ as string,
   // TestFlight invite URL once the iOS beta opens; empty renders "invite only".
   iosTestFlight: __KESTREL_IOS_TESTFLIGHT__ as string,
+  // Forms ingest target (docs/SELFHOST.md). Empty endpoint = forms disabled.
+  forms: {
+    endpoint: __KESTREL_FORMS_ENDPOINT__ as string,
+    token: __KESTREL_FORMS_TOKEN__ as string,
+  },
 };
 
 export interface PlatformBuild {
