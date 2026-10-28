@@ -143,6 +143,8 @@ Configure these variables in your `.env` file at the root of the backend deploym
 | `DATABASE_URL` | Connection string for SQLite or PostgreSQL. | `sqlite:/app/data/kestrel.db` |
 | `SESSION_SECRET` / `JWT_SECRET` | Secret key for signing JWTs and session auth. Must be a long, random string (32+ chars). | *Required* |
 | `RUST_LOG` | Logging verbosity (e.g., `info`, `debug`). | `info` |
+| `FORMS_ENDPOINT` | URL that site forms post to. Empty disables forms. See [SELFHOST.md](./SELFHOST.md). | *Disabled* |
+| `FORMS_TOKEN` | Bearer token your forms receiver checks. Empty sends no `Authorization` header. | *Unset* |
 
 ---
 
