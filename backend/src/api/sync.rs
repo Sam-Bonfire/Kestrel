@@ -157,10 +157,8 @@ pub async fn ensure_valid_token(
         || account.token_expires_at.is_none()
         || account.token_expires_at.unwrap() < threshold;
 
-    if !needs_refresh {
-        if let Some(ref token) = account.access_token {
-            return Ok(token.clone());
-        }
+    if !needs_refresh && let Some(ref token) = account.access_token {
+        return Ok(token.clone());
     }
 
     match refresher.refresh(account).await {
