@@ -77,6 +77,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     libssl3 \
     libsqlite3-0 \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create application directory
