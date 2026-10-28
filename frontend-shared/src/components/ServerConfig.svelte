@@ -6,9 +6,11 @@
   interface Props {
     class?: string;
     onUrlChange?: (url: string) => void;
+    /** Wrap the field in a closed disclosure so the host is not front-and-centre. */
+    collapsed?: boolean;
   }
 
-  let { class: className = '', onUrlChange }: Props = $props();
+  let { class: className = '', onUrlChange, collapsed = false }: Props = $props();
 
   let serverInputUrl = $state(getServerUrl());
   let testingConnection = $state(false);
@@ -51,7 +53,8 @@
   }
 </script>
 
-<div class="space-y-1.5 {className}">
+{#snippet fields()}
+<div class="space-y-1.5">
   <div class="flex items-center justify-between">
     <label for="server-host-url" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
       Host / Server URL
@@ -109,3 +112,20 @@
     </p>
   {/if}
 </div>
+{/snippet}
+
+{#if collapsed}
+  <details class={className}>
+    <summary class="cursor-pointer select-none text-xs text-[var(--color-text-secondary)] hover:text-white">
+      Server: <span class="text-[var(--color-text-primary)]">{serverInputUrl}</span>
+      <span class="text-[var(--color-text-secondary)]">(change)</span>
+    </summary>
+    <div class="mt-3">
+      {@render fields()}
+    </div>
+  </details>
+{:else}
+  <div class={className}>
+    {@render fields()}
+  </div>
+{/if}
