@@ -124,6 +124,56 @@ export default {
 Point `FORMS_ENDPOINT` at the Worker URL and set `FORMS_TOKEN` to the same value
 in the Worker (`wrangler secret put FORMS_TOKEN`) and in the build environment.
 
+### n8n receiver
+
+[`deploy/n8n/forms-ingest.json`](../deploy/n8n/forms-ingest.json) is a ready
+workflow: it authenticates per form, drops honeypots, rate limits, verifies
+Turnstile, and creates a page in the Notion database that form routes to.
+
+Setup:
+
+1. Create a data table named `forms_registry` with the columns `app`, `form`,
+   `databaseId`, `titleProperty`, `propertyMap`, `token`, `notifyUrl` (all
+   strings).
+2. Import the JSON (`Workflows → Import from File`), then open the `Registry`
+   node and select your table — the export carries the author's table ID.
+3. Create a Notion credential with write access to the target databases and
+   select it on the `Create Notion page` node.
+4. Activate the workflow and set `FORMS_ENDPOINT` to
+   `https://<your-n8n>/webhook/forms-ingest`.
+
+Registry rows:
+
+| Column | Meaning |
+| --- | --- |
+| `app` / `form` | The pair the client sends. Anything else gets `400`. |
+| `databaseId` | Notion database the submission becomes a page in. Required. |
+| `titleProperty` | Name of the database's title property. Defaults to `Name`. |
+| `propertyMap` | JSON mapping a form field to `{"name": "...", "type": "..."}`. Unmapped fields become `rich_text` with the same name. |
+| `token` | Expected token. Blank accepts any token, i.e. a public form. |
+| `notifyUrl` | Optional webhook (Discord, Slack) pinged after the page is created. |
+
+```json
+{"app":"landing","form":"interest","databaseId":"<notion-db-id>","titleProperty":"Name",
+ "propertyMap":"{\"email\":{\"name\":\"Email\",\"type\":\"email\"},\"message\":{\"name\":\"Notes\"}}",
+ "token":"","notifyUrl":""}
+```
+
+Behavior worth knowing:
+
+- Tokens are accepted as `Authorization: Bearer <token>` or `X-Token: <token>`,
+  so the same registry serves the bundle client and a plain `curl`.
+- Five submissions per IP, per form, per minute. A filled `_hp` gets a `200` and
+  is dropped before anything is stored.
+- With `TURNSTILE_SECRET` set in the n8n environment, a submission without a
+  token is rejected. Without the variable, verification is skipped — set it
+  whenever the site has a Turnstile site key.
+- Attachments are refused with `415`: Notion cannot fetch a data URL. Use the
+  Worker receiver (which can store the bytes) for the attachment variant.
+- `mise run test:scripts` asserts the wiring and both Code nodes of the export
+  without needing a live n8n.
+
+
 ## Bring-your-own backend checklist
 
 - Serve the receiver over HTTPS. The client posts from an HTTPS page, and mixed

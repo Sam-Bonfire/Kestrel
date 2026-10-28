@@ -1,0 +1,544 @@
+{
+  "name": "Kestrel Forms Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "forms-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "forms-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "9b1f5f0e-6f5c-4a1e-9d4b-2f0c6e7a8b11"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "const req = $input.first().json;\nconst body = req.body && typeof req.body === 'object' ? req.body : {};\nconst headers = req.headers ?? {};\nconst fields = body.fields && typeof body.fields === 'object' ? body.fields : null;\n\nconst reject = (status, error) => [{ json: { ok: false, status, error } }];\n\nif (!fields) return reject(400, 'bad payload');\n\nconst app = typeof body.app === 'string' ? body.app : '';\nconst form = typeof body.form === 'string' ? body.form.trim() : '';\nif (!['landing', 'mail', 'calendar'].includes(app) || form === '') {\n  return reject(400, 'unknown form');\n}\n\nif (JSON.stringify(body).length > 32 * 1024) return reject(413, 'payload too large');\n\n// A filled honeypot is a bot. Answer 200 and do nothing, so it learns nothing.\nif (typeof fields._hp === 'string' && fields._hp !== '') return reject(200, '');\n\nconst authorization = String(headers.authorization ?? '');\nconst rawToken = headers['x-token'] ?? authorization.replace(/^Bearer\\s+/i, '');\nconst token = String(rawToken ?? '').trim();\n\nconst forwarded = String(headers['x-forwarded-for'] ?? '').split(',')[0].trim();\nconst ip = forwarded || String(headers['x-real-ip'] ?? '') || 'unknown';\n\n// Per-IP, per-form sliding window kept in workflow static data.\nconst now = Date.now();\nconst windowMs = 60000;\nconst limit = 5;\nconst store = $getWorkflowStaticData('global');\nconst rateLimit = (store.rateLimit = store.rateLimit ?? {});\nif (Object.keys(rateLimit).length > 500) {\n  for (const [key, hits] of Object.entries(rateLimit)) {\n    if (!hits.some((at) => now - at < windowMs)) delete rateLimit[key];\n  }\n}\nconst bucket = `${ip}|${app}|${form}`;\nconst hits = (rateLimit[bucket] ?? []).filter((at) => now - at < windowMs);\nif (hits.length >= limit) return reject(429, 'too many submissions, try again later');\nhits.push(now);\nrateLimit[bucket] = hits;\n\nreturn [{ json: { ok: true, app, form, fields, meta: body.meta ?? {}, token, ip } }];"
+      },
+      "id": "forms-guard",
+      "name": "Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "guard-ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "forms-guard-ok-",
+      "name": "Guard ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.error ? { error: $json.error } : { ok: true }) }}",
+        "options": {
+          "responseCode": "={{ $json.status ?? 400 }}"
+        }
+      },
+      "id": "forms-respond-early",
+      "name": "Respond early",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        660,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "l4G3MacZYxR6aZja"
+        }
+      },
+      "id": "forms-registry",
+      "name": "Registry",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "const req = $('Guard').first().json;\nconst rows = $input.all().map((item) => item.json);\nconst row = rows.find((entry) => entry.app === req.app && entry.form === req.form);\n\nconst fail = (status, error) => [{ json: { ...req, authorized: false, status, error } }];\n\nif (!row) return fail(400, 'unknown form');\n\nconst expected = String(row.token ?? '');\nif (expected !== '' && req.token !== expected) return fail(401, 'unauthorized');\n\n// Attachments are data URLs; Notion cannot fetch them. Refuse instead of dropping silently.\nif (typeof req.fields.attachment === 'string' && req.fields.attachment !== '') {\n  return fail(415, 'this receiver does not store attachments');\n}\n\nconst secret = $env.TURNSTILE_SECRET ?? '';\nconst turnstileToken = typeof req.meta.turnstile === 'string' ? req.meta.turnstile : '';\nif (secret !== '' && turnstileToken === '') return fail(400, 'missing verification token');\n\nconst databaseId = String(row.databaseId ?? '').trim();\nif (databaseId === '') return fail(500, 'registry row has no databaseId');\n\nlet propertyMap = {};\nif (row.propertyMap) {\n  try {\n    propertyMap = JSON.parse(row.propertyMap);\n  } catch {\n    return fail(500, 'registry propertyMap is not valid JSON');\n  }\n}\n\nconst text = (value) => String(value).slice(0, 2000);\n\nconst toProperty = (type, value) => {\n  switch (type) {\n    case 'title':\n      return { title: [{ text: { content: text(value) } }] };\n    case 'email':\n      return { email: text(value) };\n    case 'url':\n      return { url: text(value) };\n    case 'phone_number':\n      return { phone_number: text(value) };\n    case 'select':\n      return { select: { name: text(value) } };\n    case 'number': {\n      const parsed = Number(value);\n      return { number: Number.isFinite(parsed) ? parsed : null };\n    }\n    case 'checkbox':\n      return { checkbox: value === true || value === 'true' };\n    case 'date':\n      return { date: { start: text(value) } };\n    default:\n      return { rich_text: [{ text: { content: text(value) } }] };\n  }\n};\n\nconst properties = {};\nlet titleValue = '';\nlet titleName = String(row.titleProperty ?? '').trim();\nfor (const [key, value] of Object.entries(req.fields)) {\n  if (key === '_hp' || key.startsWith('attachment')) continue;\n  const mapped = propertyMap[key] ?? {};\n  const name = mapped.name ?? key;\n  const type = mapped.type ?? 'rich_text';\n  if (type === 'title') {\n    titleValue = text(value);\n    titleName = name;\n    continue;\n  }\n  properties[name] = toProperty(type, value);\n}\nif (titleName === '') titleName = 'Name';\nif (titleValue === '') {\n  titleValue = text(req.fields.name || req.fields.email || `${req.app} ${req.form}`);\n}\nproperties[titleName] = toProperty('title', titleValue);\n\nconst page = { parent: { database_id: databaseId }, properties };\n\nreturn [{ json: {\n  ...req,\n  authorized: true,\n  status: 200,\n  needsTurnstile: secret !== '' && turnstileToken !== '',\n  turnstileToken,\n  databaseId,\n  notifyUrl: String(row.notifyUrl ?? ''),\n  page,\n} }];"
+      },
+      "id": "forms-authorize",
+      "name": "Authorize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "allowed",
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "forms-allowed-",
+      "name": "Allowed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1100,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "needs-turnstile",
+              "leftValue": "={{ $json.needsTurnstile }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "forms-turnstile-needed-",
+      "name": "Turnstile needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1320,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "secret",
+              "value": "={{ $env.TURNSTILE_SECRET }}"
+            },
+            {
+              "name": "response",
+              "value": "={{ $('Authorize').first().json.turnstileToken }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "forms-verify-turnstile",
+      "name": "Verify Turnstile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "turnstile-ok",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "forms-turnstile-ok-",
+      "name": "Turnstile ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1760,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{{ JSON.stringify({ error: \"verification failed\" }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "forms-respond-unverified",
+      "name": "Respond unverified",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1980,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Authorize').first().json.page) }}",
+        "options": {}
+      },
+      "id": "forms-create-notion-page",
+      "name": "Create Notion page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-notify",
+              "leftValue": "={{ $('Authorize').first().json.notifyUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "forms-notify-",
+      "name": "Notify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2200,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Authorize').first().json.notifyUrl }}",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ app: $('Authorize').first().json.app, form: $('Authorize').first().json.form, fields: $('Authorize').first().json.fields }) }}",
+        "options": {}
+      },
+      "id": "forms-notify",
+      "name": "Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        -320
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "forms-respond-ok",
+      "name": "Respond ok",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2640,
+        -160
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard": {
+      "main": [
+        [
+          {
+            "node": "Guard ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard ok?": {
+      "main": [
+        [
+          {
+            "node": "Registry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond early",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registry": {
+      "main": [
+        [
+          {
+            "node": "Authorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize": {
+      "main": [
+        [
+          {
+            "node": "Allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Allowed?": {
+      "main": [
+        [
+          {
+            "node": "Turnstile needed?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond early",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turnstile needed?": {
+      "main": [
+        [
+          {
+            "node": "Verify Turnstile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Notion page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Turnstile": {
+      "main": [
+        [
+          {
+            "node": "Turnstile ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turnstile ok?": {
+      "main": [
+        [
+          {
+            "node": "Create Notion page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond unverified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notion page": {
+      "main": [
+        [
+          {
+            "node": "Notify?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify?": {
+      "main": [
+        [
+          {
+            "node": "Notify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond ok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify": {
+      "main": [
+        [
+          {
+            "node": "Respond ok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
