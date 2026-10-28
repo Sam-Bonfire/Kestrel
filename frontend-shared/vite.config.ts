@@ -22,6 +22,11 @@ export default defineConfig({
       include: ['src/**/*'],
     }),
   ],
+  // Tests mount components, so resolve Svelte's browser build instead of the
+  // server entry (`mount` is unavailable there). Builds use tsc, not vite.
+  resolve: {
+    conditions: ['browser'],
+  },
   test: {
     environment: 'jsdom',
   },
