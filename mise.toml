@@ -118,9 +118,13 @@ run = "pnpm test"
 description = "Execute intent-based Hurl API suites against live backend (portable: no shell-specific syntax)"
 run = "node scripts/run-hurl.mjs"
 
+[tasks."test:scripts"]
+description = "Run node:test suites for repo scripts (release tooling)"
+run = "node --test \"scripts/**/*.test.mjs\""
+
 [tasks.test]
-description = "Run fast automated tests (backend + frontend)"
-depends = ["test:backend", "test:frontend"]
+description = "Run fast automated tests (backend + frontend + scripts)"
+depends = ["test:backend", "test:frontend", "test:scripts"]
 run = "echo \"==> All test suites passed!\""
 
 [tasks."test:all"]

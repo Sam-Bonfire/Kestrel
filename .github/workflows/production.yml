@@ -481,17 +481,17 @@ jobs:
       - name: Build Calendar Desktop App
         run: mise run build:frontend-calendar
 
-      - name: Upload Windows MSI & EXE
+      - name: Upload Windows Installer (NSIS only)
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v7
         with:
+          # Release policy: users get exactly one Windows installer. NSIS is
+          # the updater-integrated format, so the .msi (and its sig/json) stays
+          # build-internal: targets:"all" still produces it, but it never ships.
           name: release-calendar-windows-packages
           path: |
-            target/release/bundle/msi/*Calendar*.msi
             target/release/bundle/nsis/*Calendar*.exe
-            target/release/bundle/msi/*.sig
             target/release/bundle/nsis/*.sig
-            target/release/bundle/msi/*.json
             target/release/bundle/nsis/*.json
           retention-days: 7
 
@@ -636,6 +636,10 @@ jobs:
             exit 1
           fi
           echo "Publishing release $TAG"
+          # Updater manifests are generated from the signed installers that were
+          # just downloaded; the app endpoints point at <app>-latest.json on the
+          # latest release.
+          node scripts/build-updater-manifest.mjs release-artifacts "$TAG" "${{ github.repository }}" release-artifacts
           # Upload files only: the artifact glob can expand to directories
           # (e.g. release-artifacts/app/build), which `gh` rejects with
           # "is a directory" and fails the whole release.

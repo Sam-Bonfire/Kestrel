@@ -103,7 +103,7 @@ Best for maximum security where Kestrel is only accessible on your private mesh 
 
 To install the desktop application, download the latest release for your OS from the [GitHub Releases page](https://github.com/OWNER/kestrel/releases).
 
-- **Windows:** Download and run the `.msi` installer.
+- **Windows:** Download and run the NSIS `.exe` installer. (The `.msi` is built but not published: only one Windows installer ships, and NSIS is the format the in-app updater can install in place.)
 - **Linux:** Install the `.deb` package (`sudo dpkg -i kestrel_*.deb`) or run the portable `.AppImage`.
 - **macOS:** Download the `.dmg`, open it, and drag the Kestrel app into your Applications folder.
 
@@ -157,7 +157,14 @@ docker compose up -d
 ```
 
 **Desktop Clients:**
-Download the new version from GitHub Releases and install it over the existing version.
+Download the new version from GitHub Releases and install it over the existing version. The apps also check for updates at startup against `<app>-latest.json` on the latest release; those manifests and their signatures are produced by the release workflow (`scripts/build-updater-manifest.mjs`) from the signed installers.
+
+### Updater signing keys
+
+- The private key lives only in the `TAURI_SIGNING_PRIVATE_KEY` repository secret; the workflow exports it for every desktop build so `tauri build` can sign the bundles. Never commit it, print it, or paste it into logs.
+- The matching public key is the `plugins.updater.pubkey` value in each app's `src-tauri/tauri.conf.json`. Rotating the key means shipping a release signed with the old key that carries the new pubkey, then swapping the secret.
+- If the secret is missing or wrong, the release job fails while generating `*-latest.json` (an unsigned manifest makes every client reject updates), instead of publishing a release nobody can update from.
+- Bump the `version` in `frontend-mail/src-tauri/tauri.conf.json` and `frontend-calendar/src-tauri/tauri.conf.json` for each release: the manifest advertises the bundle version, so an unbumped build never offers (or keeps re-offering) the update.
 
 > [!NOTE]
 > Future updates will be handled automatically via Tauri's auto-update feature.
