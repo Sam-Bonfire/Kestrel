@@ -24,7 +24,7 @@ impl WasmPlugin {
         component: Component,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Instantiate the plugin once to get the static branding info
-        let mut store = engine.create_store();
+        let mut store = engine.create_store(vec![])?;
 
         // Setup imports if needed
         // For now, we mock the client credentials import
@@ -42,6 +42,7 @@ impl WasmPlugin {
             button_text: branding_res.button_text,
             button_color: branding_res.button_color,
             icon_svg: branding_res.icon_svg,
+            hosts: branding_res.hosts,
         };
 
         Ok(Self {
@@ -56,11 +57,28 @@ impl WasmPlugin {
     async fn instantiate(
         &self,
     ) -> Result<(wasmtime::Store<WasmState>, KestrelPlugin), PluginError> {
-        let mut store = self.engine.create_store();
+        let mut store = self
+            .engine
+            .create_store(self.branding.hosts.clone())
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
         let instance =
             KestrelPlugin::instantiate_async(&mut store, &self.component, &self.engine.linker)
                 .await
-                .map_err(|e| PluginError(e.to_string()))?;
+                .map_err(|e| {
+                    let msg = e.to_string();
+                    if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                        PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                    } else {
+                        PluginError(msg)
+                    }
+                })?;
 
         Ok((store, instance))
     }
@@ -85,7 +103,14 @@ impl MailProvider for WasmPlugin {
             .kestrel_provider_mail_provider()
             .call_sync_mail(&mut store, auth_token, cursor)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(res) => Ok(SyncResult {
@@ -124,7 +149,14 @@ impl MailProvider for WasmPlugin {
             .kestrel_provider_mail_provider()
             .call_fetch_message_body(&mut store, auth_token, external_id)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(res) => Ok(MessageBody {
@@ -165,7 +197,14 @@ impl MailProvider for WasmPlugin {
             .kestrel_provider_mail_provider()
             .call_send_message(&mut store, auth_token, &wit_payload)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(_) => Ok(()),
@@ -180,7 +219,14 @@ impl MailProvider for WasmPlugin {
             .kestrel_provider_mail_provider()
             .call_get_vacation(&mut store, auth_token)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(res) => Ok(VacationSettings {
@@ -214,7 +260,14 @@ impl MailProvider for WasmPlugin {
             .kestrel_provider_mail_provider()
             .call_set_vacation(&mut store, auth_token, &wit_settings)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(_) => Ok(()),
@@ -239,7 +292,14 @@ impl MailProvider for WasmPlugin {
                 external_attachment_id,
             )
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(res) => Ok(res),
@@ -250,13 +310,47 @@ impl MailProvider for WasmPlugin {
     async fn get_attachment_url(
         &self,
         _auth_token: &str,
-        external_message_id: &str,
+        _external_message_id: &str,
         external_attachment_id: &str,
     ) -> Result<String, PluginError> {
-        Ok(format!(
-            "https://cdn.kestrel.dev/attachments/{}/{}",
-            external_message_id, external_attachment_id
-        ))
+        let allowed_hosts = &self.branding.hosts;
+
+        if allowed_hosts.is_empty() {
+            return Err(PluginError(
+                "Plugin provider unknown or has no allowed hosts".to_string(),
+            ));
+        }
+
+        let parsed_url = reqwest::Url::parse(external_attachment_id).map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+            } else {
+                PluginError(msg)
+            }
+        })?;
+
+        if parsed_url.scheme() != "https" {
+            return Err(PluginError("Only HTTPS URLs are allowed".to_string()));
+        }
+
+        let host = parsed_url
+            .host_str()
+            .ok_or_else(|| PluginError("Invalid host in URL".to_string()))?
+            .to_lowercase();
+
+        let is_allowed = allowed_hosts
+            .iter()
+            .any(|allowed| host == allowed.to_lowercase());
+
+        if !is_allowed {
+            return Err(PluginError(format!(
+                "Host '{}' is not in the allowlist for provider '{}'",
+                host, self.id
+            )));
+        }
+
+        Ok(external_attachment_id.to_string())
     }
 }
 
@@ -269,7 +363,14 @@ impl CalendarProvider for WasmPlugin {
             .kestrel_provider_calendar_provider()
             .call_fetch_calendars(&mut store, auth_token)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(res) => Ok(res
@@ -297,7 +398,14 @@ impl CalendarProvider for WasmPlugin {
             .kestrel_provider_calendar_provider()
             .call_fetch_events(&mut store, auth_token, start_time, end_time)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(res) => Ok(res
@@ -352,7 +460,14 @@ impl CalendarProvider for WasmPlugin {
             .kestrel_provider_calendar_provider()
             .call_mutate_event(&mut store, auth_token, action, &wit_payload)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(_) => Ok(()),
@@ -367,7 +482,14 @@ impl CalendarProvider for WasmPlugin {
             .kestrel_provider_calendar_provider()
             .call_delete_event(&mut store, auth_token, external_id)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(_) => Ok(()),
@@ -388,7 +510,14 @@ impl CalendarProvider for WasmPlugin {
             .kestrel_provider_calendar_provider()
             .call_query_freebusy(&mut store, auth_token, emails, start_time, end_time)
             .await
-            .map_err(|e| PluginError(e.to_string()))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("fuel") || msg.contains("epoch") || msg.contains("memory") {
+                    PluginError(format!("LIMIT_EXCEEDED: {}", msg))
+                } else {
+                    PluginError(msg)
+                }
+            })?;
 
         match result {
             Ok(blocks) => Ok(blocks

@@ -157,6 +157,7 @@ interface provider-branding {
         button-text: string,    // e.g. "Continue with Google"
         button-color: string,   // hex, e.g. "#4285F4"
         icon-svg: string,       // raw inline SVG XML string
+        hosts: list<string>,    // allowed network hosts
     }
 
     /// Return the branding configuration for this provider.

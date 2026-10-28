@@ -168,6 +168,19 @@
   // Clip: read the message iframe selection first (sandboxed srcdoc
   // is same-origin, so this works), fall back to window selection.
   let bodyFrame: HTMLIFrameElement | undefined = $state(undefined);
+  let hiddenMeasureDiv: HTMLDivElement | undefined = $state(undefined);
+
+  $effect(() => {
+    // Update iframe height when the hidden div content changes
+    if (hiddenMeasureDiv && bodyFrame && protectedBody.html) {
+      // Small delay to allow images/fonts to render in the hidden div if they load instantly
+      requestAnimationFrame(() => {
+        if (hiddenMeasureDiv && bodyFrame) {
+          bodyFrame.style.height = `${hiddenMeasureDiv.scrollHeight + 20}px`;
+        }
+      });
+    }
+  });
 
   function frameSelection(): string {
     try {
@@ -751,13 +764,25 @@
                 </span>
               </div>
             {/if}
-            <iframe 
-              title="Email Body"
-              bind:this={bodyFrame}
-              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
-              srcdoc={DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
-              class="w-full min-h-[20vh] bg-white"
-              onload={(e) => { 
+            <div class="relative w-full">
+              <!-- Hidden div to measure content height -->
+              <div
+                class="absolute invisible pointer-events-none w-full max-h-0 overflow-hidden"
+                bind:this={hiddenMeasureDiv}
+              >
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_ATTR: ['target'] })}
+              </div>
+              <iframe
+                title="Email Body"
+                bind:this={bodyFrame}
+                sandbox="allow-popups allow-popups-to-escape-sandbox"
+                srcdoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; ${showRemoteOnce || isDomainAllowed(senderDomain(email?.senderEmail || '')) ? 'img-src * data: blob:;' : 'img-src \'none\''}">\n${DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}`}
+                class="w-full min-h-[20vh] bg-white transition-[height]"
+              ></iframe>
+            </div>
+
+            <!-- Hide old iframe onload logic --><div class="hidden" onload={(e) => {
                 const target = e.currentTarget as HTMLIFrameElement;
                 if (target.contentWindow) {
                   const doc = target.contentWindow.document;
@@ -807,7 +832,7 @@
                   target.style.height = (doc.documentElement.scrollHeight + 20) + 'px';
                 }
               }}
-            ></iframe>
+            ></div>
           </div>
 
           <!-- Attachments -->

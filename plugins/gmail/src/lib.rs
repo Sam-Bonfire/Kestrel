@@ -20,6 +20,7 @@ impl exports::kestrel::provider::provider_branding::Guest for GmailPlugin {
             button_text: "Sign in with Google".to_string(),
             button_color: "#EA4335".to_string(),
             icon_svg: "<svg></svg>".to_string(),
+            hosts: vec!["gmail.googleapis.com".to_string(), "www.googleapis.com".to_string()],
         }
     }
 }

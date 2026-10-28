@@ -208,6 +208,7 @@ pub struct BrandingPayload {
     pub button_text: String,
     pub button_color: String,
     pub icon_svg: String,
+    pub hosts: Vec<String>,
 }
 
 /// Provider branding interface - implemented by each WASM plugin.

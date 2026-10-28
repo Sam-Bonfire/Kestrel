@@ -17,6 +17,7 @@ impl exports::kestrel::provider::provider_branding::Guest for OutlookPlugin {
             button_text: "Sign in with Microsoft".to_string(),
             button_color: "#0078D4".to_string(),
             icon_svg: "<svg></svg>".to_string(),
+            hosts: vec!["graph.microsoft.com".to_string()],
         }
     }
 }
