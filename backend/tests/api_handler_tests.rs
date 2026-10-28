@@ -1550,3 +1550,111 @@ async fn test_unknown_webhook_provider_returns_404() {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
+
+async fn post_json(
+    app: &axum::Router,
+    uri: &str,
+    payload: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+    (status, json)
+}
+
+#[tokio::test]
+async fn test_duplicate_registration_is_indistinguishable() {
+    let app = create_router(create_test_state().await);
+    let username = "duplicate_reg@kestrel.dev";
+
+    let (first_status, first_body) = post_json(
+        &app,
+        "/api/v1/auth/register",
+        json!({ "username": username, "password": "Password123!" }),
+    )
+    .await;
+    assert_eq!(first_status, StatusCode::CREATED);
+
+    let (second_status, second_body) = post_json(
+        &app,
+        "/api/v1/auth/register",
+        json!({ "username": username, "password": "OtherPassword456!" }),
+    )
+    .await;
+
+    assert_eq!(second_status, first_status);
+    assert_eq!(
+        second_body
+            .as_object()
+            .map(|b| b.keys().collect::<Vec<_>>()),
+        first_body.as_object().map(|b| b.keys().collect::<Vec<_>>())
+    );
+    assert!(
+        !second_body.to_string().to_lowercase().contains("exist"),
+        "duplicate registration leaked account existence: {second_body}"
+    );
+
+    // The duplicate attempt must not have replaced the original password.
+    let (token_status, _) = post_json(
+        &app,
+        "/api/v1/auth/token",
+        json!({ "username": username, "password": "Password123!" }),
+    )
+    .await;
+    assert_eq!(token_status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_malformed_search_query_is_client_error() {
+    let app = create_router(create_test_state().await);
+    let (_, token) = register_and_get_token(&app, "search_syntax@kestrel.dev").await;
+
+    for query in ["%22", "notacolumn%3A", "%2A%2A%2A", "hello%20OR"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!("/api/v1/search?q={query}"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "malformed query {query} should be a client error"
+        );
+    }
+
+    let long_query = "a".repeat(257);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/v1/search?q={long_query}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}

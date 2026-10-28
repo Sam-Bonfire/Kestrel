@@ -249,16 +249,21 @@ async fn create_user(db: &DbPool, user: &User) -> Result<(), KestrelError> {
         DbPool::Postgres(pool) => PostgresUserRepository::new(pool.clone()).create(user).await,
     };
 
-    result.map_err(|e| match e {
-        sqlx::Error::Database(e) if is_unique_violation(&*e) => {
-            KestrelError::Conflict("Username already exists".to_string())
+    match result {
+        Ok(()) => Ok(()),
+        // Existing usernames are a silent no-op: the response must not reveal
+        // whether the account already existed.
+        Err(sqlx::Error::Database(e))
+            if is_unique_violation(&*e) && e.message().contains("username") =>
+        {
+            Ok(())
         }
-        sqlx::Error::Database(e) => {
+        Err(sqlx::Error::Database(e)) => {
             tracing::warn!("Database error during user creation: {}", e);
-            KestrelError::Internal(Box::new(e))
+            Err(KestrelError::Internal(Box::new(e)))
         }
-        other => KestrelError::Database(other),
-    })
+        Err(other) => Err(KestrelError::Database(other)),
+    }
 }
 
 fn is_unique_violation(e: &dyn sqlx::error::DatabaseError) -> bool {
@@ -667,5 +672,27 @@ mod tests {
         assert!(!query_token_allowed("/api/v1/messages"));
         assert!(!query_token_allowed("/api/v1/sync/stream/extra"));
         assert!(!query_token_allowed("/api/v1/sync/trigger"));
+    }
+
+    #[test]
+    fn decode_rejects_wrong_issuer() {
+        let secret = "test_secret_for_issuer_validation";
+        let claims = Claims {
+            sub: "user-1".to_string(),
+            exp: Utc::now().timestamp() + 60,
+            iss: "some-other-issuer".to_string(),
+            aud: "kestrel".to_string(),
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            decode_jwt(&token, secret),
+            Err(KestrelError::Unauthorized)
+        ));
     }
 }

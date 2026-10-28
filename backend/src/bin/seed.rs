@@ -39,6 +39,22 @@ const BODIES: &[&str] = &[
     "<p>Hope you have a fantastic birthday!</p>",
 ];
 
+/// Returns (password, was_generated). A missing or blank value generates a
+/// random password so no static seed credential can reach a real deployment.
+fn resolve_seed_password(from_env: Option<String>) -> (String, bool) {
+    match from_env {
+        Some(value) if !value.trim().is_empty() => (value, false),
+        _ => (
+            rand::thread_rng()
+                .sample_iter(&rand::distributions::Alphanumeric)
+                .take(24)
+                .map(char::from)
+                .collect(),
+            true,
+        ),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
@@ -56,12 +72,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let now = Utc::now().timestamp();
 
     let salt = SaltString::generate(&mut OsRng);
+    let (seed_password, generated_password) =
+        resolve_seed_password(env::var("KESTREL_SEED_PASSWORD").ok());
     let hash = Argon2::default()
-        .hash_password(b"password", &salt)
+        .hash_password(seed_password.as_bytes(), &salt)
         .expect("Failed to hash password")
         .to_string();
 
-    sqlx::query(
+    let created = sqlx::query(
         r#"
         INSERT INTO users (id, username, password_hash, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?)
@@ -74,7 +92,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .bind(now)
     .bind(now)
     .execute(&pool)
-    .await?;
+    .await?
+    .rows_affected()
+        == 1;
+
+    if generated_password {
+        if created {
+            println!("KESTREL_SEED_PASSWORD not set; demo_user password: {seed_password}");
+        } else {
+            println!("demo_user already exists; its password was left unchanged.");
+        }
+    }
 
     // Fetch the actual user_id in case it already existed
     let row: (String,) = sqlx::query_as("SELECT id FROM users WHERE username = 'demo_user'")
@@ -242,4 +270,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Seeding complete! 100 emails and 20 calendar events inserted for demo_user.");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_seed_password;
+
+    #[test]
+    fn seed_password_is_never_a_static_default() {
+        let (generated, was_generated) = resolve_seed_password(None);
+        assert!(was_generated);
+        assert_eq!(generated.len(), 24);
+        assert!(generated.chars().all(|c| c.is_ascii_alphanumeric()));
+        assert_ne!(generated, "password");
+
+        let (blank, was_generated) = resolve_seed_password(Some("   ".to_string()));
+        assert!(was_generated);
+        assert_ne!(blank, "password");
+
+        assert_eq!(
+            resolve_seed_password(Some("explicit-pass".to_string())),
+            ("explicit-pass".to_string(), false)
+        );
+    }
 }
