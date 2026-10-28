@@ -58,8 +58,14 @@ async fn test_vault_key_independent_from_jwt_secret() {
 
     // Reading with correct vault key decrypts both tokens
     let found = repo_vault.find_by_id(account_id).await.unwrap().unwrap();
-    assert_eq!(found.access_token.as_deref(), Some("secret_access_oauth_token"));
-    assert_eq!(found.refresh_token.as_deref(), Some("secret_refresh_oauth_token"));
+    assert_eq!(
+        found.access_token.as_deref(),
+        Some("secret_access_oauth_token")
+    );
+    assert_eq!(
+        found.refresh_token.as_deref(),
+        Some("secret_refresh_oauth_token")
+    );
     assert!(found.sync_error.is_none());
 
     // Reading with JWT secret (simulating key confusion / leak) cannot decrypt tokens
@@ -67,7 +73,10 @@ async fn test_vault_key_independent_from_jwt_secret() {
     let compromised_read = repo_jwt.find_by_id(account_id).await.unwrap().unwrap();
     assert_eq!(compromised_read.access_token, None);
     assert_eq!(compromised_read.refresh_token, None);
-    assert_eq!(compromised_read.sync_error.as_deref(), Some("reauth_required"));
+    assert_eq!(
+        compromised_read.sync_error.as_deref(),
+        Some("reauth_required")
+    );
 }
 
 #[tokio::test]
@@ -102,7 +111,10 @@ async fn test_server_restart_with_same_vault_key_survives() {
         let repo_boot_2 = SqliteAccountRepository::new(pool.clone(), vault_key.to_string());
         let loaded = repo_boot_2.find_by_id(account_id).await.unwrap().unwrap();
         assert_eq!(loaded.access_token.as_deref(), Some("surviving_token_xyz"));
-        assert_eq!(loaded.refresh_token.as_deref(), Some("surviving_refresh_xyz"));
+        assert_eq!(
+            loaded.refresh_token.as_deref(),
+            Some("surviving_refresh_xyz")
+        );
         assert_eq!(loaded.sync_error, None);
     }
 }
@@ -175,19 +187,30 @@ async fn test_dual_read_rotation_with_fallback_key() {
         .with_fallback_key(Some(old_key.to_string()));
 
     let loaded = repo_dual.find_by_id(account_id).await.unwrap().unwrap();
-    assert_eq!(loaded.access_token.as_deref(), Some("token_before_rotation"));
+    assert_eq!(
+        loaded.access_token.as_deref(),
+        Some("token_before_rotation")
+    );
     assert!(loaded.sync_error.is_none());
 
     // Update tokens with new credentials during rotation window
     repo_dual
-        .update_tokens_and_error(account_id, Some("token_after_rotation"), Some(1900000000), None)
+        .update_tokens_and_error(
+            account_id,
+            Some("token_after_rotation"),
+            Some(1900000000),
+            None,
+        )
         .await
         .unwrap();
 
     // Rotation complete: drop fallback key, now only new_key is used
     let repo_new_only = SqliteAccountRepository::new(pool.clone(), new_key.to_string());
     let re_read = repo_new_only.find_by_id(account_id).await.unwrap().unwrap();
-    assert_eq!(re_read.access_token.as_deref(), Some("token_after_rotation"));
+    assert_eq!(
+        re_read.access_token.as_deref(),
+        Some("token_after_rotation")
+    );
     assert!(re_read.sync_error.is_none());
 }
 

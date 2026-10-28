@@ -1,7 +1,4 @@
-use aes_gcm::{
-    Aes256Gcm, KeyInit, Nonce,
-    aead::Aead,
-};
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce, aead::Aead};
 use argon2::Argon2;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use rand::RngCore;
@@ -22,7 +19,10 @@ pub fn encrypt(plaintext: &str, master_key: &str) -> Result<String, KestrelError
     Argon2::default()
         .hash_password_into(master_key.as_bytes(), &salt_bytes, &mut key_bytes)
         .map_err(|e| {
-            KestrelError::Internal(Box::new(SimpleError(format!("KDF derivation failed: {}", e))))
+            KestrelError::Internal(Box::new(SimpleError(format!(
+                "KDF derivation failed: {}",
+                e
+            ))))
         })?;
 
     let cipher = Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| {
@@ -58,12 +58,12 @@ pub fn decrypt(encrypted: &str, master_key: &str) -> Result<String, KestrelError
             ));
         }
 
-        let salt_bytes = STANDARD.decode(parts[1]).map_err(|_| {
-            KestrelError::ReauthRequired("Invalid salt in ciphertext".to_string())
-        })?;
-        let nonce_bytes = STANDARD.decode(parts[2]).map_err(|_| {
-            KestrelError::ReauthRequired("Invalid nonce in ciphertext".to_string())
-        })?;
+        let salt_bytes = STANDARD
+            .decode(parts[1])
+            .map_err(|_| KestrelError::ReauthRequired("Invalid salt in ciphertext".to_string()))?;
+        let nonce_bytes = STANDARD
+            .decode(parts[2])
+            .map_err(|_| KestrelError::ReauthRequired("Invalid nonce in ciphertext".to_string()))?;
         let ciphertext_bytes = STANDARD.decode(parts[3]).map_err(|_| {
             KestrelError::ReauthRequired("Invalid base64 in ciphertext".to_string())
         })?;
@@ -78,7 +78,10 @@ pub fn decrypt(encrypted: &str, master_key: &str) -> Result<String, KestrelError
         Argon2::default()
             .hash_password_into(master_key.as_bytes(), &salt_bytes, &mut key_bytes)
             .map_err(|e| {
-                KestrelError::Internal(Box::new(SimpleError(format!("KDF derivation failed: {}", e))))
+                KestrelError::Internal(Box::new(SimpleError(format!(
+                    "KDF derivation failed: {}",
+                    e
+                ))))
             })?;
 
         let cipher = Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| {

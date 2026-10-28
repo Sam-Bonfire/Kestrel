@@ -76,7 +76,9 @@ impl Config {
         }
 
         if is_prod {
-            panic!("Production mode requires JWT_SECRET or SESSION_SECRET to be explicitly configured. Failing closed.");
+            panic!(
+                "Production mode requires JWT_SECRET or SESSION_SECRET to be explicitly configured. Failing closed."
+            );
         }
 
         // Generate a random secret when none is configured.
@@ -105,7 +107,9 @@ impl Config {
         }
 
         if is_prod {
-            panic!("Production mode requires VAULT_SECRET or KESTREL_VAULT_KEY to be explicitly configured. Failing closed.");
+            panic!(
+                "Production mode requires VAULT_SECRET or KESTREL_VAULT_KEY to be explicitly configured. Failing closed."
+            );
         }
 
         // Generate a random vault secret when none is configured.
