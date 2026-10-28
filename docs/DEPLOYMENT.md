@@ -176,12 +176,103 @@ Download the new version from GitHub Releases and install it over the existing v
 ## 8. Backup & Recovery
 
 > [!IMPORTANT]
-> Regularly back up your database to prevent data loss.
+> A backup you have never restored is a guess. Rehearse the restore on a clean
+> host once, then put the backup on a timer.
 
-- **SQLite:** Back up the `kestrel-data` Docker volume, or directly copy the `/app/data/kestrel.db` file from the container.
-- **PostgreSQL:** Use standard tools like `pg_dump` to export your database.
+### What to back up
+
+| Item | Why | Where |
+| --- | --- | --- |
+| The database (SQLite file or Postgres dump) | Accounts, messages, events, revisions | `kestrel-data` volume / your Postgres host |
+| Secrets (`SESSION_SECRET`, OAuth client secrets) | Restores cannot log in or sync without them | Your password manager |
+| Optional: `data/crashes/` | Local crash reports, if you enabled them | `kestrel-data` volume |
+
+WASM plugins and the frontend bundles are rebuilt from source; do not back them up.
+
+### SQLite
+
+`sqlite3` ships in the backend image, so back up online without stopping the
+server:
 
 ```bash
-# Example pg_dump command for Postgres
-docker exec -t kestrel-db pg_dump -U user kestrel > backup.sql
+docker exec -t kestrel-backend \
+  sh -c 'sqlite3 /app/data/kestrel.db ".backup /app/data/kestrel-backup.db"'
+docker cp kestrel-backend:/app/data/kestrel-backup.db ./kestrel-backup.db
 ```
+
+`.backup` uses SQLite's online backup API: it is consistent while the server is
+writing. Copying the raw file (or the volume) is only safe with the container
+stopped, because a live database can have a `-wal` file holding recent writes.
+
+Verify the copy before you trust it:
+
+```bash
+sqlite3 kestrel-backup.db "PRAGMA integrity_check;"      # expect: ok
+sqlite3 kestrel-backup.db "SELECT count(*) FROM messages;"
+```
+
+No local `sqlite3`? Check the file through the image instead:
+`docker compose run --rm -v "$PWD/kestrel-backup.db:/tmp/backup.db" --entrypoint sqlite3 backend /tmp/backup.db "PRAGMA integrity_check;"`
+
+Restore on a clean host (or over a broken one):
+
+```bash
+docker compose stop backend
+docker compose run --rm --entrypoint sh backend \
+  -c 'rm -f /app/data/kestrel.db /app/data/kestrel.db-wal /app/data/kestrel.db-shm'
+docker compose cp ./kestrel-backup.db backend:/app/data/kestrel.db
+docker compose start backend
+curl -f http://localhost:8080/api/v1/health
+```
+
+Migrations run at startup, so a backup from an older release is upgraded
+automatically. Log in and check the message count before you delete the backup.
+
+### PostgreSQL
+
+```bash
+# Custom-format dump: compressed, restorable table-by-table
+pg_dump -Fc -h db.example.com -U kestrel kestrel > "kestrel-$(date +%F).dump"
+
+# Inside Docker instead of a local client:
+docker exec -t kestrel-db pg_dump -U kestrel -Fc kestrel > "kestrel-$(date +%F).dump"
+```
+
+Verify and restore:
+
+```bash
+pg_restore --list kestrel-2026-10-28.dump | head        # sanity: objects are listed
+createdb -h newhost -U kestrel kestrel                  # clean target
+pg_restore --clean --if-exists -h newhost -U kestrel -d kestrel kestrel-2026-10-28.dump
+```
+
+`--clean --if-exists` makes the restore repeatable over a half-populated
+database. It drops and recreates objects, so never point it at a database you
+still need.
+
+### Before deleting an account
+
+Account purge is destructive and is not covered by per-message revisions or the
+contacts export. Take a database snapshot first (sections above), keep it for as
+long as your retention policy says, then purge.
+
+### Scheduling
+
+Keep at least seven daily copies and four weekly ones, off the host:
+
+```bash
+# cron: every day at 03:15
+15 3 * * * cd /srv/kestrel && docker exec -t kestrel-backend \
+  sh -c 'sqlite3 /app/data/kestrel.db ".backup /app/data/kestrel-backup.db"' \
+  && docker cp kestrel-backend:/app/data/kestrel-backup.db \
+     /srv/backups/kestrel-$(date +\%F).db
+```
+
+Test the timer by running the command by hand once and restoring the file.
+
+### Cloudflare Tunnel config
+
+A ready-to-edit tunnel config lives in
+[`deploy/cloudflared/config.yml`](../deploy/cloudflared/config.yml). It maps one
+public hostname to `http://localhost:8080` and returns 404 for everything else.
+Set `KESTREL_BASE_URL` to that hostname so OAuth redirects and API links match.

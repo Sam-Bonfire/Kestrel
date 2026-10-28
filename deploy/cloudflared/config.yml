@@ -1,0 +1,18 @@
+# Cloudflare Tunnel for Kestrel (example).
+#
+# 1. cloudflared tunnel login
+# 2. cloudflared tunnel create kestrel
+# 3. Copy the tunnel credentials path into `credentials-file` below.
+# 4. cloudflared tunnel route dns kestrel kestrel.example.com
+# 5. cloudflared --config deploy/cloudflared/config.yml tunnel run kestrel
+#
+# Then set KESTREL_BASE_URL=https://kestrel.example.com in the deployment .env
+# so OAuth redirects and API links point at the public host.
+
+tunnel: kestrel
+credentials-file: /etc/cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: kestrel.example.com
+    service: http://localhost:8080
+  - service: http_status:404
