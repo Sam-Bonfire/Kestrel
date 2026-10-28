@@ -44,7 +44,7 @@ thiserror = "2.0"
 # Auth
 argon2 = "0.5"
 jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
-rand = "0.8"
+rand = "0.10"
 
 # Async streams
 futures = "0.3"
