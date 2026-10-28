@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '@kestrel/shared/components/Button.svelte';
+  import SignupForm from '@kestrel/shared/components/SignupForm.svelte';
   import ProviderBadge from '@kestrel/shared/components/ProviderBadge.svelte';
   import ThreadList from 'frontend-mail/src/lib/components/ThreadList.svelte';
   import WeekGrid from 'frontend-calendar/src/lib/components/WeekGrid.svelte';
@@ -424,6 +425,22 @@
       {/each}
     </div>
   </section>
+
+  <!-- Gated on FORMS_ENDPOINT: an unconfigured deployment renders no section. -->
+  {#if site.forms.endpoint !== ''}
+    <section class="block band" id="early-access">
+      <div class="sec-index">Early access</div>
+      <h2>Want the beta?</h2>
+      <p class="sec-sub">Leave an address. We reply when a build is ready for you.</p>
+      <SignupForm
+        app="landing"
+        form="interest"
+        endpoint={site.forms.endpoint}
+        token={site.forms.token}
+        submitLabel="Request access"
+      />
+    </section>
+  {/if}
 
   <section class="final">
     <h2>Clear the inbox. Keep the address.</h2>

@@ -71,6 +71,9 @@ Rules for a receiver:
    never put it in shell commands or SQL fragments.
 5. Return `2xx` on success. The client maps any other status to a user-facing
    failure and never retries on its own.
+6. `attachment` is a base64 data URL (capped at 2 MB client-side) with the
+   original name in `attachmentName`. Decode it server-side and never trust the
+   extension or MIME type.
 
 The client side is `createFormsClient` in `@kestrel/shared`
 (`frontend-shared/src/forms/index.ts`). It never throws: it returns

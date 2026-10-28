@@ -125,6 +125,7 @@ export {
   WindowControls,
   EmailPillInput,
   Dropdown,
+  SignupForm,
   ReauthBanner,
   UndoToast,
   ShortcutCheatSheet,
