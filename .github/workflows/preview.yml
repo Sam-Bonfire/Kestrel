@@ -116,6 +116,16 @@ jobs:
           set -o pipefail
           cargo test --manifest-path backend/Cargo.toml 2>&1 | tee backend/test-results.log
 
+      - name: Reject ignored tests
+        id: ignored_tests
+        run: |
+          matches=$(grep -rn --include='*.rs' '#\[ignore' backend plugins || true)
+          if [ -n "$matches" ]; then
+            echo "$matches"
+            echo "::error::#[ignore] disables a test silently; fix or delete it instead"
+            exit 1
+          fi
+
       - name: Run Shared Contract Tests
         id: shared_tests
         run: |
