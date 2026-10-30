@@ -48,6 +48,7 @@ const registryRow = (overrides = {}) => ({
   databaseId: 'db-123',
   titleProperty: 'Name',
   propertyMap: '',
+  requiredFields: '',
   token: '',
   notifyUrl: '',
   ...overrides,
@@ -162,6 +163,31 @@ test('authorize rejects unknown forms, wrong tokens and attachments', () => {
 
   const badMap = authorize(request(), [registryRow({ propertyMap: 'not json' })]);
   assert.equal(badMap.status, 500);
+});
+
+test('authorize enforces the registry required-fields list', () => {
+  const row = registryRow({ requiredFields: '["email","name"]' });
+
+  const missing = authorize(request({ fields: { _hp: '', email: 'someone@example.com' } }), [row]);
+  assert.deepEqual({ status: missing.status, error: missing.error }, {
+    status: 400,
+    error: 'missing required fields: name',
+  });
+
+  const blank = authorize(request({ fields: { _hp: '', email: '  ', name: 'Sam' } }), [row]);
+  assert.equal(blank.status, 400);
+
+  const present = authorize(
+    request({ fields: { _hp: '', email: 'someone@example.com', name: 'Sam' } }),
+    [row],
+  );
+  assert.equal(present.authorized, true);
+
+  const badJson = authorize(request(), [registryRow({ requiredFields: 'email' })]);
+  assert.equal(badJson.status, 500);
+
+  const notArray = authorize(request(), [registryRow({ requiredFields: '{"email":true}' })]);
+  assert.equal(notArray.status, 500);
 });
 
 test('authorize accepts a blank registry token as a public form', () => {

@@ -133,8 +133,8 @@ Turnstile, and creates a page in the Notion database that form routes to.
 Setup:
 
 1. Create a data table named `forms_registry` with the columns `app`, `form`,
-   `databaseId`, `titleProperty`, `propertyMap`, `token`, `notifyUrl` (all
-   strings).
+   `databaseId`, `titleProperty`, `propertyMap`, `requiredFields`, `token`,
+   `notifyUrl` (all strings).
 2. Import the JSON (`Workflows → Import from File`), then open the `Registry`
    node and select your table — the export carries the author's table ID.
 3. Create a Notion credential with write access to the target databases and
@@ -150,13 +150,14 @@ Registry rows:
 | `databaseId` | Notion database the submission becomes a page in. Required. |
 | `titleProperty` | Name of the database's title property. Defaults to `Name`. |
 | `propertyMap` | JSON mapping a form field to `{"name": "...", "type": "..."}`. Unmapped fields become `rich_text` with the same name. |
+| `requiredFields` | JSON array of field keys the form cannot omit (e.g. `["email"]`). A submission missing one gets `400`. Blank means none. |
 | `token` | Expected token. Blank accepts any token, i.e. a public form. |
 | `notifyUrl` | Optional webhook (Discord, Slack) pinged after the page is created. |
 
 ```json
 {"app":"landing","form":"interest","databaseId":"<notion-db-id>","titleProperty":"Name",
  "propertyMap":"{\"email\":{\"name\":\"Email\",\"type\":\"email\"},\"message\":{\"name\":\"Notes\"}}",
- "token":"","notifyUrl":""}
+ "requiredFields":"[\"email\"]","token":"","notifyUrl":""}
 ```
 
 Behavior worth knowing:
