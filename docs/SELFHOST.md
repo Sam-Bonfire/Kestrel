@@ -14,7 +14,7 @@ Backups are covered there too (section 8).
 | `kestrel-server` (Rust) | Your Docker host / NAS | API, SQLite or Postgres, sync workers |
 | Landing page | Served by `kestrel-server` | Downloads + portfolio page |
 | Desktop / mobile apps | User devices | Mail and calendar UI |
-| WASM provider plugins | Loaded by `kestrel-server` | Gmail / Outlook sync |
+| WASM provider plugins | Loaded by `kestrel-server` | Gmail / Outlook sync ([plugin contract](./PLUGINS.md)) |
 
 ## Optional integrations
 

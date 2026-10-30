@@ -172,6 +172,7 @@ Kestrel employs a two-branch strategy for robust releases (work in Jujutsu: `jj 
 | [ROADMAP.md](ROADMAP.md) | Feature status tracker — what's done, in progress, and planned |
 | [Deployment Guide](docs/DEPLOYMENT.md) | Docker setup, networking (Cloudflare/Tailscale), database config, client installation |
 | [Self-Hosting Guide](docs/SELFHOST.md) | Optional integrations, forms ingest contract, bring-your-own receiver |
+| [Plugin Guide](docs/PLUGINS.md) | WASM provider contract, host allowlist, per-invocation sandbox limits |
 | [Decision Log](DECISION_LOG.md) | Historical record of all architectural decisions and rationale |
 | [Project Rules](PROJECT_RULES.md) | Coding standards, naming conventions, file limits |
 | [Technical Spec](kestrel_spec.md) | Full technical specification — schemas, API routes, plugin interface |
