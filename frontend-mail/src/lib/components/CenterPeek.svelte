@@ -49,6 +49,7 @@
   import type { IcsEvent } from '@kestrel/shared';
   import EventInviteCard from './EventInviteCard.svelte';
   import DOMPurify from 'dompurify';
+  import { buildMailFrameSrcdoc } from '../mail-frame.js';
   import { parseChecklists } from '@kestrel/shared';
   import { sanitizeEmailBody } from '@kestrel/shared';
   import { blockRemoteImages, senderDomain, isDomainAllowed, allowSenderDomain } from '@kestrel/shared';
@@ -165,17 +166,40 @@
   // UI state variables
   let showReplyDraft = $state(false);
 
-  // Clip: read the message iframe selection first (sandboxed srcdoc
-  // is same-origin, so this works), fall back to window selection.
+  // Clip: the frame has no same-origin access, so the bridge script reports
+  // the latest selection over postMessage; fall back to window selection.
   let bodyFrame: HTMLIFrameElement | undefined = $state(undefined);
+  let frameSelectionText = $state('');
+
+  function initBodyFrame() {
+    // Push persisted checklist state into the freshly loaded frame.
+    bodyFrame?.contentWindow?.postMessage({ source: 'kestrel-host', type: 'init', data: checklistStates }, '*');
+  }
+
+  function handleFrameMessage(event: MessageEvent) {
+    if (!bodyFrame || event.source !== bodyFrame.contentWindow) return;
+    const msg = event.data as { source?: string; type?: string; data?: unknown } | null;
+    if (msg?.source !== 'kestrel-mail') return;
+    if (msg.type === 'height' && typeof msg.data === 'number') {
+      bodyFrame.style.height = `${Math.max(120, msg.data)}px`;
+    } else if (msg.type === 'selection' && typeof msg.data === 'string') {
+      frameSelectionText = msg.data;
+    } else if (msg.type === 'checklist' && email) {
+      const update = (msg.data ?? {}) as { taskId?: string; checked?: boolean };
+      if (!update.taskId || typeof update.checked !== 'boolean') return;
+      const newStates = { ...checklistStates, [update.taskId]: update.checked };
+      checklistStates = newStates;
+      set(`checklist:${email.id}`, newStates).catch(() => {});
+    }
+  }
+
+  $effect(() => {
+    window.addEventListener('message', handleFrameMessage);
+    return () => window.removeEventListener('message', handleFrameMessage);
+  });
 
   function frameSelection(): string {
-    try {
-      return bodyFrame?.contentWindow?.getSelection()?.toString().trim() ?? '';
-    } catch {
-      // Sandbox tightened unexpectedly; fall back to window selection.
-      return '';
-    }
+    return frameSelectionText || (window.getSelection()?.toString().trim() ?? '');
   }
 
   function handleClip() {
@@ -197,6 +221,14 @@
     }
     return blockRemoteImages(parsed);
   });
+
+  // Sandboxed body document: restrictive CSP plus the nonced postMessage bridge.
+  let bodyFrameSrcdoc = $derived(
+    buildMailFrameSrcdoc(
+      DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] }),
+      showRemoteOnce || isDomainAllowed(senderDomain(email?.senderEmail || ''))
+    )
+  );
   // Contact notes for the sender
   let notesOpen = $state(false);
   let contactNotes = $state('');
@@ -751,62 +783,13 @@
                 </span>
               </div>
             {/if}
-            <iframe 
+            <iframe
               title="Email Body"
               bind:this={bodyFrame}
-              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-scripts"
-              srcdoc={DOMPurify.sanitize(protectedBody.html, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], ADD_ATTR: ['target'] })}
-              class="w-full min-h-[20vh] bg-white"
-              onload={(e) => { 
-                const target = e.currentTarget as HTMLIFrameElement;
-                if (target.contentWindow) {
-                  const doc = target.contentWindow.document;
-
-                  // Initialize checked state from local storage
-                  const checkboxes = doc.querySelectorAll<HTMLInputElement>('.kestrel-task-checkbox');
-                  checkboxes.forEach((cb) => {
-                    const parent = cb.closest('.kestrel-task-item');
-                    const taskId = parent?.getAttribute('data-task-id');
-                    if (taskId && checklistStates[taskId] !== undefined) {
-                       cb.checked = checklistStates[taskId];
-                       const textSpan = parent?.querySelector('.kestrel-task-text') as HTMLElement;
-                       if (textSpan) {
-                         textSpan.style.textDecoration = cb.checked ? 'line-through' : 'none';
-                         textSpan.style.opacity = cb.checked ? '0.7' : '1';
-                       }
-                    }
-
-                    // Allow keyboard interaction
-                    cb.addEventListener('keydown', (e: KeyboardEvent) => {
-                      if (e.key === ' ' || e.code === 'Space') {
-                        e.preventDefault();
-                        cb.checked = !cb.checked;
-                        cb.dispatchEvent(new Event('change'));
-                      }
-                    });
-
-                    cb.addEventListener('change', () => {
-                      const parent = cb.closest('.kestrel-task-item');
-                      const taskId = parent?.getAttribute('data-task-id');
-                      if (taskId && email) {
-                        const newStates = { ...checklistStates, [taskId]: cb.checked };
-                        checklistStates = newStates;
-                        set(`checklist:${email.id}`, newStates).catch(() => {});
-
-                        const textSpan = parent?.querySelector('.kestrel-task-text') as HTMLElement;
-                        if (textSpan) {
-                          textSpan.style.textDecoration = cb.checked ? 'line-through' : 'none';
-                          textSpan.style.opacity = cb.checked ? '0.7' : '1';
-                        }
-                      }
-                    });
-                  });
-
-                  // Reset height so scrollHeight shrinks if the new content is smaller
-                  target.style.height = '0px';
-                  target.style.height = (doc.documentElement.scrollHeight + 20) + 'px';
-                }
-              }}
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+              srcdoc={bodyFrameSrcdoc}
+              onload={initBodyFrame}
+              class="w-full min-h-[20vh] bg-white transition-[height]"
             ></iframe>
           </div>
 

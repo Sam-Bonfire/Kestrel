@@ -1016,6 +1016,7 @@ impl backend::plugins::traits::ProviderBranding for NetworkFailProvider {
             button_text: "Stub".to_string(),
             button_color: "#000".to_string(),
             icon_svg: String::new(),
+            hosts: vec![],
         }
     }
 }
@@ -1284,6 +1285,7 @@ impl backend::plugins::traits::ProviderBranding for ScriptedProvider {
             button_text: "Stub".to_string(),
             button_color: "#000".to_string(),
             icon_svg: String::new(),
+            hosts: vec![],
         }
     }
 }
