@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import CenterPeek from './CenterPeek.svelte';
+import { set } from 'idb-keyval';
 import type { ComponentProps } from 'svelte';
 import { tick } from 'svelte';
 
@@ -69,5 +70,36 @@ describe('CenterPeek - Iframe Hardening', () => {
     expect(srcdoc).not.toContain('window.parent.postMessage("xss")');
     expect(srcdoc).not.toContain('alert(1)');
     expect(srcdoc).not.toContain('onerror=');
+  });
+
+  it('ignores checklist messages that do not come from the body frame', async () => {
+    const mockEmail: EmailProp = {
+      id: '456',
+      sender: 'Test',
+      senderEmail: 'test@example.com',
+      to: 'me@example.com',
+      subject: 'Bridge spoofing',
+      body: '- [ ] Task',
+      timestamp: '2026-01-01T00:00:00Z',
+      isUnread: false,
+      isStarred: false,
+      isArchived: false,
+      isTrash: false,
+      labels: [],
+    };
+
+    render(CenterPeek, { props: { email: mockEmail } });
+    await tick();
+
+    vi.mocked(set).mockClear();
+    // No `source`, so this never came from the iframe's contentWindow.
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { source: 'kestrel-mail', type: 'checklist', data: { taskId: 'task-1', checked: true } },
+      })
+    );
+    await tick();
+
+    expect(set).not.toHaveBeenCalled();
   });
 });
