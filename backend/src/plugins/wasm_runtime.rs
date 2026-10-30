@@ -150,6 +150,68 @@ impl crate::plugins::bindings::KestrelPluginImports for WasmState {
     }
 }
 
+pub const MAX_REQUEST_BYTES: usize = 1024 * 1024;
+
+/// True for addresses a plugin must never reach: loopback, private ranges,
+/// link-local (including the cloud metadata address), reserved and unspecified.
+pub fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let first = v4.octets()[0];
+            v4.is_private()
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || v4.is_unspecified()
+                || first == 0
+                || first >= 240
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()
+                || v6.is_unicast_link_local()
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| is_blocked_ip(v4.into()))
+        }
+    }
+}
+
+/// Reject a host whose literal or resolved address is blocked.
+///
+/// shortcut: only the request host is resolved; redirect hops are re-checked
+/// against the allowlist but not re-resolved. Upgrade to a custom
+/// `reqwest::dns::Resolve` if a provider ever uses an attacker-controlled name.
+pub async fn ensure_public_host(host: &str) -> Result<(), String> {
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return if is_blocked_ip(ip) {
+            Err(format!("Host '{}' resolves to a blocked address", host))
+        } else {
+            Ok(())
+        };
+    }
+
+    let addrs = tokio::net::lookup_host((host, 443u16))
+        .await
+        .map_err(|e| format!("DNS lookup failed for '{}': {}", host, e))?;
+
+    let mut resolved = false;
+    for addr in addrs {
+        resolved = true;
+        if is_blocked_ip(addr.ip()) {
+            return Err(format!("Host '{}' resolves to a blocked address", host));
+        }
+    }
+
+    if !resolved {
+        return Err(format!("Host '{}' did not resolve", host));
+    }
+
+    Ok(())
+}
+
 impl HttpHost for WasmState {
     async fn request(&mut self, req: HttpRequest) -> Result<HttpResponse, String> {
         let allowed_hosts = self.allowed_hosts.clone();
@@ -174,6 +236,17 @@ impl HttpHost for WasmState {
 
         if !is_allowed {
             return Err(format!("Host '{}' is not in the allowlist", host));
+        }
+
+        ensure_public_host(&host).await?;
+
+        if let Some(body) = &req.body
+            && body.len() > MAX_REQUEST_BYTES
+        {
+            return Err(format!(
+                "Request body too large (exceeds {} bytes)",
+                MAX_REQUEST_BYTES
+            ));
         }
 
         // redirect loop is handled by reqwest, but we can set redirect policy to custom

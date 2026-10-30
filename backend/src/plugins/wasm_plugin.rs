@@ -350,6 +350,10 @@ impl MailProvider for WasmPlugin {
             )));
         }
 
+        crate::plugins::wasm_runtime::ensure_public_host(&host)
+            .await
+            .map_err(PluginError)?;
+
         Ok(external_attachment_id.to_string())
     }
 }
