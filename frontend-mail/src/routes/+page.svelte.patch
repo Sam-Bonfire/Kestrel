@@ -1,0 +1,344 @@
+--- frontend-mail/src/routes/+page.svelte
++++ frontend-mail/src/routes/+page.svelte
+@@ -2,6 +2,7 @@
+   import Sidebar from '$lib/components/Sidebar.svelte';
++  import TabStrip from '$lib/components/tabs/TabStrip.svelte';
+   import ThreadList from '$lib/components/ThreadList.svelte';
+   import ScreenerQueue from '$lib/components/ScreenerQueue.svelte';
+   import ClipsLibrary from '$lib/components/ClipsLibrary.svelte';
+   import { firstTimeSenders, approveSender, loadScreened } from '@kestrel/shared';
+   import CenterPeek from '$lib/components/CenterPeek.svelte';
+   import ComposeModal from '$lib/components/ComposeModal.svelte';
+   import CommandPalette from '$lib/components/CommandPalette.svelte';
+   import MailSettingsModal from '$lib/components/MailSettingsModal.svelte';
+   import { SettingsModal } from '@kestrel/shared';
+   import { AppShell, ReauthBanner, UndoToast, Breadcrumbs, SyncErrorBanner } from '@kestrel/shared/components';
+-  import { authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb, focusMode, exitFocusMode } from '@kestrel/shared/stores';
++  import { registerShortcuts, authState, initAuth, logout, addRevokedAccount, triggerUndoAction, relativeTimeTick, mailSnoozeDefault, setCurrentCrumb, focusMode, exitFocusMode } from '@kestrel/shared/stores';
+   import { formatRelativeTime, formatExactDateTime, resolveSnoozeTimestamp, snoozePresetLabel, type SnoozePreset } from '@kestrel/shared';
+   import { isNewsletter, setUnreadBadge, resolveBucket, type PinMap, type Bucket } from '@kestrel/shared';
+   import { categorizeEmail, type EmailCategory } from '@kestrel/shared';
+   import { triageCandidates, shouldRunTriage, markTriageRun, smartTriageEnabled } from '@kestrel/shared';
+   import { get } from 'svelte/store';
+   import { replayOfflineQueue, searchMessages, getRawEmlBlob } from '@kestrel/shared/api';
+   import { popoutDraftNonce, takePopoutDraft, openComposePopout } from '@kestrel/shared';
+   import { enqueueOutboxItem, getOutboxItems, updateOutboxItem, removeOutboxItem } from '@kestrel/shared/offline';
+   import { registerNotificationCategories, sendMailNotification } from '$lib/notifications';
+   import { mailStore } from '$lib/stores/mailStore.svelte.js';
++  import { tabsStore } from '$lib/stores/tabsStore.svelte.js';
++  import { profilesStore } from '$lib/stores/profilesStore.svelte.js';
+   import { getCustomViews, saveCustomView, deleteCustomView, updateCustomView } from '$lib/utils/customViews';
+   import { inboxCategory } from '$lib/utils/inboxCategory';
+   import { onMount, untrack, onDestroy } from 'svelte';
+   import { setPomodoroCompleteHandler } from '@kestrel/shared/stores';
+@@ -165,10 +167,11 @@
+   }
+
+   $effect(() => {
+     if (authState.isAuthenticated && !accountsLoaded) {
+       accountsLoaded = true;
+       import('@kestrel/shared/api').then(({ listAccounts }) => {
+         listAccounts()
+           .then((list) => {
+             if (list.length > 0) accounts = list.map(toSidebarAccount);
+           })
+           .catch(() => {
+             /* offline or unreachable — defaults stay */
+           });
+       });
+       loadClips();
+       loadThreadNotes();
+       loadSubjectOverrides();
++      tabsStore.init();
++      profilesStore.init();
+     }
+   });
+
+   // ── App state ───────────────────────────────────────────────────
+-  let currentView      = $state('inbox');
+-  let searchQuery      = $state('');
+-  let selectedThreadId = $state<string | null>(null);
++  let currentView = $derived(tabsStore.loaded && tabsStore.activeTabId ? (tabsStore.tabs.find(t => t.id === tabsStore.activeTabId)?.view || 'inbox') : 'inbox');
++  let selectedThreadId = $derived(tabsStore.loaded && tabsStore.activeTabId ? (tabsStore.tabs.find(t => t.id === tabsStore.activeTabId)?.threadId || null) : null);
++  let searchQuery = $derived(tabsStore.loaded && tabsStore.activeTabId ? (tabsStore.tabs.find(t => t.id === tabsStore.activeTabId)?.searchQuery || '') : '');
+
+   // Lifted list filters (bound into ThreadList) + saved custom views.
+   let filterCategory = $state<'All' | 'Primary' | 'Updates' | 'Social' | 'Forums'>('All');
+   let filterLabel = $state('All');
+   let filterAttachmentsOnly = $state(false);
+   let filterDateRange = $state<'All' | 'Today' | 'This Week' | 'This Month'>('All');
+   let customViews = $state(getCustomViews());
+   let activeCustomViewId = $state<string | null>(null);
+@@ -260,7 +263,7 @@
+   let isCommandOpen    = $state(false);
+   let isSettingsOpen   = $state(false);
+   let isMailSettingsOpen = $state(false);
+-  let activeAccountId  = $state('all');
++  let activeAccountId = $derived(profilesStore.loaded ? profilesStore.getActiveProfile().accountIds[0] || 'all' : 'all');
+   let isMobileSidebarOpen = $state(false);
+   let initialReplyMode = $state<'reply'|'reply_all'|'forward'|null>(null);
+   let isBatchMode = $state(false);
+@@ -450,25 +453,28 @@
+
+   let unreadCount = $derived.by(() => {
+     const total = totalUnread;
+-    const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isTrash && !e.isSpam).length;
+     if (total === 0) return 0;
+-    return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
++    const profile = profilesStore.getActiveProfile();
++    if (profile.accountIds.includes('all')) return `${total}`;
++    const current = allEmails.filter(e => profile.accountIds.includes(e.accountId) && e.isUnread && !e.isTrash && !e.isSpam).length;
++    return `${current} / ${total}`;
+   });
+   let inboxCount = $derived.by(() => {
+     const total = allEmails.filter(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
+-    const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
+     if (total === 0) return 0;
+-    return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
++    const profile = profilesStore.getActiveProfile();
++    if (profile.accountIds.includes('all')) return `${total}`;
++    const current = allEmails.filter(e => profile.accountIds.includes(e.accountId) && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
++    return `${current} / ${total}`;
+   });
+
+   let viewCounts = $derived.by(() => {
+     const getCountStr = (filterFn: (e: typeof allEmails[0]) => boolean) => {
+       const total = allEmails.filter(filterFn).length;
+-      const current = activeAccountId === 'all' ? total : allEmails.filter(e => e.accountId === activeAccountId && filterFn(e)).length;
+       if (total === 0) return 0;
+-      return activeAccountId === 'all' ? `${total}` : `${current} / ${total}`;
++      const profile = profilesStore.getActiveProfile();
++      if (profile.accountIds.includes('all')) return `${total}`;
++      const current = allEmails.filter(e => profile.accountIds.includes(e.accountId) && filterFn(e)).length;
++      return `${current} / ${total}`;
+     };
+
+     const counts: Record<string, string | number> = {};
+@@ -507,17 +513,17 @@
+
+   let screenerQueue = $derived(
+     firstTimeSenders(
+-      allEmails.filter((e) => activeAccountId === 'all' || e.accountId === activeAccountId),
++      allEmails.filter((e) => profilesStore.getActiveProfile().accountIds.includes('all') || profilesStore.getActiveProfile().accountIds.includes(e.accountId)),
+       screened,
+-      activeAccountId
++      'all'
+     )
+   );
+
+   // Unscreened first-time senders stay out of pure consumption views
+   // until reviewed in the Screener. Queued (not deleted) and visible
+   // approval in one scope never leaks into another. Explicit-intent
+   // views (starred, reply-later, sent, drafts, labels) are exempt.
+-  let unscreenedKeys = $derived(new Set(screenerQueue.map((s) => `${activeAccountId}:${s.email}`)));
++  let unscreenedKeys = $derived.by(() => {
++    const profile = profilesStore.getActiveProfile();
++    const set = new Set<string>();
++    for (const acc of profile.accountIds) {
++      screenerQueue.forEach((s) => set.add(`${acc}:${s.email}`));
++    }
++    return set;
++  });
+
+   // Personal thread subject overrides, keyed accountUuid:threadId.
+   // Loaded per real account; display-only overlay, provider subjects untouched.
+@@ -600,9 +606,9 @@
+   let hiddenForReview = $derived(
+     allEmails.filter(
+       (e) =>
+-        (activeAccountId === 'all' || e.accountId === activeAccountId) &&
++        (profilesStore.getActiveProfile().accountIds.includes('all') || profilesStore.getActiveProfile().accountIds.includes(e.accountId)) &&
+         !e.isTrash &&
+-        unscreenedKeys.has(`${activeAccountId}:${(e.senderEmail || '').trim().toLowerCase()}`)
++        profilesStore.getActiveProfile().accountIds.some(acc => unscreenedKeys.has(`${acc}:${(e.senderEmail || '').trim().toLowerCase()}`))
+     ).length
+   );
+
+@@ -879,15 +885,16 @@
+   let threads = $derived(
+     allEmails
+       .filter(e => {
+-        if (activeAccountId !== 'all' && e.accountId !== activeAccountId) return false;
++        const profile = profilesStore.getActiveProfile();
++        if (!profile.accountIds.includes('all') && !profile.accountIds.includes(e.accountId)) return false;
+         if (
+           (currentView === 'inbox' ||
+             currentView === 'all-mail' ||
+             currentView === 'unread' ||
+             currentView === 'feed') &&
+-          unscreenedKeys.has(`${activeAccountId}:${(e.senderEmail || '').trim().toLowerCase()}`)
++            profile.accountIds.some(acc => unscreenedKeys.has(`${acc}:${(e.senderEmail || '').trim().toLowerCase()}`))
+         )
+           return false;
+         if (currentView === 'inbox')    return !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft;
+         if (currentView === 'reply-later') return e.isReplyLater && !e.isTrash;
+         if (currentView === 'set-aside') return e.isSetAside && !e.isTrash;
+@@ -992,7 +999,8 @@
+         labels: e.labels,
+         category: e.category,
+         provider: accounts.find(a => a.id === e.accountId)?.provider || 'unknown',
+-        accountColor: accounts.find(a => a.id === e.accountId)?.color || '#6B7280'
++        accountColor: accounts.find(a => a.id === e.accountId)?.color || '#6B7280',
++        accountName: accounts.find(a => a.id === e.accountId)?.name || 'Unknown Account'
+         };
+       })
+   );
+@@ -1008,6 +1016,8 @@
+           subjectOverridden: shown.overridden,
+           threadId: e.thread_id,
+           accountUuid: e.account_id,
++          accountColor: accounts.find(a => a.id === e.account_id)?.color || '#6B7280',
++          accountName: accounts.find(a => a.id === e.account_id)?.name || 'Unknown Account',
+           snippet: e.snippet || '',
+           date: formatRelativeTime(new Date(e.date_received * 1000).toISOString(), new Date($relativeTimeTick)),
+           timestamp: new Date(e.date_received * 1000).toISOString(),
+@@ -1196,15 +1206,15 @@
+
+   // Label Actions
+   function renameLabel(oldVal: string, newVal: string) {
+     allEmails = allEmails.map(e => ({
+       ...e,
+       labels: e.labels.map((l: string) => l === oldVal ? newVal : l)
+     }));
+     customLabels = customLabels.map((l: string) => l === oldVal ? newVal : l);
+   }
+
+   function deleteLabel(label: string) {
+     allEmails = allEmails.map(e => ({
+       ...e,
+       labels: e.labels.filter((l: string) => l !== label)
+     }));
+     customLabels = customLabels.filter((l: string) => l !== label);
+   }
+@@ -1371,7 +1381,7 @@
+       return;
+     }
+
+-    if (cmd === 'compose') isComposeOpen = true;
++    if (cmd === 'compose') { isComposeOpen = true; }
+-    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); currentView = 'inbox'; }
++    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: 'inbox', threadId: null }); }
+     else if (cmd === 'settings') {
+       isCommandOpen = false;
+       isSettingsOpen = true;
+     }
+-    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); currentView = cmd.replace('view-', ''); }
++    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: cmd.replace('view-', ''), threadId: null }); }
+   }
+@@ -1473,8 +1483,28 @@
+       }).catch(err => console.error("Failed to init deep-link plugin", err));
+     }
+
+     const handler = (e: KeyboardEvent) => {
+       if (!authState.isAuthenticated) return;
+       if (isTyping(e)) return;
+       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
+-      if (selectedThreadId && (e.key === 'h' || e.key === 'H' || (e.key === 'R' && e.shiftKey))) { toggleReplyLater(selectedThreadId); }
+-      if (selectedThreadId && (e.key === 'b' || e.key === 'B')) { toggleSetAside(selectedThreadId); }
++      if (selectedThreadId && (e.key === 'h' || e.key === 'H' || (e.key === 'R' && e.shiftKey))) { toggleReplyLater(selectedThreadId!); }
++      if (selectedThreadId && (e.key === 'b' || e.key === 'B')) { toggleSetAside(selectedThreadId!); }
+       if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+         e.preventDefault();
+         advanceBatch(e.shiftKey || e.key === 'ArrowLeft' ? -1 : 1);
+       }
+       if (currentView === 'reply-later' && !isBatchMode && (e.key === 'p' || e.key === 'P' || e.key === ' ')) {
+         e.preventDefault();
+         startBatchMode();
+       }
+       if (e.key === 'c') isComposeOpen = true;
+       if (e.key === 'Escape') {
+         if (isBatchMode) exitBatch();
+-        else selectedThreadId = null;
++        else tabsStore.updateActiveTab({ threadId: null });
+         isCommandOpen = false; isComposeOpen = false;
+       }
+     };
+     window.addEventListener('keydown', handler);
++
++    const unregisterTabs = registerShortcuts(window, {
++      'open_tab_bg': (e) => {
++        e.preventDefault();
++        if (selectedThreadId) {
++          tabsStore.openTab({ view: currentView, threadId: selectedThreadId, searchQuery }, true);
++        }
++      },
++      'close_tab': (e) => {
++        e.preventDefault();
++        if (tabsStore.activeTabId) tabsStore.closeTab(tabsStore.activeTabId);
++      },
++      'next_tab': (e) => {
++        e.preventDefault();
++        tabsStore.cycleNext();
++      },
++      'prev_tab': (e) => {
++        e.preventDefault();
++        tabsStore.cyclePrev();
++      },
++      'restore_tab': (e) => {
++        e.preventDefault();
++        tabsStore.restoreTab();
++      }
++    });
++
+     return () => {
+       window.removeEventListener('keydown', handler);
++      unregisterTabs();
+       clearInterval(interval);
+     };
+   });
+ </script>
+@@ -1507,7 +1537,7 @@
+     <Sidebar
+       {currentView}
+       hideCounts={isBatchMode}
+-      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
++      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: v, threadId: null }); activeCustomViewId = null; isMobileSidebarOpen = false; }}
+       {customViews}
+       {activeCustomViewId}
+       onSelectCustomView={applyCustomView}
+       onDeleteCustomView={removeCustomView}
+       onUpdateCustomView={editCustomView}
+       onSaveCustomView={saveCurrentView}
+       onComposeClick={() => { isComposeOpen = true; isMobileSidebarOpen = false; }}
+       onOpenMailSettings={() => { isMailSettingsOpen = true; isMobileSidebarOpen = false; }}
+-      bind:searchQuery
++      searchQuery={searchQuery}
+       {accounts}
+-      bind:activeAccountId
++      {activeAccountId}
+       {allLabels}
+       onRenameLabel={renameLabel}
+       onDeleteLabel={deleteLabel}
+       onCreateNewLabel={createNewLabel}
+@@ -1529,6 +1559,7 @@
+       {viewCounts}
+     />
+   {/snippet}
++  <TabStrip />
+
+     {#if
+       (currentView === 'inbox' ||
+@@ -1643,15 +1674,15 @@
+     {/if}
+     <ThreadList
+       threads={finalThreads}
+       {currentView}
+       bind:activeCategory={filterCategory}
+       bind:activeLabelFilter={filterLabel}
+       bind:hasAttachmentFilterOnly={filterAttachmentsOnly}
+       bind:activeDateRange={filterDateRange}
+       onFilterChange={() => tabsStore.updateActiveTab({ view: currentView, threadId: null })}
+       {selectedThreadId}
+       {readerDocked}
+-      onSelectThread={(id: string) => {
++      onSelectThread={(id) => {
+         if (isBatchMode) exitBatch(false);
+-        selectedThreadId = id;
++        tabsStore.updateActiveTab({ threadId: id });
+         if (!readerDocked) {
+           isMobileSidebarOpen = false;
+         }
+       }}
+       {allLabels}
+       onRenameLabel={renameLabel}
+       onDeleteLabel={deleteLabel}
