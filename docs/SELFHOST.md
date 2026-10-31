@@ -30,6 +30,17 @@ Each row is safe to leave unset. "Unset" never fails a build or a request.
 | `SYNC_INTERVAL_MINUTES` | `5` | Background mail/calendar sync cadence |
 | `PLUGINS_DIR` | `/app/plugins` | Compiled WASM provider plugins |
 
+## Secrets manifest
+
+[`secretspec.toml`](../secretspec.toml) declares every secret the backend can
+consume — names, descriptions and whether it is required — and nothing else, so
+it is safe to commit. Values are fetched from a secret provider with
+[SecretSpec](https://secretspec.dev) (`secretspec run -- docker compose up`); the
+provider the operators choose is a local decision, the manifest does not pin
+one. The four required secrets are `DATABASE_URL`, `JWT_SECRET`,
+`SESSION_SECRET` and `VAULT_SECRET`; everything else gates an optional
+integration exactly like the table above.
+
 ## Forms ingest contract
 
 Site forms (signup interest, contact) post JSON to `FORMS_ENDPOINT`. Bring any
