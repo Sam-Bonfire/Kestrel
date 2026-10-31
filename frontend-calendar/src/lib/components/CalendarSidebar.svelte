@@ -22,10 +22,53 @@
   }
 
   import { calendarSetsStore } from '$lib/stores/calendars.svelte';
-  import { Edit2, Trash2 } from 'lucide-svelte';
+  import { Edit2, Trash2, Link2, Copy, RefreshCw, XCircle } from 'lucide-svelte';
+  import { createFeed, revokeFeed } from '@kestrel/shared/api/client.js';
+
+  let expandedFeeds = $state(new Set<string>());
+  let feedUrls = $state<Record<string, string>>({});
+  let feedTokens = $state<Record<string, string>>({});
+  let showRevokeConfirm = $state<string | null>(null);
+
+  async function handleCreateFeed(calendarId: string) {
+    try {
+      const { url, token } = await createFeed(calendarId, feedTokens[calendarId]);
+      feedUrls[calendarId] = url;
+      feedTokens[calendarId] = token;
+      expandedFeeds.add(calendarId);
+      expandedFeeds = expandedFeeds;
+    } catch (e) {
+      console.error('Failed to create feed', e);
+    }
+  }
+
+  async function handleRevokeFeed(calendarId: string) {
+    try {
+      await revokeFeed(calendarId, feedTokens[calendarId]);
+      delete feedUrls[calendarId];
+      delete feedTokens[calendarId];
+      showRevokeConfirm = null;
+      expandedFeeds.delete(calendarId);
+      expandedFeeds = expandedFeeds;
+    } catch (e) {
+      console.error('Failed to revoke feed', e);
+    }
+  }
+
+  function toggleFeedExpanded(calendarId: string) {
+    if (expandedFeeds.has(calendarId)) {
+      expandedFeeds.delete(calendarId);
+    } else {
+      expandedFeeds.add(calendarId);
+      if (!feedUrls[calendarId]) {
+        // Automatically try to create/fetch if it wasn't there
+        handleCreateFeed(calendarId);
+      }
+    }
+    expandedFeeds = expandedFeeds;
+  }
 
   let {
-    selectedDate = new Date(),
     onDateSelect = (d: Date) => {},
     onNewEventClick = () => {},
     accounts = $bindable([] as Account[]),
@@ -374,6 +417,13 @@
 
                   <!-- Visibility Toggles -->
                   <button
+                    onclick={() => toggleFeedExpanded(cal.id)}
+                    class="p-0.5 rounded text-[var(--color-text-secondary)]/40 hover:text-[var(--color-text-secondary)] transition-colors cursor-pointer ml-1"
+                    title="Subscribe"
+                  >
+                    <Link2 class="w-3.5 h-3.5 text-[var(--color-text-secondary)]/60" />
+                  </button>
+                  <button
                     onclick={() => onToggleCalendar(acc.id, cal.id)}
                     class="p-0.5 rounded text-[var(--color-text-secondary)]/40 hover:text-[var(--color-text-secondary)] transition-colors cursor-pointer ml-1"
                     title={cal.isActive ? 'Hide' : 'Show'}
@@ -385,6 +435,75 @@
                     {/if}
                   </button>
                 </div>
+
+                {#if expandedFeeds.has(cal.id)}
+                  <div class="px-2 pb-2 text-[10px] space-y-2 border-l border-[var(--color-border-hairline)] ml-2.5 pl-3 mt-1" transition:slide={{duration: 150}}>
+                    {#if feedUrls[cal.id]}
+                      <div class="flex items-center gap-1.5 w-full bg-[var(--color-canvas-inset)] border border-[var(--color-border-hairline)] rounded p-1">
+                        <input
+                          type="text"
+                          readonly
+                          value={feedUrls[cal.id]}
+                          class="flex-1 bg-transparent text-[var(--color-text-primary)] outline-none min-w-0"
+                        />
+                        <button
+                          onclick={() => navigator.clipboard.writeText(feedUrls[cal.id])}
+                          title="Copy to clipboard"
+                          class="p-1 hover:bg-[var(--color-canvas-hover)] rounded transition-colors text-[var(--color-text-secondary)]"
+                          aria-label="Copy to clipboard"
+                        >
+                          <Copy class="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div class="flex items-center gap-2 justify-end">
+                        <button
+                          onclick={() => handleCreateFeed(cal.id)}
+                          class="flex items-center gap-1 text-[var(--color-text-secondary)] hover:text-white transition-colors"
+                          aria-label="Regenerate link"
+                        >
+                          <RefreshCw class="w-3 h-3" />
+                          <span>Regenerate</span>
+                        </button>
+
+                        {#if showRevokeConfirm === cal.id}
+                          <button
+                            onclick={() => handleRevokeFeed(cal.id)}
+                            class="flex items-center gap-1 text-red-500 hover:text-red-400 font-medium transition-colors border border-red-500/20 bg-red-500/10 px-1 rounded"
+                            aria-label="Confirm revoke"
+                          >
+                            <span>Confirm revoke</span>
+                          </button>
+                          <button
+                            onclick={() => showRevokeConfirm = null}
+                            class="text-[var(--color-text-secondary)] hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        {:else}
+                          <button
+                            onclick={() => showRevokeConfirm = cal.id}
+                            class="flex items-center gap-1 text-red-500 hover:text-red-400 transition-colors"
+                            aria-label="Revoke feed"
+                          >
+                            <XCircle class="w-3 h-3" />
+                            <span>Revoke</span>
+                          </button>
+                        {/if}
+                      </div>
+                    {:else}
+                      <div class="text-[var(--color-text-secondary)] py-1 flex items-center justify-between">
+                        <span>No active feed.</span>
+                        <button
+                          onclick={() => handleCreateFeed(cal.id)}
+                          class="text-blue-500 hover:text-blue-400 font-medium bg-[var(--color-canvas-inset)] px-1.5 py-0.5 rounded border border-[var(--color-border-hairline)]"
+                        >
+                          Create feed
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
               {/each}
             </div>
           {/if}

@@ -1,8 +1,14 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::http::header::{CONTENT_TYPE, ETAG, HeaderMap, IF_NONE_MATCH, LAST_MODIFIED};
+use axum::response::IntoResponse;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{TimeZone, Utc};
+use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::auth::AuthUser;
@@ -885,9 +891,328 @@ pub(crate) async fn verify_event_ownership(
     Ok(())
 }
 
+// --- K-1597: Calendar Feeds ---
+
+#[derive(Deserialize)]
+pub struct FeedQuery {
+    pub token: String,
+}
+
+pub fn escape_ics(s: &str) -> String {
+    s.replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\n", "\\n")
+        .replace("\r", "")
+}
+
+pub fn format_ics_datetime(ts: i64, is_all_day: bool) -> String {
+    if is_all_day {
+        chrono::Utc
+            .timestamp_opt(ts, 0)
+            .unwrap()
+            .format("%Y%m%d")
+            .to_string()
+    } else {
+        chrono::Utc
+            .timestamp_opt(ts, 0)
+            .unwrap()
+            .format("%Y%m%dT%H%M%SZ")
+            .to_string()
+    }
+}
+
+pub async fn get_calendar_feed(
+    State(state): State<AppState>,
+    Path(filename): Path<String>,
+    Query(query): Query<FeedQuery>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, KestrelError> {
+    let raw_token = query.token;
+
+    let id_str = filename.strip_suffix(".ics").unwrap_or(&filename);
+    let id = Uuid::parse_str(id_str)
+        .map_err(|_| KestrelError::BadRequest("Invalid calendar ID".to_string()))?;
+
+    // Hash token
+    let mut hasher = Sha256::new();
+    hasher.update(raw_token.as_bytes());
+    let token_hash = URL_SAFE_NO_PAD.encode(hasher.finalize());
+
+    // Look up calendar by ID and token hash
+    let calendar = match state.db {
+        DbPool::Sqlite(ref pool) => {
+            SqliteCalendarRepository::new(pool.clone())
+                .get_calendar_by_feed_token(id, &token_hash)
+                .await?
+        }
+        DbPool::Postgres(ref pool) => {
+            PostgresCalendarRepository::new(pool.clone())
+                .get_calendar_by_feed_token(id, &token_hash)
+                .await?
+        }
+    }
+    .ok_or_else(|| KestrelError::NotFound("Calendar feed not found".to_string()))?;
+
+    let account = match state.db {
+        DbPool::Sqlite(ref pool) => {
+            crate::db::sqlite::account_repository::SqliteAccountRepository::new(
+                pool.clone(),
+                state.vault_secret.clone(),
+            )
+            .with_fallback_key(state.vault_old_secret.clone())
+            .find_by_id(calendar.account_id.0)
+            .await?
+        }
+        DbPool::Postgres(ref pool) => {
+            crate::db::postgres::account_repository::PostgresAccountRepository::new(
+                pool.clone(),
+                state.vault_secret.clone(),
+            )
+            .with_fallback_key(state.vault_old_secret.clone())
+            .find_by_id(calendar.account_id.0)
+            .await?
+        }
+    }
+    .ok_or_else(|| KestrelError::NotFound("Account not found".to_string()))?;
+
+    let user_id = account.user_id.0;
+
+    let now = chrono::Utc::now().timestamp();
+    let window_start = now - (30 * 24 * 60 * 60);
+    let window_end = now + (365 * 24 * 60 * 60);
+
+    // Get events for the calendar within the window
+    let events = match state.db {
+        DbPool::Sqlite(ref pool) => {
+            SqliteEventRepository::new(pool.clone())
+                .list_range(user_id, window_start, window_end, Some(calendar.id.0))
+                .await?
+        }
+        DbPool::Postgres(ref pool) => {
+            PostgresEventRepository::new(pool.clone())
+                .list_range(user_id, window_start, window_end, Some(calendar.id.0))
+                .await?
+        }
+    };
+
+    let mut ics = String::new();
+    ics.push_str("BEGIN:VCALENDAR\r\n");
+    ics.push_str("VERSION:2.0\r\n");
+    ics.push_str("PRODID:-//Kestrel//NONSGML v1.0//EN\r\n");
+    ics.push_str("CALSCALE:GREGORIAN\r\n");
+    let cal_name = escape_ics(&calendar.name);
+    ics.push_str(&format!("X-WR-CALNAME:{cal_name}\r\n"));
+
+    let mut max_updated_at = calendar.updated_at;
+
+    for event in events {
+        max_updated_at = max_updated_at.max(event.updated_at);
+        let occurrences = event_occurrences(&event, window_start, window_end);
+        for (start_ts, end_ts) in occurrences {
+            ics.push_str("BEGIN:VEVENT\r\n");
+
+            // Stable UID
+            let uid = if event.recurrence_rules.is_some() {
+                format!("{}-{}@kestrel", event.id.0, start_ts)
+            } else {
+                format!("{}@kestrel", event.id.0)
+            };
+            ics.push_str(&format!("UID:{uid}\r\n"));
+
+            ics.push_str(&format!(
+                "DTSTAMP:{}\r\n",
+                format_ics_datetime(event.created_at, false)
+            ));
+
+            if event.is_all_day {
+                ics.push_str(&format!(
+                    "DTSTART;VALUE=DATE:{}\r\n",
+                    format_ics_datetime(start_ts, true)
+                ));
+                // In all-day, DTEND is exclusive and generally the next day
+                ics.push_str(&format!(
+                    "DTEND;VALUE=DATE:{}\r\n",
+                    format_ics_datetime(end_ts, true)
+                ));
+            } else {
+                ics.push_str(&format!(
+                    "DTSTART:{}\r\n",
+                    format_ics_datetime(start_ts, false)
+                ));
+                ics.push_str(&format!("DTEND:{}\r\n", format_ics_datetime(end_ts, false)));
+            }
+
+            ics.push_str(&format!("SUMMARY:{}\r\n", escape_ics(&event.title)));
+
+            if let Some(desc) = &event.description {
+                ics.push_str(&format!("DESCRIPTION:{}\r\n", escape_ics(desc)));
+            }
+
+            if let Some(loc) = &event.location {
+                ics.push_str(&format!("LOCATION:{}\r\n", escape_ics(loc)));
+            }
+
+            if let Some(status) = &event.status {
+                ics.push_str(&format!("STATUS:{}\r\n", escape_ics(status)));
+            }
+
+            ics.push_str("END:VEVENT\r\n");
+        }
+    }
+    ics.push_str("END:VCALENDAR\r\n");
+
+    let mut hasher = Sha256::new();
+    hasher.update(ics.as_bytes());
+    let etag = format!("\"{}\"", URL_SAFE_NO_PAD.encode(hasher.finalize()));
+
+    if headers.get(IF_NONE_MATCH).is_some_and(|h| h.to_str().is_ok_and(|s| s == etag)) {
+        return Ok((StatusCode::NOT_MODIFIED, [(ETAG, etag)]).into_response());
+    }
+
+    let last_modified = chrono::Utc
+        .timestamp_opt(max_updated_at, 0)
+        .unwrap()
+        .format("%a, %d %b %Y %H:%M:%S GMT")
+        .to_string();
+
+    Ok((
+        StatusCode::OK,
+        [
+            (CONTENT_TYPE, "text/calendar; charset=utf-8".to_string()),
+            (ETAG, etag),
+            (LAST_MODIFIED, last_modified),
+        ],
+        ics,
+    )
+        .into_response())
+}
+
+#[derive(Serialize, specta::Type)]
+pub struct FeedResponse {
+    pub url: String,
+    pub token: String,
+}
+
+pub async fn create_calendar_feed(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Result<Json<FeedResponse>, KestrelError> {
+    // Check if calendar exists and belongs to user
+    let cal = match state.db {
+        DbPool::Sqlite(ref pool) => {
+            SqliteCalendarRepository::new(pool.clone())
+                .find_by_id(id)
+                .await?
+        }
+        DbPool::Postgres(ref pool) => {
+            PostgresCalendarRepository::new(pool.clone())
+                .find_by_id(id)
+                .await?
+        }
+    }
+    .ok_or_else(|| KestrelError::NotFound("Calendar not found".to_string()))?;
+
+    // Verify ownership
+    verify_calendar_ownership(&state, user_id, &cal).await?;
+
+    // Generate random token
+    let mut token_bytes = [0u8; 32]; // 256 bits of entropy
+    OsRng.fill_bytes(&mut token_bytes);
+    let token = URL_SAFE_NO_PAD.encode(token_bytes);
+
+    // Hash token
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    let token_hash = URL_SAFE_NO_PAD.encode(hasher.finalize());
+
+    // Upsert feed token in repository
+    match state.db {
+        DbPool::Sqlite(ref pool) => {
+            SqliteCalendarRepository::new(pool.clone())
+                .upsert_feed_token(id, user_id, &token_hash)
+                .await?
+        }
+        DbPool::Postgres(ref pool) => {
+            PostgresCalendarRepository::new(pool.clone())
+                .upsert_feed_token(id, user_id, &token_hash)
+                .await?
+        }
+    };
+
+    let host = headers
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost:3000");
+
+    let base_url = std::env::var("KESTREL_BASE_URL").unwrap_or_else(|_| format!("http://{}", host));
+
+    let url = format!("{}/feeds/calendars/{}.ics?token={}", base_url, id, token);
+
+    Ok(Json(FeedResponse { url, token }))
+}
+
+pub async fn revoke_calendar_feed(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, KestrelError> {
+    // Check if calendar exists and belongs to user
+    let cal = match state.db {
+        DbPool::Sqlite(ref pool) => {
+            SqliteCalendarRepository::new(pool.clone())
+                .find_by_id(id)
+                .await?
+        }
+        DbPool::Postgres(ref pool) => {
+            PostgresCalendarRepository::new(pool.clone())
+                .find_by_id(id)
+                .await?
+        }
+    }
+    .ok_or_else(|| KestrelError::NotFound("Calendar not found".to_string()))?;
+
+    // Verify ownership
+    verify_calendar_ownership(&state, user_id, &cal).await?;
+
+    match state.db {
+        DbPool::Sqlite(ref pool) => {
+            SqliteCalendarRepository::new(pool.clone())
+                .delete_feed_token(id)
+                .await?
+        }
+        DbPool::Postgres(ref pool) => {
+            PostgresCalendarRepository::new(pool.clone())
+                .delete_feed_token(id)
+                .await?
+        }
+    };
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_escape_ics() {
+        assert_eq!(escape_ics("Hello World"), "Hello World");
+        assert_eq!(escape_ics("Line 1\nLine 2"), "Line 1\\nLine 2");
+        assert_eq!(escape_ics("Comma,;slash\\"), "Comma\\,\\;slash\\\\");
+    }
+
+    #[test]
+    fn test_format_ics_datetime() {
+        let ts = chrono::Utc
+            .with_ymd_and_hms(2023, 10, 28, 14, 30, 45)
+            .unwrap()
+            .timestamp();
+        assert_eq!(format_ics_datetime(ts, false), "20231028T143045Z");
+        assert_eq!(format_ics_datetime(ts, true), "20231028");
+    }
     use crate::core::types::DbUuid;
 
     fn event(start_time: i64, end_time: i64, rrule: Option<&str>) -> CalendarEvent {
