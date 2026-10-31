@@ -1,5 +1,6 @@
 <script lang="ts">
   import Sidebar from '$lib/components/Sidebar.svelte';
+  import TabStrip from '$lib/components/tabs/TabStrip.svelte';
   import ThreadList from '$lib/components/ThreadList.svelte';
   import ScreenerQueue from '$lib/components/ScreenerQueue.svelte';
   import ClipsLibrary from '$lib/components/ClipsLibrary.svelte';
@@ -204,7 +205,7 @@
     filterAttachmentsOnly = view.filter.attachmentOnly;
     filterDateRange = view.filter.dateRange;
     mailStore.setUnreadFilter(view.filter.unreadOnly);
-    selectedThreadId = null;
+    tabsStore.updateActiveTab({ threadId: null });
     activeCustomViewId = id;
     isMobileSidebarOpen = false;
   }
@@ -296,7 +297,7 @@
       filterDateRange = batchReturn.dateRange as typeof filterDateRange;
       selectedThreadId = batchReturn.selectedId;
     } else if (!restore) {
-      selectedThreadId = null;
+      tabsStore.updateActiveTab({ threadId: null });
     }
     batchReturn = null;
   }
@@ -763,7 +764,7 @@
       });
       return;
     }
-    currentView = 'all-mail';
+    tabsStore.updateActiveTab({ view: 'all-mail' });
     selectedThreadId = messageId;
     isMobileSidebarOpen = false;
   }
@@ -1267,11 +1268,11 @@
 
   function initiateReply(id: string) {
     initialReplyMode = 'reply';
-    selectedThreadId = id;
+    tabsStore.updateActiveTab({ threadId: id });
   }
   function initiateReplyAll(id: string) {
     initialReplyMode = 'reply_all';
-    selectedThreadId = id;
+    tabsStore.updateActiveTab({ threadId: id });
   }
 
   async function handleForwardAsAttachment(id: string) {
@@ -1303,7 +1304,7 @@
 
   function initiateForward(id: string) {
     initialReplyMode = 'forward';
-    selectedThreadId = id;
+    tabsStore.updateActiveTab({ threadId: id });
   }
   async function handleSendCompose(draft: { to: string; subject: string; body: string }) {
     isComposeOpen = false;
@@ -1371,12 +1372,12 @@
 
   function handleCommandSelect(cmd: string) {
     if (cmd === 'compose') isComposeOpen = true;
-    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); currentView = 'inbox'; }
+    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: 'inbox', threadId: null }); }
     else if (cmd === 'settings') {
       isCommandOpen = false;
       isSettingsOpen = true;
     }
-    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); currentView = cmd.replace('view-', ''); }
+    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: cmd.replace('view-', ''), threadId: null }); }
   }
 
   // Bulk Actions
@@ -1462,7 +1463,7 @@
               // isn't in the loaded list. The selected-thread effect below
               // loads the full body and marks it read.
               if (isBatchMode) exitBatch(false);
-              if (!allEmails.some((e) => e.id === link.id)) currentView = 'all-mail';
+              if (!allEmails.some((e) => e.id === link.id)) tabsStore.updateActiveTab({ view: 'all-mail' });
               selectedThreadId = link.id;
               isMobileSidebarOpen = false;
             }
@@ -1488,7 +1489,7 @@
       if (e.key === 'c') isComposeOpen = true;
       if (e.key === 'Escape') {
         if (isBatchMode) exitBatch();
-        else selectedThreadId = null;
+        else tabsStore.updateActiveTab({ threadId: null });
         isCommandOpen = false; isComposeOpen = false;
       }
     };
@@ -1507,7 +1508,7 @@
     <Sidebar
       {currentView}
       hideCounts={isBatchMode}
-      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
+      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: v, threadId: null }); tabsStore.updateActiveTab({ threadId: null }); activeCustomViewId = null; isMobileSidebarOpen = false; }}
       {customViews}
       {activeCustomViewId}
       onSelectCustomView={applyCustomView}
@@ -1516,7 +1517,7 @@
       onSaveCustomView={saveCurrentView}
       onComposeClick={() => { isComposeOpen = true; isMobileSidebarOpen = false; }}
       onOpenMailSettings={() => { isMailSettingsOpen = true; isMobileSidebarOpen = false; }}
-      bind:searchQuery
+      searchQuery={searchQuery}
       {accounts}
       bind:activeAccountId
       {allLabels}
@@ -1543,7 +1544,7 @@
           onclick={() => {
             if (isBatchMode) exitBatch(false);
             currentView = 'screener';
-            selectedThreadId = null;
+            tabsStore.updateActiveTab({ threadId: null });
             isMobileSidebarOpen = false;
           }}
           class="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium rounded-md transition-colors"
@@ -1567,7 +1568,7 @@
         active={currentView === 'screener'}
         onAllow={allowSender}
         onBlock={blockScreenedSender}
-        onOpen={(id) => { selectedThreadId = id; }}
+        onOpen={(id) => { tabsStore.updateActiveTab({ threadId: id }); }}
       />
     {:else if currentView === 'clips'}
       <ClipsLibrary
@@ -1644,7 +1645,7 @@
       {allLabels}
       onSelectThread={(id) => {
         if (isBatchMode) exitBatch(false);
-        selectedThreadId = id;
+        tabsStore.updateActiveTab({ threadId: id });
         import('@kestrel/shared/api').then(api => {
           api.markAsRead(id);
           api.getMessage(id).then(detail => {
@@ -1743,7 +1744,7 @@
       onClose={() => {
         if (isBatchMode) exitBatch();
         else {
-          selectedThreadId = null;
+          tabsStore.updateActiveTab({ threadId: null });
           initialReplyMode = null;
         }
       }}
