@@ -64,6 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<CreateEventRequest>()
         .register::<CreateEventResponse>()
         .register::<UpdateEventRequest>()
+        .register::<FeedResponse>()
         // Search models
         .register::<SearchParams>()
         .register::<SearchResult>()

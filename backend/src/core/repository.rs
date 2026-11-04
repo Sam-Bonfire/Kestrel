@@ -84,6 +84,20 @@ pub trait CalendarRepository: Send + Sync {
     async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Calendar>, sqlx::Error>;
     async fn list_by_user(&self, user_id: Uuid) -> Result<Vec<Calendar>, sqlx::Error>;
     async fn upsert(&self, calendar: &Calendar) -> Result<(), sqlx::Error>;
+
+    // Calendar Feeds
+    async fn upsert_feed_token(
+        &self,
+        calendar_id: Uuid,
+        user_id: Uuid,
+        token_hash: &str,
+    ) -> Result<(), sqlx::Error>;
+    async fn get_calendar_by_feed_token(
+        &self,
+        calendar_id: Uuid,
+        token_hash: &str,
+    ) -> Result<Option<Calendar>, sqlx::Error>;
+    async fn delete_feed_token(&self, calendar_id: Uuid) -> Result<(), sqlx::Error>;
 }
 
 #[async_trait]

@@ -71,4 +71,45 @@ impl CalendarRepository for SqliteCalendarRepository {
         .await?;
         Ok(())
     }
+
+    async fn upsert_feed_token(
+        &self,
+        calendar_id: Uuid,
+        user_id: Uuid,
+        token_hash: &str,
+    ) -> Result<(), sqlx::Error> {
+        let now = chrono::Utc::now().timestamp_millis();
+        sqlx::query(
+            "INSERT INTO calendar_feeds (calendar_id, user_id, token_hash, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (calendar_id) DO UPDATE SET token_hash = excluded.token_hash, created_at = excluded.created_at"
+        )
+        .bind(calendar_id.to_string())
+        .bind(user_id.to_string())
+        .bind(token_hash)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_calendar_by_feed_token(
+        &self,
+        calendar_id: Uuid,
+        token_hash: &str,
+    ) -> Result<Option<Calendar>, sqlx::Error> {
+        sqlx::query_as::<_, Calendar>(sqlx::AssertSqlSafe(format!(
+            "SELECT {CALENDAR_COLUMNS} FROM calendars c JOIN calendar_feeds f ON c.id = f.calendar_id WHERE f.calendar_id = ? AND f.token_hash = ?"
+        )))
+        .bind(calendar_id.to_string())
+        .bind(token_hash)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    async fn delete_feed_token(&self, calendar_id: Uuid) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM calendar_feeds WHERE calendar_id = ?")
+            .bind(calendar_id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
 }

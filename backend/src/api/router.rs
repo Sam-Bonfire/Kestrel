@@ -104,7 +104,11 @@ pub fn create_router(state: AppState) -> Router {
             "/api/book/:slug",
             get(booking::public_page).post(booking::book_slot),
         )
-        .route("/api/book/:slug/slots", get(booking::public_slots));
+        .route("/api/book/:slug/slots", get(booking::public_slots))
+        .route(
+            "/feeds/calendars/:filename",
+            get(calendars::get_calendar_feed),
+        );
 
     // Protected routes (auth middleware required)
     let protected = Router::new()
@@ -193,6 +197,10 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/api/v1/calendars", get(calendars::list_calendars))
         .route("/api/v1/calendars/:id", get(calendars::get_calendar))
+        .route(
+            "/api/v1/calendars/:id/feed",
+            post(calendars::create_calendar_feed).delete(calendars::revoke_calendar_feed),
+        )
         .route(
             "/api/v1/events",
             get(calendars::list_events).post(calendars::create_event),

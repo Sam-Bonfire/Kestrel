@@ -1666,3 +1666,149 @@ async fn test_malformed_search_query_is_client_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn test_calendar_feeds() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+    let (user_id, token) = register_and_get_token(&app, "feed_test@kestrel.dev").await;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).unwrap();
+
+    let account = seed_account(&state.db, user_uuid, "google", "Google Calendar").await;
+    let cal = seed_calendar(&state.db, account.id.0, "Engineering", true).await;
+    let start_ts = chrono::Utc::now().timestamp();
+    let end_ts = start_ts + 3600;
+    let event = common::seed_event(
+        &state.db,
+        account.id.0,
+        cal.id.0,
+        "ext-evt-1",
+        start_ts,
+        end_ts,
+    )
+    .await;
+
+    // 1. Create a feed
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/calendars/{}/feed", cal.id.0))
+                .header("authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = res.status();
+    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    if status != StatusCode::OK {
+        panic!(
+            "Status was {status}. Body: {:?}",
+            String::from_utf8_lossy(&body_bytes)
+        );
+    }
+    assert_eq!(status, StatusCode::OK);
+
+    let feed_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    let url = feed_res["url"].as_str().unwrap().to_string();
+    let token_str = feed_res["token"].as_str().unwrap().to_string();
+
+    // 2. Fetch the feed (valid token)
+    let path = url.split("localhost").last().unwrap_or(&url); // Get relative path if any
+    let relative_url = if url.starts_with("http") {
+        let url_obj = url::Url::parse(&url).unwrap();
+        format!("{}?{}", url_obj.path(), url_obj.query().unwrap_or(""))
+    } else {
+        url.clone()
+    };
+
+    let res2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(&relative_url)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status2 = res2.status();
+    let etag = if let Some(e) = res2.headers().get("ETAG") {
+        e.to_str().unwrap().to_string()
+    } else {
+        "".to_string()
+    };
+    let ics_bytes = axum::body::to_bytes(res2.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    if status2 != StatusCode::OK {
+        panic!(
+            "Status was {status2}. Body: {:?}",
+            String::from_utf8_lossy(&ics_bytes)
+        );
+    }
+    assert_eq!(status2, StatusCode::OK);
+
+    let ics = String::from_utf8(ics_bytes.to_vec()).unwrap();
+
+    assert!(ics.contains("BEGIN:VCALENDAR"));
+    if !ics.contains("BEGIN:VEVENT") {
+        panic!("VEVENT not found in ICS. ICS: {}", ics);
+    }
+    assert!(ics.contains(&event.id.0.to_string()));
+
+    // 3. Fetch the feed with If-None-Match (304 Not Modified)
+    let res3 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(&relative_url)
+                .header("If-None-Match", etag)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res3.status(), StatusCode::NOT_MODIFIED);
+
+    // 4. Revoke feed
+    let res4 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/calendars/{}/feed", cal.id.0))
+                .header("authorization", format!("Bearer {}", token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res4.status(), StatusCode::NO_CONTENT);
+
+    // 5. Fetch revoked feed (404)
+    let res5 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(&relative_url)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res5.status(), StatusCode::NOT_FOUND);
+}

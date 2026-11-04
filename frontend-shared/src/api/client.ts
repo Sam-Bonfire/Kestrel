@@ -156,7 +156,7 @@ async function request<T, B = unknown>(
   opts: RequestOptions<B> = {},
 ): Promise<T> {
   const { token, body, ...init } = opts;
-  
+
   if (typeof navigator !== 'undefined' && navigator.onLine === false && method !== 'GET') {
     enqueueMutation(path, method, body);
     return undefined as unknown as T; // Return early for void operations (or mock for others)
@@ -223,7 +223,7 @@ export async function replayOfflineQueue(): Promise<void> {
     } catch (err) {
       console.error('Failed to replay mutation', mut, err);
       // Stop replay on first network failure to maintain order
-      if (err instanceof TypeError) break; 
+      if (err instanceof TypeError) break;
     }
   }
 }
@@ -971,4 +971,12 @@ export async function updateSettings(settings: Partial<SettingsPayload>): Promis
     throw new ApiError(res.status, `PUT /api/settings failed: ${res.statusText}`);
   }
   return res.json();
+}
+
+export async function createFeed(calendarId: string, token?: string): Promise<{ url: string; token: string }> {
+  return request<{ url: string; token: string }>('POST', `/calendars/${calendarId}/feed`, { token });
+}
+
+export async function revokeFeed(calendarId: string, token?: string): Promise<void> {
+  return request<void>('DELETE', `/calendars/${calendarId}/feed`, { token });
 }
