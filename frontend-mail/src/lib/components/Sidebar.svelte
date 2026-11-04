@@ -64,7 +64,7 @@
     onComposeClick = () => {},
     searchQuery = $bindable(''),
     accounts = [] as Account[],
-    activeAccountId = '',
+    activeAccountId = $bindable('all'),
     allLabels = [] as string[],
     onRenameLabel = (oldVal: string, newVal: string) => {},
     onDeleteLabel = (label: string) => {},
@@ -159,11 +159,7 @@
     teal: { dot: 'bg-teal-500', text: 'text-teal-400' }
   };
 
-  let activeAccount = $derived(
-    profilesStore.activeProfileId === 'default'
-      ? { id: 'all', name: 'All Inboxes', email: 'Unified Inbox', color: '#6B7280' }
-      : { id: profilesStore.activeProfileId, name: profilesStore.getActiveProfile().name, email: 'Filtered Inbox', color: '#6B7280' }
-  );
+  let activeAccount = $derived(activeAccountId === 'all' ? { id: 'all', name: 'All Inboxes', email: 'Unified Inbox', color: '#6B7280' } : accounts.find((a: Account) => a.id === activeAccountId));
 
   let labelsExpanded = $state(true);
   let categoriesExpanded = $state(false);
@@ -213,6 +209,9 @@
 
   // Settings state
   let showAccountDropdown = $state(false);
+  let newProfileName = $state('');
+  let newProfileAccounts = $state<string[]>([]);
+
   let showProfileMenu = $state(false);
 
   let isDeletingConfirmOpen = $state(false);
@@ -345,12 +344,13 @@
               onclick={(e) => { e.stopPropagation(); showAccountDropdown = !showAccountDropdown; }}
               class="flex items-center gap-1.5 text-xs font-semibold text-white cursor-pointer hover:text-neutral-200 transition-colors w-full text-left justify-between pr-2 border-none bg-transparent"
             >
-              <span class="truncate">{profilesStore.getActiveProfile().name}</span>
+              <span class="truncate">{activeAccount?.name || 'All Inboxes'}</span>
               <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0 transition-transform {showAccountDropdown ? 'rotate-180' : ''}" />
             </button>
           {/snippet}
           {#snippet content()}
             <div class="w-48 py-1 font-sans text-xs">
+              <div class="px-3 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)]">Profiles</div>
               {#each profilesStore.profiles as profile}
                 <button
                   onclick={() => {
@@ -362,23 +362,89 @@
                   <div class="w-2 h-2 rounded-full" style="background-color: #6B7280"></div>
                   <div class="flex flex-col min-w-0">
                     <span class="truncate">{profile.name}</span>
+                    <span class="text-[10px] text-[var(--color-text-secondary)] truncate">
+                      {profile.accountIds.includes('all') ? 'All accounts' : `${profile.accountIds.length} account${profile.accountIds.length === 1 ? '' : 's'}`}
+                    </span>
                   </div>
                   {#if profile.id === profilesStore.activeProfileId}
                     <Check class="w-3 h-3 text-blue-400 ml-auto" />
                   {/if}
                 </button>
               {/each}
-              <div class="border-t border-white/5 mt-1 pt-1">
+              {#if profilesStore.activeProfileId !== 'default'}
                 <button
                   onclick={() => {
-                    const name = prompt('New Profile Name:');
-                    if (name) profilesStore.addProfile(name, [accounts[0]?.id || 'all']);
+                    profilesStore.deleteProfile(profilesStore.activeProfileId);
                     showAccountDropdown = false;
                   }}
-                  class="w-full text-left px-3 py-1.5 text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)] transition-colors text-[11px] cursor-pointer border-none bg-transparent"
+                  class="w-full text-left px-3 py-1.5 text-red-400/80 hover:text-red-300 hover:bg-[var(--color-canvas-hover)] transition-colors text-[11px] cursor-pointer border-none bg-transparent"
+                >
+                  Delete active profile
+                </button>
+              {/if}
+              <div class="border-t border-white/5 mt-1 pt-1 px-3 py-1.5">
+                <input
+                  placeholder="New profile name"
+                  bind:value={newProfileName}
+                  onkeydown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                  class="w-full px-2 py-1 rounded bg-[var(--color-canvas-hover)] text-white text-[11px] border border-white/10 outline-none focus:border-blue-400/50 placeholder:text-[var(--color-text-secondary)]"
+                />
+                <div class="mt-1 flex flex-col gap-0.5">
+                  {#each accounts as account (account.id)}
+                    <label class="flex items-center gap-2 px-1 py-0.5 text-[11px] text-white cursor-pointer">
+                      <input type="checkbox" bind:group={newProfileAccounts} value={account.id} class="accent-blue-500" />
+                      <span class="w-2 h-2 rounded-full shrink-0" style="background-color: {account.color}"></span>
+                      <span class="truncate">{account.name}</span>
+                    </label>
+                  {/each}
+                </div>
+                <button
+                  onclick={() => {
+                    const name = newProfileName.trim();
+                    if (!name) return;
+                    profilesStore.addProfile(name, newProfileAccounts.length > 0 ? [...newProfileAccounts] : ['all']);
+                    newProfileName = '';
+                    newProfileAccounts = [];
+                    showAccountDropdown = false;
+                  }}
+                  class="mt-1 w-full text-left px-1 py-1 text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)] transition-colors text-[11px] cursor-pointer border-none bg-transparent"
                 >
                   + Add Profile
                 </button>
+              </div>
+              <div class="border-t border-white/5 mt-1 pt-1">
+                <div class="px-3 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)]">Accounts</div>
+                <button
+                  onclick={() => {
+                    activeAccountId = 'all';
+                    showAccountDropdown = false;
+                  }}
+                  class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
+                >
+                  <div class="w-2 h-2 rounded-full" style="background-color: #6B7280"></div>
+                  <span class="truncate">All Inboxes</span>
+                  {#if activeAccountId === 'all'}
+                    <Check class="w-3 h-3 text-blue-400 ml-auto" />
+                  {/if}
+                </button>
+                {#each accounts as account (account.id)}
+                  <button
+                    onclick={() => {
+                      activeAccountId = account.id;
+                      showAccountDropdown = false;
+                    }}
+                    class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
+                  >
+                    <div class="w-2 h-2 rounded-full shrink-0" style="background-color: {account.color}"></div>
+                    <div class="flex flex-col min-w-0">
+                      <span class="truncate">{account.name}</span>
+                      <span class="text-[10px] text-[var(--color-text-secondary)] truncate">{account.email}</span>
+                    </div>
+                    {#if activeAccountId === account.id}
+                      <Check class="w-3 h-3 text-blue-400 ml-auto" />
+                    {/if}
+                  </button>
+                {/each}
               </div>
             </div>
           {/snippet}

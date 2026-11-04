@@ -15,6 +15,11 @@ export const defaultShortcuts = [
   { id: 'today', label: 'Go to Today', defaultKey: 'T' },
   { id: 'escape', label: 'Escape', defaultKey: 'Escape' },
   { id: 'focus_mode', label: 'Toggle Focus Mode', defaultKey: '$mod+Shift+F' },
+  { id: 'open_tab_bg', label: 'Open Thread in New Background Tab', defaultKey: '$mod+Enter' },
+  { id: 'close_tab', label: 'Close Tab', defaultKey: '$mod+W' },
+  { id: 'next_tab', label: 'Next Tab', defaultKey: '$mod+Alt+ArrowRight' },
+  { id: 'prev_tab', label: 'Previous Tab', defaultKey: '$mod+Alt+ArrowLeft' },
+  { id: 'restore_tab', label: 'Reopen Closed Tab', defaultKey: '$mod+Shift+T' },
 ];
 
 export type ShortcutOverride = Record<string, string>;

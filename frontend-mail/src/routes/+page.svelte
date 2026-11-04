@@ -162,7 +162,16 @@
     { id: '2', name: 'Work Outlook',    email: 'alex@kestrel.dev', color: '#0078D4', provider: 'outlook' },
   ]);
   let accountsLoaded = $state(false);
-  let activeAccountId = $derived(profilesStore.loaded ? profilesStore.getActiveProfile().accountIds[0] || 'all' : 'all');
+  let activeAccountId = $state('all');
+
+  // Effective message scope: an explicit account pick wins; otherwise the
+  // active profile's account list ('all' = everything). Counts, screener,
+  // unscreened keys and hidden-for-review all read this single derived value.
+  let scopedAccountIds = $derived.by(() => {
+    if (activeAccountId !== 'all') return [activeAccountId];
+    if (!profilesStore.loaded) return ['all'];
+    return profilesStore.getActiveProfile().accountIds as string[];
+  });
 
   function toSidebarAccount(a: { id: string; provider: string; provider_account_id: string; display_name: string }) {
     const color = a.provider === 'gmail' ? '#EA4335' : a.provider === 'outlook' ? '#0078D4' : '#6B7280';
@@ -262,6 +271,30 @@
       tabsStore.updateActiveTab(update);
     }
   }
+
+  // Tabs mirror page state. Switching tabs reapplies that tab's snapshot;
+  // every other flow is page -> tab: handlers set page state directly and
+  // this effect reconciles it into the active tab (K-1629).
+  let lastAppliedTabId = $state<string | null>(null);
+  $effect(() => {
+    if (!tabsStore.loaded) return;
+    const tab = tabsStore.tabs.find((t) => t.id === tabsStore.activeTabId);
+    if (!tab) return;
+    if (lastAppliedTabId !== tab.id) {
+      lastAppliedTabId = tab.id;
+      currentView = tab.view;
+      searchQuery = tab.searchQuery || '';
+      selectedThreadId = tab.threadId || null;
+      return;
+    }
+    const sameState =
+      tab.view === currentView &&
+      (tab.searchQuery || '') === searchQuery &&
+      (tab.threadId || null) === (selectedThreadId ?? null);
+    if (!sameState) {
+      tabsStore.updateActiveTab({ view: currentView, searchQuery, threadId: selectedThreadId });
+    }
+  });
   let isComposeOpen    = $state(false);
   let composeInitialTo = $state<string[]>([]);
   let composeInitialSubject = $state('');
@@ -461,18 +494,16 @@
   let unreadCount = $derived.by(() => {
     const total = totalUnread;
     if (total === 0) return 0;
-    const profile = profilesStore.getActiveProfile();
-    if (profile.accountIds.includes('all')) return `${total}`;
-    const current = allEmails.filter(e => profile.accountIds.includes(e.accountId) && e.isUnread && !e.isTrash && !e.isSpam).length;
+    if (scopedAccountIds.includes('all')) return `${total}`;
+    const current = allEmails.filter(e => scopedAccountIds.includes(e.accountId) && e.isUnread && !e.isTrash && !e.isSpam).length;
     return `${current} / ${total}`;
   });
 
   let inboxCount = $derived.by(() => {
     const total = allEmails.filter(e => e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
     if (total === 0) return 0;
-    const profile = profilesStore.getActiveProfile();
-    if (profile.accountIds.includes('all')) return `${total}`;
-    const current = allEmails.filter(e => profile.accountIds.includes(e.accountId) && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
+    if (scopedAccountIds.includes('all')) return `${total}`;
+    const current = allEmails.filter(e => scopedAccountIds.includes(e.accountId) && e.isUnread && !e.isArchived && !e.isTrash && !e.isSpam && !e.isDraft).length;
     return `${current} / ${total}`;
   });
 
@@ -481,9 +512,8 @@
     const getCountStr = (filterFn: (e: typeof allEmails[0]) => boolean) => {
       const total = allEmails.filter(filterFn).length;
       if (total === 0) return 0;
-      const profile = profilesStore.getActiveProfile();
-      if (profile.accountIds.includes('all')) return `${total}`;
-      const current = allEmails.filter(e => profile.accountIds.includes(e.accountId) && filterFn(e)).length;
+      if (scopedAccountIds.includes('all')) return `${total}`;
+      const current = allEmails.filter(e => scopedAccountIds.includes(e.accountId) && filterFn(e)).length;
       return `${current} / ${total}`;
     };
 
@@ -527,7 +557,7 @@
   let screened = $state(loadScreened());
   let screenerQueue = $derived(
     firstTimeSenders(
-      allEmails.filter((e) => profilesStore.getActiveProfile().accountIds.includes('all') || profilesStore.getActiveProfile().accountIds.includes(e.accountId)),
+      allEmails.filter((e) => scopedAccountIds.includes('all') || scopedAccountIds.includes(e.accountId)),
       screened,
       'all'
     )
@@ -540,9 +570,8 @@
   // approval in one scope never leaks into another. Explicit-intent
   // views (starred, reply-later, sent, drafts, labels) are exempt.
   let unscreenedKeys = $derived.by(() => {
-    const profile = profilesStore.getActiveProfile();
     const set = new Set<string>();
-    for (const acc of (profile.accountIds as string[])) {
+    for (const acc of scopedAccountIds) {
       screenerQueue.forEach((s) => set.add(`${acc}:${s.email}`));
     }
     return set;
@@ -628,9 +657,9 @@
   let hiddenForReview = $derived(
     allEmails.filter(
       (e) =>
-        (profilesStore.getActiveProfile().accountIds.includes('all') || profilesStore.getActiveProfile().accountIds.includes(e.accountId)) &&
+        (scopedAccountIds.includes('all') || scopedAccountIds.includes(e.accountId)) &&
         !e.isTrash &&
-        profilesStore.getActiveProfile().accountIds.some((acc: string) => unscreenedKeys.has(`${acc}:${(e.senderEmail || '').trim().toLowerCase()}`))
+        scopedAccountIds.some((acc: string) => unscreenedKeys.has(`${acc}:${(e.senderEmail || '').trim().toLowerCase()}`))
     ).length
   );
 
@@ -792,7 +821,7 @@
       });
       return;
     }
-    tabsStore.updateActiveTab({ view: 'all-mail' });
+    currentView = 'all-mail';
     selectedThreadId = messageId; updateActiveTabForNavigation({ threadId: messageId });
     isMobileSidebarOpen = false;
   }
@@ -909,15 +938,14 @@
   let threads = $derived(
     allEmails
       .filter(e => {
-        const profile = profilesStore.getActiveProfile();
-        if (!profile.accountIds.includes('all') && !profile.accountIds.includes(e.accountId)) return false;
+        if (!scopedAccountIds.includes('all') && !scopedAccountIds.includes(e.accountId)) return false;
 
         if (
           (currentView === 'inbox' ||
             currentView === 'all-mail' ||
             currentView === 'unread' ||
             currentView === 'feed') &&
-            profile.accountIds.some((acc: string) => unscreenedKeys.has(`${acc}:${(e.senderEmail || '').trim().toLowerCase()}`))
+            scopedAccountIds.some((acc: string) => unscreenedKeys.has(`${acc}:${(e.senderEmail || '').trim().toLowerCase()}`))
         )
           return false;
 
@@ -1408,12 +1436,12 @@
 
   function handleCommandSelect(cmd: string) {
     if (cmd === 'compose') isComposeOpen = true;
-    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: 'inbox', threadId: null }); }
+    else if (cmd === 'inbox') { if (isBatchMode) exitBatch(false); currentView = 'inbox'; selectedThreadId = null; }
     else if (cmd === 'settings') {
       isCommandOpen = false;
       isSettingsOpen = true;
     }
-    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: cmd.replace('view-', ''), threadId: null }); }
+    else if (cmd.startsWith('view-')) { if (isBatchMode) exitBatch(false); currentView = cmd.replace('view-', ''); selectedThreadId = null; }
   }
 
   // Bulk Actions
@@ -1501,7 +1529,7 @@
               // isn't in the loaded list. The selected-thread effect below
               // loads the full body and marks it read.
               if (isBatchMode) exitBatch(false);
-              if (!allEmails.some((e) => e.id === link.id)) tabsStore.updateActiveTab({ view: 'all-mail' });
+              if (!allEmails.some((e) => e.id === link.id)) currentView = 'all-mail';
               selectedThreadId = link.id; updateActiveTabForNavigation({ threadId: link.id });
               isMobileSidebarOpen = false;
             }
@@ -1527,7 +1555,7 @@
       if (e.key === 'c') isComposeOpen = true;
       if (e.key === 'Escape') {
         if (isBatchMode) exitBatch();
-        else tabsStore.updateActiveTab({ threadId: null });
+        else selectedThreadId = null;
         isCommandOpen = false; isComposeOpen = false;
       }
     };
@@ -1573,7 +1601,7 @@
     <Sidebar
       {currentView}
       hideCounts={isBatchMode}
-      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); tabsStore.updateActiveTab({ view: v, threadId: null }); tabsStore.updateActiveTab({ threadId: null }); activeCustomViewId = null; isMobileSidebarOpen = false; }}
+      onSelectView={(v: any) => { if (isBatchMode) exitBatch(false); currentView = v; selectedThreadId = null; activeCustomViewId = null; isMobileSidebarOpen = false; }}
       {customViews}
       {activeCustomViewId}
       onSelectCustomView={applyCustomView}
@@ -1582,9 +1610,9 @@
       onSaveCustomView={saveCurrentView}
       onComposeClick={() => { isComposeOpen = true; isMobileSidebarOpen = false; }}
       onOpenMailSettings={() => { isMailSettingsOpen = true; isMobileSidebarOpen = false; }}
-      searchQuery={searchQuery}
+      bind:searchQuery
       {accounts}
-      activeAccountId={activeAccountId}
+      bind:activeAccountId
       {allLabels}
       onRenameLabel={renameLabel}
       onDeleteLabel={deleteLabel}
@@ -1612,7 +1640,7 @@
           onclick={() => {
             if (isBatchMode) exitBatch(false);
             currentView = 'screener';
-            tabsStore.updateActiveTab({ threadId: null });
+            selectedThreadId = null;
             isMobileSidebarOpen = false;
           }}
           class="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium rounded-md transition-colors"
@@ -1636,7 +1664,7 @@
         active={currentView === 'screener'}
         onAllow={allowSender}
         onBlock={blockScreenedSender}
-        onOpen={(id: string) => { tabsStore.updateActiveTab({ threadId: id }); }}
+        onOpen={(id: string) => { selectedThreadId = id; }}
       />
     {:else if currentView === 'clips'}
       <ClipsLibrary
@@ -1713,7 +1741,7 @@
       {allLabels}
       onSelectThread={(id: string) => {
         if (isBatchMode) exitBatch(false);
-        tabsStore.updateActiveTab({ threadId: id });
+        selectedThreadId = id;
         import('@kestrel/shared/api').then(api => {
           api.markAsRead(id);
           api.getMessage(id).then(detail => {
@@ -1812,7 +1840,7 @@
       onClose={() => {
         if (isBatchMode) exitBatch();
         else {
-          tabsStore.updateActiveTab({ threadId: null });
+          selectedThreadId = null;
           initialReplyMode = null;
         }
       }}
