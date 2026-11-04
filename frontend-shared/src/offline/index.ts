@@ -9,6 +9,15 @@ export {
 export type { QueuedMutation } from './queue.js';
 
 export {
+  cacheAttachment,
+  getCachedAttachment,
+  attachmentCacheKey,
+  pruneAttachmentCache,
+} from './attachments.js';
+
+export type { AttachmentCacheRecord, EvictionCaps } from './attachments.js';
+
+export {
   enqueueOutboxItem,
   getOutboxItems,
   updateOutboxItem,

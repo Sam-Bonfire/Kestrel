@@ -54,6 +54,8 @@
   import { sanitizeEmailBody } from '@kestrel/shared';
   import { blockRemoteImages, senderDomain, isDomainAllowed, allowSenderDomain } from '@kestrel/shared';
   import { get, set } from 'idb-keyval';
+  import { onMount } from 'svelte';
+  import { cacheAttachment, getCachedAttachment, pruneAttachmentCache } from '@kestrel/shared/offline';
 
   export interface Email {
     id: string;
@@ -309,6 +311,10 @@
 
   let downloadingAttachments = $state<Record<string, boolean>>({});
 
+  onMount(() => {
+    void pruneAttachmentCache();
+  });
+
   async function downloadAttachment(attachment: { filename: string; size: number }) {
     if (!email) return;
     const key = `${email.id}:${attachment.filename}`;
@@ -317,8 +323,15 @@
 
     try {
       const { downloadAttachment: fetchBytes } = await import('@kestrel/shared/api');
-      const bytes = await fetchBytes(email.id, attachment.filename);
+      let bytes = await fetchBytes(email.id, attachment.filename).catch(async (err) => {
+        // Offline or endpoint error: fall back to a previously cached copy.
+        console.error('Attachment fetch failed, trying cache:', err);
+        const cached = await getCachedAttachment(email.id, attachment.filename);
+        if (!cached) throw err;
+        return cached;
+      });
       const data = new Uint8Array(bytes);
+      void cacheAttachment(email.id, attachment.filename, bytes);
 
       // Save to the OS download directory via the Tauri fs plugin
       const { writeFile } = await import('@tauri-apps/plugin-fs');
