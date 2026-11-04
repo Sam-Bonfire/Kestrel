@@ -30,11 +30,56 @@
   let feedTokens = $state<Record<string, string>>({});
   let showRevokeConfirm = $state<string | null>(null);
 
+  // A copied ICS URL keeps working only while the row token is unchanged, so
+  // the session caches what was handed out instead of rotating on every open.
+  const FEED_CACHE_KEY = 'kestrel:calendar:feeds';
+
+  type FeedCache = { urls: Record<string, string>; tokens: Record<string, string> };
+
+  function loadFeedCache(): FeedCache {
+    if (typeof localStorage === 'undefined') return { urls: {}, tokens: {} };
+    try {
+      const raw = localStorage.getItem(FEED_CACHE_KEY);
+      if (!raw) return { urls: {}, tokens: {} };
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed !== 'object' || parsed === null) return { urls: {}, tokens: {} };
+      const entry = parsed as Partial<FeedCache>;
+      return {
+        urls: typeof entry.urls === 'object' && entry.urls !== null ? entry.urls : {},
+        tokens: typeof entry.tokens === 'object' && entry.tokens !== null ? entry.tokens : {},
+      };
+    } catch {
+      return { urls: {}, tokens: {} };
+    }
+  }
+
+  function saveFeedCache(): void {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(
+        FEED_CACHE_KEY,
+        JSON.stringify({ urls: { ...feedUrls }, tokens: { ...feedTokens } }),
+      );
+    } catch {
+      // Storage full or blocked; the UI still works, links just do not persist.
+    }
+  }
+
+  function hydrateFeedMode(calendarId: string): void {
+    const cached = loadFeedCache();
+    const url = cached.urls[calendarId];
+    if (url) {
+      feedUrls[calendarId] = url;
+      if (cached.tokens[calendarId]) feedTokens[calendarId] = cached.tokens[calendarId];
+    }
+  }
+
   async function handleCreateFeed(calendarId: string) {
     try {
-      const { url, token } = await createFeed(calendarId, feedTokens[calendarId]);
+      const { url, token } = await createFeed(calendarId);
       feedUrls[calendarId] = url;
       feedTokens[calendarId] = token;
+      saveFeedCache();
       expandedFeeds.add(calendarId);
       expandedFeeds = expandedFeeds;
     } catch (e) {
@@ -44,9 +89,10 @@
 
   async function handleRevokeFeed(calendarId: string) {
     try {
-      await revokeFeed(calendarId, feedTokens[calendarId]);
+      await revokeFeed(calendarId);
       delete feedUrls[calendarId];
       delete feedTokens[calendarId];
+      saveFeedCache();
       showRevokeConfirm = null;
       expandedFeeds.delete(calendarId);
       expandedFeeds = expandedFeeds;
@@ -60,10 +106,8 @@
       expandedFeeds.delete(calendarId);
     } else {
       expandedFeeds.add(calendarId);
-      if (!feedUrls[calendarId]) {
-        // Automatically try to create/fetch if it wasn't there
-        handleCreateFeed(calendarId);
-      }
+      // Only hydrate; rotating a token is reserved for the explicit button.
+      if (!feedUrls[calendarId]) hydrateFeedMode(calendarId);
     }
     expandedFeeds = expandedFeeds;
   }
