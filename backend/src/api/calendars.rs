@@ -5,8 +5,8 @@ use axum::http::header::{CONTENT_TYPE, ETAG, HeaderMap, IF_NONE_MATCH, LAST_MODI
 use axum::response::IntoResponse;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{TimeZone, Utc};
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -1066,7 +1066,10 @@ pub async fn get_calendar_feed(
     hasher.update(ics.as_bytes());
     let etag = format!("\"{}\"", URL_SAFE_NO_PAD.encode(hasher.finalize()));
 
-    if headers.get(IF_NONE_MATCH).is_some_and(|h| h.to_str().is_ok_and(|s| s == etag)) {
+    if headers
+        .get(IF_NONE_MATCH)
+        .is_some_and(|h| h.to_str().is_ok_and(|s| s == etag))
+    {
         return Ok((StatusCode::NOT_MODIFIED, [(ETAG, etag)]).into_response());
     }
 
