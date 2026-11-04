@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { profilesStore } from '$lib/stores/profilesStore.svelte.js';
   import {
     Inbox,
     CircleDot,
@@ -63,7 +64,7 @@
     onComposeClick = () => {},
     searchQuery = $bindable(''),
     accounts = [] as Account[],
-    activeAccountId = $bindable(''),
+    activeAccountId = '',
     allLabels = [] as string[],
     onRenameLabel = (oldVal: string, newVal: string) => {},
     onDeleteLabel = (label: string) => {},
@@ -158,7 +159,11 @@
     teal: { dot: 'bg-teal-500', text: 'text-teal-400' }
   };
 
-  let activeAccount = $derived(activeAccountId === 'all' ? { id: 'all', name: 'All Inboxes', email: 'Unified Inbox', color: '#6B7280' } : accounts.find((a: Account) => a.id === activeAccountId));
+  let activeAccount = $derived(
+    profilesStore.activeProfileId === 'default'
+      ? { id: 'all', name: 'All Inboxes', email: 'Unified Inbox', color: '#6B7280' }
+      : { id: profilesStore.activeProfileId, name: profilesStore.getActiveProfile().name, email: 'Filtered Inbox', color: '#6B7280' }
+  );
 
   let labelsExpanded = $state(true);
   let categoriesExpanded = $state(false);
@@ -338,48 +343,43 @@
           {#snippet trigger()}
             <button
               onclick={(e) => { e.stopPropagation(); showAccountDropdown = !showAccountDropdown; }}
-              class="flex items-center gap-1.5 text-xs font-semibold text-white cursor-pointer hover:text-neutral-200 transition-colors w-full text-left justify-between pr-2"
+              class="flex items-center gap-1.5 text-xs font-semibold text-white cursor-pointer hover:text-neutral-200 transition-colors w-full text-left justify-between pr-2 border-none bg-transparent"
             >
-              <span class="truncate">{activeAccount?.name || ''}</span>
+              <span class="truncate">{profilesStore.getActiveProfile().name}</span>
               <ChevronDown class="w-3.5 h-3.5 text-[var(--color-text-secondary)] shrink-0 transition-transform {showAccountDropdown ? 'rotate-180' : ''}" />
             </button>
           {/snippet}
           {#snippet content()}
             <div class="w-48 py-1 font-sans text-xs">
-              <button
-                onclick={() => {
-                  activeAccountId = 'all';
-                  showAccountDropdown = false;
-                }}
-                class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-b border-white/5 pb-2 mb-1"
-              >
-                <div class="w-2 h-2 rounded-full" style="background-color: #6B7280"></div>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-semibold truncate">All Inboxes</span>
-                  <span class="text-[9px] text-[var(--color-text-secondary)] truncate">Unified Inbox</span>
-                </div>
-                {#if 'all' === activeAccountId}
-                  <Check class="w-3 h-3 text-blue-400 ml-auto" />
-                {/if}
-              </button>
-              {#each accounts as acc}
+              {#each profilesStore.profiles as profile}
                 <button
                   onclick={() => {
-                    activeAccountId = acc.id;
+                    profilesStore.setActiveProfile(profile.id);
                     showAccountDropdown = false;
                   }}
-                  class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer"
+                  class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-canvas-hover)] transition-colors text-white cursor-pointer border-none bg-transparent"
                 >
-                  <div class="w-2 h-2 rounded-full" style="background-color: {acc.color}"></div>
+                  <div class="w-2 h-2 rounded-full" style="background-color: #6B7280"></div>
                   <div class="flex flex-col min-w-0">
-                    <span class="font-semibold truncate">{acc.name}</span>
-                    <span class="text-[9px] text-[var(--color-text-secondary)] truncate">{acc.email}</span>
+                    <span class="truncate">{profile.name}</span>
                   </div>
-                  {#if acc.id === activeAccountId}
+                  {#if profile.id === profilesStore.activeProfileId}
                     <Check class="w-3 h-3 text-blue-400 ml-auto" />
                   {/if}
                 </button>
               {/each}
+              <div class="border-t border-white/5 mt-1 pt-1">
+                <button
+                  onclick={() => {
+                    const name = prompt('New Profile Name:');
+                    if (name) profilesStore.addProfile(name, [accounts[0]?.id || 'all']);
+                    showAccountDropdown = false;
+                  }}
+                  class="w-full text-left px-3 py-1.5 text-[var(--color-text-secondary)] hover:text-white hover:bg-[var(--color-canvas-hover)] transition-colors text-[11px] cursor-pointer border-none bg-transparent"
+                >
+                  + Add Profile
+                </button>
+              </div>
             </div>
           {/snippet}
         </Dropdown>

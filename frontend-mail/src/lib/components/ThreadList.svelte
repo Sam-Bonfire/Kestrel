@@ -29,6 +29,10 @@
     senderEmail: string;
     subject: string;
     subjectOverridden?: boolean;
+    threadId?: string | null;
+    accountUuid?: string | null;
+    accountName?: string;
+    accountColor?: string;
     snippet: string;
     date: string;
     timestamp?: string;
@@ -41,8 +45,7 @@
     isOutbox?: boolean;
     outboxStatus?: 'pending' | 'sending' | 'failed' | 'sent';
     provider?: string;
-    accountColor?: string;
-  }
+      }
 
   let {
     threads = [] as EmailThread[],
@@ -866,7 +869,12 @@
             <div class="w-full sm:w-36 md:w-44 sm:pr-4 shrink-0 flex justify-between sm:justify-start items-center text-xs truncate">
               <div class="flex items-center gap-1.5 truncate">
                 {#if thread.accountColor}
-                  <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background-color: {thread.accountColor};"></span>
+                  <span
+                    class="w-1.5 h-1.5 rounded-full shrink-0"
+                    style="background-color: {thread.accountColor};"
+                    title={thread.accountName || 'Account'}
+                    aria-label={thread.accountName || 'Account'}
+                  ></span>
                 {/if}
                 <span class="{thread.isUnread ? 'font-bold text-white' : 'font-medium text-neutral-200'} truncate">{thread.sender}</span>
               </div>
