@@ -216,6 +216,10 @@ pub fn create_router(state: AppState) -> Router {
                 .delete(calendars::delete_event),
         )
         .route(
+            "/api/v1/events/:id/rsvp",
+            post(calendars::rsvp_event),
+        )
+        .route(
             "/api/v1/events/:id/polls",
             get(polls::list_polls).post(polls::create_poll),
         )

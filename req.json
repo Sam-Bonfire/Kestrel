@@ -1,0 +1,4 @@
+{
+  "filepath": "frontend-calendar/src/lib/components/EventPeekPanel.svelte",
+  "merge_diff": "<<<<<<< SEARCH\n            <button onclick={() => updateRsvp('tentative')} class=\"flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}\">Maybe</button>\n          </div>\n        </div>\n      </div>\n=======\n            <button onclick={() => updateRsvp('tentative')} class=\"flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}\">Maybe</button>\n          </div>\n        </div>\n        {/if}\n      </div>\n>>>>>>> REPLACE"
+}

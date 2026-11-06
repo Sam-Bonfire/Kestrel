@@ -921,13 +921,13 @@ export async function updateEvent(
 }
 
 export async function rsvpExternal(
-  externalId: string,
+  eventId: string,
   status: string,
   token?: string,
-): Promise<CalendarEvent> {
-  return request<CalendarEvent>('POST', '/events/rsvp_external', {
+): Promise<EventDetail> {
+  return request<EventDetail>('POST', `/events/${eventId}/rsvp`, {
     token,
-    body: { external_id: externalId, status },
+    body: { status },
   });
 }
 
