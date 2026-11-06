@@ -206,6 +206,10 @@ pub fn create_router(state: AppState) -> Router {
             get(calendars::list_events).post(calendars::create_event),
         )
         .route(
+            "/api/v1/events/import-ics",
+            post(calendars::import_ics),
+        )
+        .route(
             "/api/v1/events/rsvp_external",
             post(calendars::rsvp_external),
         )

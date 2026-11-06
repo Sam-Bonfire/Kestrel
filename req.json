@@ -1,4 +1,4 @@
 {
-  "filepath": "frontend-calendar/src/lib/components/EventPeekPanel.svelte",
-  "merge_diff": "<<<<<<< SEARCH\n            <button onclick={() => updateRsvp('tentative')} class=\"flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}\">Maybe</button>\n          </div>\n        </div>\n      </div>\n=======\n            <button onclick={() => updateRsvp('tentative')} class=\"flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}\">Maybe</button>\n          </div>\n        </div>\n        {/if}\n      </div>\n>>>>>>> REPLACE"
+  "filepath": "backend/src/api/router.rs",
+  "merge_diff": "<<<<<<< SEARCH\n            get(calendars::list_events).post(calendars::create_event),\n        )\n        .route(\n            \"/api/v1/events/rsvp_external\",\n=======\n            get(calendars::list_events).post(calendars::create_event),\n        )\n        .route(\n            \"/api/v1/events/import-ics\",\n            post(calendars::import_ics),\n        )\n        .route(\n            \"/api/v1/events/rsvp_external\",\n>>>>>>> REPLACE"
 }
