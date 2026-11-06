@@ -698,6 +698,311 @@ pub struct RsvpExternalRequest {
     pub status: String,
 }
 
+#[derive(Deserialize, specta::Type)]
+pub struct RsvpRequest {
+    pub status: String,
+}
+
+pub fn unescape_ics(s: &str) -> String {
+    let mut res = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(&nc) = chars.peek() {
+                match nc {
+                    '\\' | ';' | ',' => {
+                        res.push(nc);
+                        chars.next();
+                    }
+                    'n' | 'N' => {
+                        res.push('\n');
+                        chars.next();
+                    }
+                    _ => res.push('\\'),
+                }
+            } else {
+                res.push('\\');
+            }
+        } else {
+            res.push(c);
+        }
+    }
+    res
+}
+
+pub fn parse_ics_datetime(s: &str) -> Option<(i64, bool)> {
+    if s.len() == 8 {
+        let year = s[0..4].parse::<i32>().ok()?;
+        let month = s[4..6].parse::<u32>().ok()?;
+        let day = s[6..8].parse::<u32>().ok()?;
+        let dt = chrono::Utc.with_ymd_and_hms(year, month, day, 0, 0, 0).single()?;
+        Some((dt.timestamp(), true))
+    } else {
+        let dt = chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|d| d.with_timezone(&chrono::Utc));
+        if let Some(dt) = dt {
+            return Some((dt.timestamp(), false));
+        }
+        if s.len() == 16 && s.ends_with('Z') {
+            let year = s[0..4].parse::<i32>().ok()?;
+            let month = s[4..6].parse::<u32>().ok()?;
+            let day = s[6..8].parse::<u32>().ok()?;
+            let hour = s[9..11].parse::<u32>().ok()?;
+            let minute = s[11..13].parse::<u32>().ok()?;
+            let second = s[13..15].parse::<u32>().ok()?;
+            let dt = chrono::Utc
+                .with_ymd_and_hms(year, month, day, hour, minute, second)
+                .single()?;
+            Some((dt.timestamp(), false))
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Deserialize, specta::Type)]
+pub struct ImportIcsRequest {
+    pub calendar_id: Uuid,
+    pub ics_body: String,
+}
+
+pub async fn import_ics(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Json(body): Json<ImportIcsRequest>,
+) -> Result<(StatusCode, Json<CreateEventResponse>), KestrelError> {
+    let cal = find_calendar_from_db(&state, body.calendar_id).await?;
+    let cal = cal.ok_or_else(|| KestrelError::NotFound("Calendar not found".to_string()))?;
+    verify_calendar_ownership(&state, user_id, &cal).await?;
+
+    let mut unfolded = String::new();
+    let mut current_line = String::new();
+    for line in body.ics_body.lines() {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            current_line.push_str(&line[1..]);
+        } else {
+            if !current_line.is_empty() {
+                unfolded.push_str(&current_line);
+                unfolded.push('\n');
+            }
+            current_line = line.to_string();
+        }
+    }
+    if !current_line.is_empty() {
+        unfolded.push_str(&current_line);
+        unfolded.push('\n');
+    }
+
+    let mut title = String::new();
+    let mut description = None;
+    let mut location = None;
+    let mut start_time = None;
+    let mut end_time = None;
+    let mut is_all_day = false;
+    let mut status = None;
+    let mut organizer_name = None;
+    let mut organizer_email = None;
+    let mut attendees = Vec::new();
+    let mut in_vevent = false;
+
+    for line in unfolded.lines() {
+        if line == "BEGIN:VEVENT" {
+            in_vevent = true;
+        } else if line == "END:VEVENT" {
+            break;
+        } else if in_vevent {
+            if let Some((k, v)) = line.split_once(':') {
+                let k_upper = k.to_uppercase();
+                if k_upper == "SUMMARY" {
+                    title = unescape_ics(v);
+                } else if k_upper == "DESCRIPTION" {
+                    description = Some(unescape_ics(v));
+                } else if k_upper == "LOCATION" {
+                    location = Some(unescape_ics(v));
+                } else if k_upper == "STATUS" {
+                    status = Some(unescape_ics(v));
+                } else if k_upper.starts_with("DTSTART") {
+                    if let Some((ts, all_day)) = parse_ics_datetime(v) {
+                        start_time = Some(ts);
+                        is_all_day = is_all_day || all_day;
+                    }
+                } else if k_upper.starts_with("DTEND") {
+                    if let Some((ts, all_day)) = parse_ics_datetime(v) {
+                        end_time = Some(ts);
+                        is_all_day = is_all_day || all_day;
+                    }
+                } else if k_upper.starts_with("ORGANIZER") {
+                    let email = v.strip_prefix("mailto:").unwrap_or(v).to_string();
+                    organizer_email = Some(email);
+                    if let Some((params_str, _)) = k.split_once(';') {
+                        for param in params_str.split(';') {
+                            if let Some((pk, pv)) = param.split_once('=') {
+                                if pk.to_uppercase() == "CN" {
+                                    organizer_name = Some(pv.trim_matches('"').to_string());
+                                }
+                            }
+                        }
+                    }
+                } else if k_upper.starts_with("ATTENDEE") {
+                    let email = v.strip_prefix("mailto:").unwrap_or(v).to_string();
+                    let mut att_name = None;
+                    let mut att_status = None;
+                    if let Some((_, params_str)) = k.split_once(';') {
+                        for param in params_str.split(';') {
+                            if let Some((pk, pv)) = param.split_once('=') {
+                                if pk.to_uppercase() == "CN" {
+                                    att_name = Some(pv.trim_matches('"').to_string());
+                                } else if pk.to_uppercase() == "PARTSTAT" {
+                                    att_status = match pv.to_uppercase().as_str() {
+                                        "ACCEPTED" => Some("accepted".to_string()),
+                                        "DECLINED" => Some("declined".to_string()),
+                                        "TENTATIVE" => Some("tentative".to_string()),
+                                        _ => Some("needsAction".to_string()),
+                                    };
+                                }
+                            }
+                        }
+                    }
+                    let mut map = serde_json::Map::new();
+                    map.insert("email".to_string(), serde_json::Value::String(email));
+                    if let Some(n) = att_name {
+                        map.insert("name".to_string(), serde_json::Value::String(n));
+                    }
+                    if let Some(st) = att_status {
+                        map.insert("status".to_string(), serde_json::Value::String(st));
+                    }
+                    attendees.push(serde_json::Value::Object(map));
+                }
+            }
+        }
+    }
+
+    if title.is_empty() {
+        return Err(KestrelError::BadRequest(
+            "Invalid ICS: Missing SUMMARY".to_string(),
+        ));
+    }
+
+    let st = start_time.unwrap_or_else(|| chrono::Utc::now().timestamp());
+    let et = end_time.unwrap_or(st + 3600);
+
+    let attendees_json = if !attendees.is_empty() {
+        Some(serde_json::to_string(&attendees).map_err(|e| {
+            KestrelError::Internal(format!("Failed to serialize attendees: {}", e).into())
+        })?)
+    } else {
+        None
+    };
+
+    let new_event = CalendarEvent {
+        id: DbUuid::from(Uuid::new_v4()),
+        account_id: DbUuid::from(cal.account_id.0),
+        calendar_id: DbUuid::from(cal.id.0),
+        external_id: Uuid::new_v4().to_string(),
+        title: title.clone(),
+        description,
+        location,
+        start_time: st,
+        end_time: et,
+        is_all_day,
+        recurrence_rules: None,
+        organizer_email,
+        organizer_name,
+        attendees: attendees_json,
+        status,
+        has_conflict: false,
+        created_at: chrono::Utc::now().timestamp(),
+        updated_at: chrono::Utc::now().timestamp(),
+    };
+
+    match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            use crate::core::repository::EventRepository;
+            crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone())
+                .upsert(&new_event)
+                .await?;
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            use crate::core::repository::EventRepository;
+            crate::db::postgres::event_repository::PostgresEventRepository::new(pool.clone())
+                .upsert(&new_event)
+                .await?;
+        }
+    }
+
+    let res = CreateEventResponse {
+        id: new_event.id.0,
+        calendar_id: cal.id.0,
+        title: new_event.title,
+        start_time: new_event.start_time,
+        end_time: new_event.end_time,
+        created_at: new_event.created_at,
+    };
+
+    Ok((StatusCode::CREATED, Json(res)))
+}
+
+pub async fn rsvp_event(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(event_id): Path<Uuid>,
+    Json(body): Json<RsvpRequest>,
+) -> Result<Json<EventDetail>, KestrelError> {
+    let status_lower = body.status.to_lowercase();
+    if !matches!(status_lower.as_str(), "accepted" | "declined" | "tentative") {
+        return Err(KestrelError::BadRequest(
+            "Invalid RSVP status. Must be 'accepted', 'declined', or 'tentative'.".to_string(),
+        ));
+    }
+
+    let event = find_event_from_db(&state, event_id).await?;
+    let mut event = event.ok_or_else(|| KestrelError::NotFound("Event not found".to_string()))?;
+
+    // Enforce ownership
+    verify_event_ownership(&state, user_id, &event).await?;
+
+    event.status = Some(status_lower);
+    event.updated_at = chrono::Utc::now().timestamp();
+
+    match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            use crate::core::repository::EventRepository;
+            crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone())
+                .upsert(&event)
+                .await?;
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            use crate::core::repository::EventRepository;
+            crate::db::postgres::event_repository::PostgresEventRepository::new(pool.clone())
+                .upsert(&event)
+                .await?;
+        }
+    }
+
+    Ok(Json(EventDetail {
+        id: event.id.0,
+        account_id: event.account_id.0,
+        calendar_id: event.calendar_id.0,
+        external_id: event.external_id,
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        start_time: event.start_time,
+        end_time: event.end_time,
+        is_all_day: event.is_all_day,
+        recurrence_rules: event.recurrence_rules,
+        organizer_email: event.organizer_email,
+        organizer_name: event.organizer_name,
+        attendees: event.attendees,
+        status: event.status,
+        created_at: event.created_at,
+        updated_at: event.updated_at,
+    }))
+}
+
+// --- K-225: POST /api/v1/events/rsvp_external ---
+
 pub async fn rsvp_external(
     State(state): State<AppState>,
     AuthUser { user_id }: AuthUser,
@@ -1199,6 +1504,26 @@ pub async fn revoke_calendar_feed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_unescape_ics() {
+        assert_eq!(unescape_ics("Line1\\nLine2"), "Line1\nLine2");
+        assert_eq!(unescape_ics("Comma\\,\\;slash\\\\"), "Comma,;slash\\");
+        assert_eq!(unescape_ics("Hello World"), "Hello World");
+    }
+
+    #[test]
+    fn test_parse_ics_datetime() {
+        assert_eq!(
+            parse_ics_datetime("20231028T143045Z"),
+            Some((1698503445, false))
+        );
+        assert_eq!(
+            parse_ics_datetime("20231028"),
+            Some((1698451200, true))
+        );
+        assert_eq!(parse_ics_datetime("InvalidString"), None);
+    }
 
     #[test]
     fn test_escape_ics() {
