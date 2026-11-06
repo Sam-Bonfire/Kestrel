@@ -153,7 +153,7 @@ async fn test_message_repository_crud_and_queries() {
     let found_msg = found.unwrap();
     assert_eq!(found_msg.subject, Some("Meeting notes".to_string()));
     assert_eq!(found_msg.sender_email, "boss@corp.com");
-    assert_eq!(found_msg.is_read, false);
+    assert!(!found_msg.is_read);
 
     // 3. List messages with account_id filter
     let list = repo
@@ -171,7 +171,7 @@ async fn test_message_repository_crud_and_queries() {
         .await
         .expect("find failed")
         .unwrap();
-    assert_eq!(updated.is_read, true);
+    assert!(updated.is_read);
 
     // 5. Archive message
     repo.set_archived(msg1.id.0, true)
@@ -182,7 +182,7 @@ async fn test_message_repository_crud_and_queries() {
         .await
         .expect("find failed")
         .unwrap();
-    assert_eq!(archived.is_archived, true);
+    assert!(archived.is_archived);
 
     // 6. Delete message (soft delete)
     repo.set_deleted(msg2.id.0, true)
@@ -193,7 +193,7 @@ async fn test_message_repository_crud_and_queries() {
         .await
         .expect("find failed")
         .unwrap();
-    assert_eq!(deleted.is_deleted, true);
+    assert!(deleted.is_deleted);
 }
 
 #[tokio::test]

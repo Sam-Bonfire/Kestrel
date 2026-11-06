@@ -14,6 +14,7 @@ use backend::db::sqlite::user_repository::SqliteUserRepository;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 pub async fn setup_test_db() -> DbPool {
     let pool = SqlitePool::connect("sqlite::memory:")
         .await
@@ -35,8 +36,10 @@ pub async fn setup_test_db() -> DbPool {
     db_pool
 }
 
+#[allow(dead_code)]
 pub const TEST_SECRET: &str = "test_secret_32bytes_long_key!!";
 
+#[allow(dead_code)]
 pub fn get_sqlite_pool(pool: &DbPool) -> SqlitePool {
     match pool {
         DbPool::Sqlite(p) => p.clone(),
@@ -44,6 +47,7 @@ pub fn get_sqlite_pool(pool: &DbPool) -> SqlitePool {
     }
 }
 
+#[allow(dead_code)]
 pub async fn seed_user(pool: &DbPool, username: &str) -> User {
     let sqlite = get_sqlite_pool(pool);
     let repo = SqliteUserRepository::new(sqlite);
@@ -59,6 +63,7 @@ pub async fn seed_user(pool: &DbPool, username: &str) -> User {
     user
 }
 
+#[allow(dead_code)]
 pub async fn seed_account(
     pool: &DbPool,
     user_id: Uuid,
@@ -85,6 +90,7 @@ pub async fn seed_account(
     account
 }
 
+#[allow(dead_code)]
 pub async fn seed_message(
     pool: &DbPool,
     account_id: Uuid,
@@ -127,6 +133,7 @@ pub async fn seed_message(
     msg
 }
 
+#[allow(dead_code)]
 pub async fn seed_calendar(
     pool: &DbPool,
     account_id: Uuid,
@@ -151,6 +158,7 @@ pub async fn seed_calendar(
     cal
 }
 
+#[allow(dead_code)]
 pub async fn seed_event(
     pool: &DbPool,
     account_id: Uuid,
@@ -190,6 +198,7 @@ pub async fn seed_event(
     ev
 }
 
+#[allow(dead_code)]
 pub async fn seed_contact(pool: &DbPool, account_id: Uuid, name: &str, email: &str) -> Contact {
     let sqlite = get_sqlite_pool(pool);
     let repo = SqliteContactRepository::new(sqlite);

@@ -13,7 +13,7 @@ use crate::db::sqlite::label_repository::SqliteLabelRepository;
 
 #[derive(Deserialize)]
 pub struct UpdateLabelRequest {
-    pub account_id: Uuid,
+    pub id: Uuid,
     pub name: String,
     pub color: Option<String>,
     pub icon: Option<String>,
@@ -24,29 +24,35 @@ pub async fn update_label(
     AuthUser { user_id }: AuthUser,
     Json(payload): Json<UpdateLabelRequest>,
 ) -> Result<Json<Label>, KestrelError> {
-    if !super::calendars::verify_account_ownership(&state, user_id, payload.account_id).await? {
-        return Err(KestrelError::NotFound("Account not found".to_string()));
-    }
-
-    let label = Label {
-        id: crate::core::types::DbUuid(Uuid::new_v4()),
-        account_id: crate::core::types::DbUuid(payload.account_id),
-        name: payload.name.clone(),
-        color: payload.color.clone(),
-        icon: payload.icon.clone(),
-        created_at: chrono::Utc::now().timestamp(),
-        updated_at: chrono::Utc::now().timestamp(),
-    };
-
-    match &state.db {
+    let mut label = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            let repo = SqliteLabelRepository::new(pool.clone());
-            repo.upsert(&label).await.map_err(KestrelError::Database)?;
+            SqliteLabelRepository::new(pool.clone()).find_by_id(payload.id).await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            let repo = PostgresLabelRepository::new(pool.clone());
-            repo.upsert(&label).await.map_err(KestrelError::Database)?;
+            PostgresLabelRepository::new(pool.clone()).find_by_id(payload.id).await?
         }
+    }.ok_or_else(|| KestrelError::NotFound("Label not found".to_string()))?;
+
+    if !super::calendars::verify_account_ownership(&state, user_id, label.account_id.0).await? {
+        return Err(KestrelError::NotFound("Label not found".to_string()));
+    }
+
+    label.name = payload.name.clone();
+    label.color = payload.color.clone();
+    label.icon = payload.icon.clone();
+    label.updated_at = chrono::Utc::now().timestamp();
+
+    let rows_affected = match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            SqliteLabelRepository::new(pool.clone()).update(&label).await?
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            PostgresLabelRepository::new(pool.clone()).update(&label).await?
+        }
+    };
+
+    if rows_affected == 0 {
+        return Err(KestrelError::NotFound("Label not found".to_string()));
     }
 
     Ok(Json(label))

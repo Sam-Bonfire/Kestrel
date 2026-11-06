@@ -1420,19 +1420,19 @@ mod tests {
         let threshold = now + 300;
         let needs_refresh =
             account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
-        assert_eq!(needs_refresh, false);
+        assert!(!needs_refresh);
 
         // If it's within 5 minutes (300s), it needs a refresh
         account.token_expires_at = Some(now + 200);
         let needs_refresh =
             account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
-        assert_eq!(needs_refresh, true);
+        assert!(needs_refresh);
 
         // If it's already expired, it needs a refresh
         account.token_expires_at = Some(now - 100);
         let needs_refresh =
             account.token_expires_at.is_none() || account.token_expires_at.unwrap() < threshold;
-        assert_eq!(needs_refresh, true);
+        assert!(needs_refresh);
     }
 
     async fn create_test_app_state() -> AppState {
