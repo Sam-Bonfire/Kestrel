@@ -1477,6 +1477,8 @@
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); isCommandOpen = true; }
       if (selectedThreadId && (e.key === 'h' || e.key === 'H' || (e.key === 'R' && e.shiftKey))) { toggleReplyLater(selectedThreadId); }
       if (selectedThreadId && (e.key === 'b' || e.key === 'B')) { toggleSetAside(selectedThreadId); }
+      // Advertised by CenterPeek's "Archive Email (e)" tooltip
+      if (selectedThreadId && (e.key === 'e' || e.key === 'E')) { e.preventDefault(); archive(selectedThreadId); }
       if (isBatchMode && (e.key === 'Tab' || e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         e.preventDefault();
         advanceBatch(e.shiftKey || e.key === 'ArrowLeft' ? -1 : 1);
