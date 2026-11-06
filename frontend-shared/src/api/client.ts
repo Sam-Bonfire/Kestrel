@@ -991,3 +991,21 @@ export async function createFeed(calendarId: string, token?: string): Promise<{ 
 export async function revokeFeed(calendarId: string, token?: string): Promise<void> {
   return request<void>('DELETE', `/calendars/${calendarId}/feed`, { token });
 }
+
+export async function dismissMessageConflict(messageId: string, token?: string): Promise<void> {
+  await request<void>('POST', `/messages/${messageId}/conflict/dismiss`, {
+    token,
+  });
+}
+
+export async function dismissEventConflict(eventId: string, token?: string): Promise<void> {
+  await request<void>('POST', `/events/${eventId}/conflict/dismiss`, {
+    token,
+  });
+}
+
+export async function restoreRevision(revisionId: string, token?: string): Promise<void> {
+  await request<void>('POST', `/revisions/${revisionId}/restore`, {
+    token,
+  });
+}
