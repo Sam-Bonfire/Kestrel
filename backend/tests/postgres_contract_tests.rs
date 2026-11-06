@@ -114,7 +114,7 @@ async fn postgres_jsonb_round_trips_for_events_and_polls() {
     let stored: Vec<serde_json::Value> =
         serde_json::from_str(fetched.attendees.as_deref().unwrap_or("")).expect("attendees JSON");
     assert_eq!(stored[0]["email"], "guest@example.com");
-    assert!(fetched.has_conflict == false);
+    assert!(!fetched.has_conflict);
 
     let poll_repo = PostgresPollRepository::new(pool.clone());
     let poll = poll_repo

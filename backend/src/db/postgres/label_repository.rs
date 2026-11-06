@@ -16,27 +16,34 @@ impl PostgresLabelRepository {
 
 #[async_trait]
 impl LabelRepository for PostgresLabelRepository {
-    async fn upsert(&self, label: &Label) -> Result<(), sqlx::Error> {
-        sqlx::query(
+    async fn update(&self, label: &Label) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query(
             r#"
-            INSERT INTO labels (id, account_id, name, color, icon, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT(account_id, name) DO UPDATE SET
-                color = excluded.color,
-                icon = excluded.icon,
-                updated_at = excluded.updated_at
+            UPDATE labels SET
+                name = $1,
+                color = $2,
+                icon = $3,
+                updated_at = $4
+            WHERE id = $5
             "#,
         )
-        .bind(label.id)
-        .bind(label.account_id)
         .bind(&label.name)
         .bind(&label.color)
         .bind(&label.icon)
-        .bind(label.created_at)
         .bind(label.updated_at)
+        .bind(label.id)
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(result.rows_affected())
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<Label>, sqlx::Error> {
+        sqlx::query_as::<_, Label>(
+            "SELECT id, account_id, name, color, icon, created_at, updated_at FROM labels WHERE id = $1"
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
     }
 
     async fn list_by_accounts(&self, account_ids: &[Uuid]) -> Result<Vec<Label>, sqlx::Error> {

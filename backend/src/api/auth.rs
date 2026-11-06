@@ -59,6 +59,7 @@ pub struct TokenRequest {
 pub struct TokenResponse {
     pub token: String,
     pub user_id: String,
+    pub csrf_token: String,
 }
 
 #[derive(Deserialize, specta::Type)]
@@ -101,10 +102,14 @@ pub async fn auth_middleware(
     mut req: Request<Body>,
     next: Next,
 ) -> Response {
-    let token = match extract_bearer_token(&req) {
+    let (token, is_from_cookie) = match extract_bearer_token(&req) {
         Some(t) => t,
         None => return KestrelError::Unauthorized.into_response(),
     };
+
+    if is_from_cookie && is_state_changing_method(req.method()) && !verify_csrf_token(&req) {
+        return KestrelError::Forbidden("Invalid or missing CSRF token".to_string()).into_response();
+    }
 
     match decode_jwt(&token, &state.jwt_secret) {
         Ok(claims) => match Uuid::parse_str(&claims.sub) {
@@ -118,7 +123,36 @@ pub async fn auth_middleware(
     }
 }
 
-fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
+fn is_state_changing_method(method: &axum::http::Method) -> bool {
+    method == axum::http::Method::POST
+        || method == axum::http::Method::PUT
+        || method == axum::http::Method::PATCH
+        || method == axum::http::Method::DELETE
+}
+
+fn verify_csrf_token(req: &Request<Body>) -> bool {
+    let csrf_header = req.headers().get("x-csrf-token").and_then(|v| v.to_str().ok());
+    let mut csrf_cookie = None;
+
+    if let Some(cookie) = req.headers().get(axum::http::header::COOKIE)
+        && let Ok(cookie_str) = cookie.to_str()
+    {
+        for part in cookie_str.split(';') {
+            let part = part.trim();
+            if let Some(token) = part.strip_prefix("kestrel_csrf=") {
+                csrf_cookie = Some(token);
+                break;
+            }
+        }
+    }
+
+    match (csrf_header, csrf_cookie) {
+        (Some(header), Some(cookie)) => header == cookie && !header.is_empty(),
+        _ => false,
+    }
+}
+
+fn extract_bearer_token(req: &Request<Body>) -> Option<(String, bool)> {
     // 1. Try Cookie header
     if let Some(cookie) = req.headers().get(axum::http::header::COOKIE)
         && let Ok(cookie_str) = cookie.to_str()
@@ -126,7 +160,7 @@ fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
         for part in cookie_str.split(';') {
             let part = part.trim();
             if let Some(token) = part.strip_prefix("kestrel_token=") {
-                return Some(token.to_string());
+                return Some((token.to_string(), true));
             }
         }
     }
@@ -138,33 +172,10 @@ fn extract_bearer_token(req: &Request<Body>) -> Option<String> {
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
     {
-        return Some(token.to_string());
-    }
-
-    // 3. Fallback to query parameter — SSE/EventSource only.
-    // EventSource cannot set headers and the Tauri WebView shares no cookie
-    // jar with the system browser, so the sync stream is the one route that
-    // accepts ?token=. Everywhere else it is rejected (no log/history leak).
-    if query_token_allowed(req.uri().path())
-        && let Some(query) = req.uri().query()
-    {
-        for pair in query.split('&') {
-            if let Some((k, v)) = pair.split_once('=')
-                && k == "token"
-                && !v.is_empty()
-            {
-                return Some(v.to_string());
-            }
-        }
+        return Some((token.to_string(), false));
     }
 
     None
-}
-
-/// Routes allowed to carry the session token as a `?token=` query parameter.
-/// Exactly one: the SSE sync stream (see extraction fallback above).
-fn query_token_allowed(path: &str) -> bool {
-    path == "/api/v1/sync/stream"
 }
 
 // --- JWT helpers ---
@@ -274,9 +285,16 @@ fn is_unique_violation(e: &dyn sqlx::error::DatabaseError) -> bool {
 
 pub async fn token(
     State(state): State<AppState>,
-    Json(body): Json<TokenRequest>,
+    req: Request<Body>,
 ) -> Result<Response, KestrelError> {
-    let user = find_user_by_username(&state, &body.username).await?;
+    let (parts, body) = req.into_parts();
+    let bytes = axum::body::to_bytes(body, usize::MAX)
+        .await
+        .map_err(|e| KestrelError::BadRequest(e.to_string()))?;
+    let req_body: TokenRequest = serde_json::from_slice(&bytes)
+        .map_err(|e| KestrelError::BadRequest(e.to_string()))?;
+
+    let user = find_user_by_username(&state, &req_body.username).await?;
     let user = user.ok_or(KestrelError::Unauthorized)?;
 
     let parsed_hash = PasswordHash::new(&user.password_hash).map_err(|e| {
@@ -285,24 +303,33 @@ pub async fn token(
     })?;
 
     Argon2::default()
-        .verify_password(body.password.as_bytes(), &parsed_hash)
+        .verify_password(req_body.password.as_bytes(), &parsed_hash)
         .map_err(|_| KestrelError::Unauthorized)?;
 
     let jwt = encode_jwt(&user.id.to_string(), &state.jwt_secret)?;
+    let csrf_token = Uuid::new_v4().to_string();
 
+    let suffix = cookie_secure_suffix(&parts.headers);
     let cookie = format!(
         "kestrel_token={}; HttpOnly; Path=/; SameSite=Lax{}",
         jwt,
-        cookie_secure_suffix()
+        suffix
+    );
+    let csrf_cookie = format!(
+        "kestrel_csrf={}; HttpOnly; Path=/; SameSite=Lax{}",
+        csrf_token,
+        suffix
     );
 
     let response = axum::response::Response::builder()
         .header(axum::http::header::SET_COOKIE, cookie)
+        .header(axum::http::header::SET_COOKIE, csrf_cookie)
         .header(axum::http::header::CONTENT_TYPE, "application/json")
         .body(axum::body::Body::from(
             serde_json::to_string(&TokenResponse {
                 token: jwt,
                 user_id: user.id.to_string(),
+                csrf_token,
             })
             .unwrap(),
         ))
@@ -316,21 +343,32 @@ pub async fn token(
 /// Clears the session cookie. Native clients drop their in-memory/keychain
 /// token via the shared logout routine; this endpoint ends the browser
 /// (cookie) leg of the session.
-pub async fn logout() -> Result<Response, KestrelError> {
+pub async fn logout(req: Request<Body>) -> Result<Response, KestrelError> {
+    let suffix = cookie_secure_suffix(req.headers());
     let tombstone = format!(
         "kestrel_token=; HttpOnly; Path=/; SameSite=Lax{}; Max-Age=0",
-        cookie_secure_suffix()
+        suffix
+    );
+    let csrf_tombstone = format!(
+        "kestrel_csrf=; HttpOnly; Path=/; SameSite=Lax{}; Max-Age=0",
+        suffix
     );
     axum::response::Response::builder()
         .header(axum::http::header::SET_COOKIE, tombstone)
+        .header(axum::http::header::SET_COOKIE, csrf_tombstone)
         .header(axum::http::header::CONTENT_TYPE, "application/json")
         .body(axum::body::Body::from(r#"{"ok":true}"#))
         .map_err(|e| KestrelError::Internal(Box::new(e)))
 }
 
-/// "; Secure" when the canonical base URL is https, else "".
-/// Mirrors how KESTREL_BASE_URL is read elsewhere in this module.
-fn cookie_secure_suffix() -> &'static str {
+/// "; Secure" when the request is made over HTTPS.
+/// Checks `X-Forwarded-Proto` header, fallback to `KESTREL_BASE_URL`.
+fn cookie_secure_suffix(headers: &axum::http::HeaderMap) -> &'static str {
+    if let Some(proto) = headers.get("X-Forwarded-Proto").and_then(|v| v.to_str().ok())
+        && proto.eq_ignore_ascii_case("https") {
+            return "; Secure";
+        }
+
     match std::env::var("KESTREL_BASE_URL") {
         Ok(base) if base.trim_start().starts_with("https://") => "; Secure",
         _ => "",
@@ -659,6 +697,11 @@ pub async fn callback(
 
     // Redirect back to the app via deep link
     Ok(axum::response::Redirect::to(&frontend_url).into_response())
+}
+
+#[allow(dead_code)]
+pub fn encode_jwt_test(user_id: &str, secret: &str) -> Result<String, KestrelError> {
+    encode_jwt(user_id, secret)
 }
 
 #[cfg(test)]

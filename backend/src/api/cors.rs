@@ -103,6 +103,6 @@ mod tests {
     fn test_allowed_origins_from_ignores_bad_base() {
         let set = allowed_origins_from(&Some("garbage".to_string()), &None);
         assert!(set.contains("http://tauri.localhost"));
-        assert_eq!(set.contains("garbage"), false);
+        assert!(!set.contains("garbage"));
     }
 }

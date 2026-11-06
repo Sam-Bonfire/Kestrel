@@ -16,27 +16,34 @@ impl SqliteLabelRepository {
 
 #[async_trait]
 impl LabelRepository for SqliteLabelRepository {
-    async fn upsert(&self, label: &Label) -> Result<(), sqlx::Error> {
-        sqlx::query(
+    async fn update(&self, label: &Label) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query(
             r#"
-            INSERT INTO labels (id, account_id, name, color, icon, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(account_id, name) DO UPDATE SET
-                color = excluded.color,
-                icon = excluded.icon,
-                updated_at = excluded.updated_at
+            UPDATE labels SET
+                name = ?,
+                color = ?,
+                icon = ?,
+                updated_at = ?
+            WHERE id = ?
             "#,
         )
-        .bind(label.id.to_string())
-        .bind(label.account_id.to_string())
         .bind(&label.name)
         .bind(&label.color)
         .bind(&label.icon)
-        .bind(label.created_at)
         .bind(label.updated_at)
+        .bind(label.id.to_string())
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(result.rows_affected())
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<Label>, sqlx::Error> {
+        sqlx::query_as::<_, Label>(
+            "SELECT id, account_id, name, color, icon, created_at, updated_at FROM labels WHERE id = ?"
+        )
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await
     }
 
     async fn list_by_accounts(&self, account_ids: &[Uuid]) -> Result<Vec<Label>, sqlx::Error> {
