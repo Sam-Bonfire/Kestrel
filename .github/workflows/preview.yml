@@ -349,11 +349,12 @@ jobs:
           pnpm install
           pnpm --filter @kestrel/e2e exec playwright install --with-deps chromium
 
-      - name: Build backend bins and Mail frontend
+      - name: Build backend bins and frontends
         run: |
           cargo build --manifest-path backend/Cargo.toml --bins
           pnpm --filter @kestrel/shared build
           pnpm --filter frontend-mail build
+          pnpm --filter frontend-calendar build
 
       - name: Run seeded backend E2E suite
         run: node scripts/run-e2e-backend.mjs
