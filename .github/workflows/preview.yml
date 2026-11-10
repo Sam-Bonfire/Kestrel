@@ -265,7 +265,8 @@ jobs:
   validate-landing:
     name: Validate Landing
     needs: changes
-    if: needs.changes.outputs.landing == 'true'    runs-on: ubuntu-latest
+    if: needs.changes.outputs.landing == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
