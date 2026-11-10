@@ -8,6 +8,18 @@ use sqlx::sqlite::SqlitePoolOptions;
 use std::env;
 use uuid::Uuid;
 
+/// One row of deterministic E2E fixtures (KESTREL_SEED_E2E=1).
+struct SeedMessage {
+    subject: &'static str,
+    sender_name: &'static str,
+    sender_email: &'static str,
+    body: &'static str,
+    is_read: bool,
+    is_archived: bool,
+    is_deleted: bool,
+    labels: &'static str,
+}
+
 const SENDERS: &[(&str, &str)] = &[
     ("Alice Smith", "alice@example.com"),
     ("Bob Jones", "bob.jones@workplace.net"),
@@ -146,8 +158,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|v| v.trim().is_empty())
             .unwrap_or(true)
         {
-            return Err("KESTREL_SEED_E2E=1 requires KESTREL_SEED_PASSWORD to be set"
-                .into());
+            return Err("KESTREL_SEED_E2E=1 requires KESTREL_SEED_PASSWORD to be set".into());
         }
 
         sqlx::query("DELETE FROM messages WHERE account_id = ?")
@@ -183,37 +194,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // (subject, sender_name, sender_email, body, is_read, is_archived,
         //  is_deleted, labels JSON)
-        const E2E_MESSAGES: &[(&str, &str, &str, &str, bool, bool, bool, &str)] = &[
-            (
-                "E2E Integration Wirecheck",
-                "Fixture Sender",
-                "fixture@kestrel.test",
-                "<p>This message flows straight from the seeded backend into the UI.</p>",
-                false,
-                false,
-                false,
-                "[\"fixture\"]",
-            ),
-            (
-                "E2E Fixture Second Inbox Item",
-                "Fixture Sender",
-                "fixture@kestrel.test",
-                "<p>Second live inbox item.</p>",
-                true,
-                false,
-                false,
-                "[]",
-            ),
-            (
-                "E2E Fixture Archived Probe",
-                "Fixture Sender",
-                "fixture@kestrel.test",
-                "<p>Pre-archived fixture message for archive-view assertions.</p>",
-                true,
-                true,
-                false,
-                "[]",
-            ),
+        const E2E_MESSAGES: &[SeedMessage] = &[
+            SeedMessage {
+                subject: "E2E Integration Wirecheck",
+                sender_name: "Fixture Sender",
+                sender_email: "fixture@kestrel.test",
+                body: "<p>This message flows straight from the seeded backend into the UI.</p>",
+                is_read: false,
+                is_archived: false,
+                is_deleted: false,
+                labels: "[\"fixture\"]",
+            },
+            SeedMessage {
+                subject: "E2E Fixture Second Inbox Item",
+                sender_name: "Fixture Sender",
+                sender_email: "fixture@kestrel.test",
+                body: "<p>Second live inbox item.</p>",
+                is_read: true,
+                is_archived: false,
+                is_deleted: false,
+                labels: "[]",
+            },
+            SeedMessage {
+                subject: "E2E Fixture Archived Probe",
+                sender_name: "Fixture Sender",
+                sender_email: "fixture@kestrel.test",
+                body: "<p>Pre-archived fixture message for archive-view assertions.</p>",
+                is_read: true,
+                is_archived: true,
+                is_deleted: false,
+                labels: "[]",
+            },
         ];
 
         for (i, m) in E2E_MESSAGES.iter().enumerate() {
@@ -234,19 +245,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .bind(&account_id)
             .bind(format!("mock-ext-{}", msg_id))
             .bind(&msg_id) // one message per thread: archive hides exactly one subject
-            .bind(m.0)
-            .bind(m.1)
-            .bind(m.2)
+            .bind(m.subject)
+            .bind(m.sender_name)
+            .bind(m.sender_email)
             .bind("demo@kestrel.local")
             .bind(ts)
             .bind(ts)
-            .bind(m.0) // snippet
+            .bind(m.subject) // snippet
             .bind("")
-            .bind(m.3)
-            .bind(m.7)
-            .bind(m.4)
-            .bind(m.5)
-            .bind(m.6)
+            .bind(m.body)
+            .bind(m.labels)
+            .bind(m.is_read)
+            .bind(m.is_archived)
+            .bind(m.is_deleted)
             .bind(false)
             .bind(Option::<i64>::None)
             .execute(&pool)
