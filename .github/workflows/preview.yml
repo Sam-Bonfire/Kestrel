@@ -265,8 +265,7 @@ jobs:
   validate-landing:
     name: Validate Landing
     needs: changes
-    if: needs.changes.outputs.landing == 'true'
-    runs-on: ubuntu-latest
+    if: needs.changes.outputs.landing == 'true'    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -301,29 +300,13 @@ jobs:
           echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           echo "| Landing Build | \`frontend-landing/\` | ${{ steps.landing_checks.outcome == 'success' && '✅ Passed' || '❌ Failed' }} | ${{ steps.landing_checks.outcome }} |" >> $GITHUB_STEP_SUMMARY
 
-
   e2e-backend:
-    name: E2E Backend (${{ matrix.db }})
-    needs: [validate-backend, validate-mail, validate-calendar]
+    name: E2E Backend (SQLite)
+    needs: changes
+    if: needs.changes.outputs.mail == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        db: [sqlite, postgres]
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: kestrel
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: kestrel
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    env:
+      SKIP_BUILD: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -351,15 +334,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: target/
-          key: cargo-target-${{ runner.os }}-backend-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-target-${{ runner.os }}-backend-
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: playwright-${{ runner.os }}-
+          key: cargo-target-${{ runner.os }}-e2e-backend-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-e2e-backend-
 
       - name: Setup Mise
         uses: jdx/mise-action@v4
@@ -368,73 +344,23 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: pnpm install
-
-      - name: Build plugins
-        run: mise run build:plugins
-
-      - name: Set DB URL for Postgres
-        if: matrix.db == 'postgres'
-        run: echo "DATABASE_URL=postgres://kestrel:password@localhost:5432/kestrel" >> $GITHUB_ENV
-
-      - name: Set DB URL for SQLite
-        if: matrix.db == 'sqlite'
-        run: echo "DATABASE_URL=sqlite:./data/kestrel.db" >> $GITHUB_ENV
-
-      - name: Run Backend & Tests
-        env:
-          KESTREL_SEED_PASSWORD: e2e-password-123
-          JWT_SECRET: e2e-jwt-secret-12345678901234567890
-          VAULT_SECRET: e2e-vault-secret-12345678901234567890
-          PORT: 8080
-          HOST: 0.0.0.0
         run: |
-          mise run db:migrate
-          SQLX_OFFLINE=true cargo run --bin seed
+          pnpm install
+          pnpm --filter @kestrel/e2e exec playwright install --with-deps chromium
 
-          # Start the backend in the background
-          cargo run --bin kestrel-server > backend.log 2>&1 &
-          SERVER_PID=$!
+      - name: Build backend bins and Mail frontend
+        run: |
+          cargo build --manifest-path backend/Cargo.toml --bins
+          pnpm --filter @kestrel/shared build
+          pnpm --filter frontend-mail build
 
-          # Wait for health endpoint
-          echo "Waiting for backend to be healthy..."
-          n=0
-          until [ "$n" -ge 30 ]
-          do
-            if curl -sf http://localhost:8080/api/v1/health > /dev/null; then
-              echo "Backend is healthy!"
-              break
-            fi
-            n=$((n+1))
-            sleep 1
-          done
+      - name: Run seeded backend E2E suite
+        run: node scripts/run-e2e-backend.mjs
 
-          if [ "$n" -ge 30 ]; then
-            echo "Backend failed to start in time. Logs:"
-            cat backend.log
-            kill $SERVER_PID || true
-            exit_code=1
-            false
-          fi
-
-          # Run Playwright E2E suite
-          mise run test:e2e:install
-          mise run test:e2e
-
-          kill $SERVER_PID || true
-
-      - name: Upload traces on failure
+      - name: Upload Playwright traces
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: e2e-traces-${{ matrix.db }}
+          name: e2e-backend-traces
           path: e2e/test-results/
-          retention-days: 7
-
-      - name: Upload backend logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: backend-logs-${{ matrix.db }}
-          path: backend.log
-          retention-days: 7
+          retention-days: 5

@@ -30,7 +30,6 @@ export default defineConfig({
   webServer: [
     {
       command: `pnpm --filter frontend-mail exec vite preview --port ${MAIL_PORT} --strictPort`,
-      env: { VITE_API_BASE: 'http://127.0.0.1:8080' },
       url: `http://localhost:${MAIL_PORT}`,
       reuseExistingServer: !process.env.CI,
       cwd: '..',
@@ -38,7 +37,6 @@ export default defineConfig({
     },
     {
       command: `pnpm --filter frontend-calendar exec vite preview --port ${CAL_PORT} --strictPort`,
-      env: { VITE_API_BASE: 'http://127.0.0.1:8080' },
       url: `http://localhost:${CAL_PORT}`,
       reuseExistingServer: !process.env.CI,
       cwd: '..',
