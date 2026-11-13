@@ -255,13 +255,13 @@
     handleSave(false);
   }
 
-  function updateRsvp(newStatus: string) {
+  function updateRsvp(newStatus: 'accepted' | 'declined' | 'tentative') {
 
     if (!event || !event.id) return;
     const newRsvpStatus = newStatus === 'accepted' ? 'yes' : newStatus === 'declined' ? 'no' : 'maybe';
     event.rsvpStatus = newRsvpStatus;
-    import('@kestrel/shared/api').then(({ updateEvent }) => {
-      (updateEvent as any)(event!.id!, { status: newStatus }).catch(console.error);
+    import('@kestrel/shared/api').then(({ rsvpEvent }) => {
+      rsvpEvent(event!.id!, newStatus).catch(console.error);
     });
   }
 </script>
@@ -504,6 +504,7 @@
         </div>
 
         <!-- RSVP Response Pill -->
+        {#if organizer && !accounts.some(a => a.email === organizer)}
         <div class="space-y-1">
           <span class="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Your RSVP Status</span>
           <div class="flex items-center gap-1 bg-[#1a1a1a]/80 p-1.5 rounded-xl border border-neutral-800/40">
@@ -512,6 +513,7 @@
             <button onclick={() => updateRsvp('tentative')} class="flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors cursor-pointer {rsvpStatus === 'maybe' ? 'bg-amber-500/15 text-amber-400 font-bold' : 'text-neutral-500 hover:text-white'}">Maybe</button>
           </div>
         </div>
+        {/if}
       </div>
 
       <!-- Location / Conference Field (Inline Editable) -->
