@@ -166,7 +166,9 @@ async fn require_resource_ownership(
         account_id.ok_or_else(|| KestrelError::NotFound("Resource not found".to_string()))?;
 
     if !super::calendars::verify_account_ownership(state, user_id, account_id).await? {
-        return Err(KestrelError::NotFound("Resource not found".to_string()));
+        return Err(KestrelError::Forbidden(
+            "Not authorized to access this resource".to_string(),
+        ));
     }
 
     Ok(())
