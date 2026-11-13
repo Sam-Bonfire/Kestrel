@@ -348,6 +348,7 @@ pub struct EventDetail {
     pub organizer_name: Option<String>,
     pub attendees: Option<String>,
     pub status: Option<String>,
+    pub conflict: Option<super::revisions::ConflictInfo>,
     #[specta(type = f64)]
     pub created_at: i64,
     #[specta(type = f64)]
@@ -381,6 +382,11 @@ pub async fn get_event(
         organizer_name: event.organizer_name,
         attendees: event.attendees,
         status: event.status,
+        conflict: if event.has_conflict {
+            super::revisions::latest_conflict_info(&state, "event", event.id.0).await?
+        } else {
+            None
+        },
         created_at: event.created_at,
         updated_at: event.updated_at,
     }))
@@ -685,6 +691,11 @@ pub async fn update_event(
         organizer_name: event.organizer_name,
         attendees: event.attendees,
         status: event.status,
+        conflict: if event.has_conflict {
+            super::revisions::latest_conflict_info(&state, "event", event.id.0).await?
+        } else {
+            None
+        },
         created_at: event.created_at,
         updated_at: event.updated_at,
     }))
@@ -996,6 +1007,61 @@ pub async fn rsvp_event(
         organizer_name: event.organizer_name,
         attendees: event.attendees,
         status: event.status,
+        conflict: if event.has_conflict {
+            super::revisions::latest_conflict_info(&state, "event", event.id.0).await?
+        } else {
+            None
+        },
+        created_at: event.created_at,
+        updated_at: event.updated_at,
+    }))
+}
+
+pub async fn dismiss_event_conflict(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(event_id): Path<Uuid>,
+) -> Result<Json<EventDetail>, KestrelError> {
+    let event = find_event_from_db(&state, event_id).await?;
+    let mut event = event.ok_or_else(|| KestrelError::NotFound("Event not found".to_string()))?;
+
+    verify_event_ownership(&state, user_id, &event).await?;
+
+    event.has_conflict = false;
+    event.updated_at = chrono::Utc::now().timestamp();
+
+    match &state.db {
+        crate::db::pool::DbPool::Sqlite(pool) => {
+            use crate::core::repository::EventRepository;
+            crate::db::sqlite::event_repository::SqliteEventRepository::new(pool.clone())
+                .upsert(&event)
+                .await?;
+        }
+        crate::db::pool::DbPool::Postgres(pool) => {
+            use crate::core::repository::EventRepository;
+            crate::db::postgres::event_repository::PostgresEventRepository::new(pool.clone())
+                .upsert(&event)
+                .await?;
+        }
+    }
+
+    Ok(Json(EventDetail {
+        id: event.id.0,
+        account_id: event.account_id.0,
+        calendar_id: event.calendar_id.0,
+        external_id: event.external_id,
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        start_time: event.start_time,
+        end_time: event.end_time,
+        is_all_day: event.is_all_day,
+        recurrence_rules: event.recurrence_rules,
+        organizer_email: event.organizer_email,
+        organizer_name: event.organizer_name,
+        attendees: event.attendees,
+        status: event.status,
+        conflict: None,
         created_at: event.created_at,
         updated_at: event.updated_at,
     }))
@@ -1073,6 +1139,11 @@ pub async fn rsvp_external(
         organizer_name: event.organizer_name,
         attendees: event.attendees,
         status: event.status,
+        conflict: if event.has_conflict {
+            super::revisions::latest_conflict_info(&state, "event", event.id.0).await?
+        } else {
+            None
+        },
         created_at: event.created_at,
         updated_at: event.updated_at,
     }))

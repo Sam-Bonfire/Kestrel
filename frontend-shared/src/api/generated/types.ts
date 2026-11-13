@@ -101,6 +101,16 @@ export type Clip = {
 	created_at: number | null,
 };
 
+/**
+ *  Conflict pointer attached to detail responses when the live row is flagged
+ *  `has_conflict`: identifies the snapshot revision holding the server-side
+ *  version, which `POST /revisions/:id/restore` can bring back.
+ */
+export type ConflictInfo = {
+	revision_id: string,
+	revision_number: number,
+};
+
 export type Contact = {
 	id: DbUuid,
 	account_id: DbUuid,
@@ -176,6 +186,7 @@ export type EventDetail = {
 	organizer_name: string | null,
 	attendees: string | null,
 	status: string | null,
+	conflict: ConflictInfo | null,
 	created_at: number | null,
 	updated_at: number | null,
 };
@@ -228,6 +239,11 @@ export type EventSummary = {
 	has_conflict: boolean,
 };
 
+export type FeedResponse = {
+	url: string,
+	token: string,
+};
+
 export type FreebusyRequest = {
 	emails: string[],
 	start_time: number | null,
@@ -272,6 +288,7 @@ export type MessageDetail = {
 	has_attachments: boolean,
 	is_set_aside: boolean,
 	has_conflict: boolean,
+	conflict: ConflictInfo | null,
 	created_at: number | null,
 	updated_at: number | null,
 };

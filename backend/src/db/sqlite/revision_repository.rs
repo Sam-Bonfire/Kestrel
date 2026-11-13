@@ -60,4 +60,20 @@ impl HistoricalRevisionRepository for SqliteRevisionRepository {
         .await?;
         Ok(result)
     }
+
+    async fn find_latest_revision(
+        &self,
+        resource_type: &str,
+        resource_id: Uuid,
+    ) -> Result<Option<HistoricalRevision>, sqlx::Error> {
+        sqlx::query_as::<_, HistoricalRevision>(
+            "SELECT id, resource_type, resource_id, serialized_payload, revision_number, created_at \
+             FROM historical_revisions WHERE resource_type = ? AND resource_id = ? \
+             ORDER BY revision_number DESC LIMIT 1",
+        )
+        .bind(resource_type)
+        .bind(resource_id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+    }
 }

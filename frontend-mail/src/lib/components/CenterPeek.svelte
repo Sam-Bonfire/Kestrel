@@ -77,6 +77,7 @@
     labels: string[];
     avatar?: string;
     attachments?: { filename: string; size: number }[];
+    conflict?: { revision_id: string; revision_number: number };
   }
 
   let {
@@ -452,6 +453,36 @@
       e.stopPropagation();
     }}
     >
+      {#if email?.conflict}
+        <div class="px-4 py-3 bg-[#422c10] border-b border-[#634218] flex flex-col gap-2 shrink-0">
+          <div class="text-[13px] text-[#ffc16b] font-medium flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            This email changed on the server while you had local changes
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              onclick={async () => {
+                const api = await import('@kestrel/shared/api');
+                await api.dismissMessageConflict(email!.id);
+                email!.conflict = undefined;
+              }}
+              class="px-3 py-1.5 bg-[#634218] hover:bg-[#7a521e] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              Keep mine
+            </button>
+            <button
+              onclick={async () => {
+                const api = await import('@kestrel/shared/api');
+                await api.restoreRevision(email!.conflict!.revision_id);
+                email!.conflict = undefined;
+              }}
+              class="px-3 py-1.5 bg-white text-black hover:bg-neutral-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              Use server version
+            </button>
+          </div>
+        </div>
+      {/if}
       {#if isBatchMode}
         <div class="px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between text-blue-400 shrink-0">
           <div class="text-xs md:text-sm font-medium">Batch Processing: {batchIndex + 1} of {batchTotal} items remaining</div>

@@ -60,4 +60,20 @@ impl HistoricalRevisionRepository for PostgresRevisionRepository {
         .await?;
         Ok(result.unwrap_or(0))
     }
+
+    async fn find_latest_revision(
+        &self,
+        resource_type: &str,
+        resource_id: Uuid,
+    ) -> Result<Option<HistoricalRevision>, sqlx::Error> {
+        sqlx::query_as::<_, HistoricalRevision>(
+            "SELECT id, resource_type, resource_id, serialized_payload, revision_number, created_at \
+             FROM historical_revisions WHERE resource_type = $1 AND resource_id = $2 \
+             ORDER BY revision_number DESC LIMIT 1",
+        )
+        .bind(resource_type)
+        .bind(resource_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
 }

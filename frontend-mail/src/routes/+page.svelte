@@ -1748,10 +1748,14 @@
           api.markAsRead(id);
           api.getMessage(id).then(detail => {
             allEmails = allEmails.map(e => e.id === id ? {
-              ...e, 
+              ...e,
               isUnread: false,
               body: detail.body_html || detail.body_text || detail.snippet || '',
-              to: detail.recipients || e.to
+              to: detail.recipients || e.to,
+              conflict: detail.conflict ? {
+                revision_id: detail.conflict.revision_id,
+                revision_number: detail.conflict.revision_number
+              } : undefined
             } : e);
           });
         });
