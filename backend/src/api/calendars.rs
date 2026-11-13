@@ -735,7 +735,9 @@ pub fn parse_ics_datetime(s: &str) -> Option<(i64, bool)> {
         let year = s[0..4].parse::<i32>().ok()?;
         let month = s[4..6].parse::<u32>().ok()?;
         let day = s[6..8].parse::<u32>().ok()?;
-        let dt = chrono::Utc.with_ymd_and_hms(year, month, day, 0, 0, 0).single()?;
+        let dt = chrono::Utc
+            .with_ymd_and_hms(year, month, day, 0, 0, 0)
+            .single()?;
         Some((dt.timestamp(), true))
     } else {
         let dt = chrono::DateTime::parse_from_rfc3339(s)
@@ -811,69 +813,67 @@ pub async fn import_ics(
             in_vevent = true;
         } else if line == "END:VEVENT" {
             break;
-        } else if in_vevent {
-            if let Some((k, v)) = line.split_once(':') {
-                let k_upper = k.to_uppercase();
-                if k_upper == "SUMMARY" {
-                    title = unescape_ics(v);
-                } else if k_upper == "DESCRIPTION" {
-                    description = Some(unescape_ics(v));
-                } else if k_upper == "LOCATION" {
-                    location = Some(unescape_ics(v));
-                } else if k_upper == "STATUS" {
-                    status = Some(unescape_ics(v));
-                } else if k_upper.starts_with("DTSTART") {
-                    if let Some((ts, all_day)) = parse_ics_datetime(v) {
-                        start_time = Some(ts);
-                        is_all_day = is_all_day || all_day;
-                    }
-                } else if k_upper.starts_with("DTEND") {
-                    if let Some((ts, all_day)) = parse_ics_datetime(v) {
-                        end_time = Some(ts);
-                        is_all_day = is_all_day || all_day;
-                    }
-                } else if k_upper.starts_with("ORGANIZER") {
-                    let email = v.strip_prefix("mailto:").unwrap_or(v).to_string();
-                    organizer_email = Some(email);
-                    if let Some((params_str, _)) = k.split_once(';') {
-                        for param in params_str.split(';') {
-                            if let Some((pk, pv)) = param.split_once('=') {
-                                if pk.to_uppercase() == "CN" {
-                                    organizer_name = Some(pv.trim_matches('"').to_string());
-                                }
-                            }
-                        }
-                    }
-                } else if k_upper.starts_with("ATTENDEE") {
-                    let email = v.strip_prefix("mailto:").unwrap_or(v).to_string();
-                    let mut att_name = None;
-                    let mut att_status = None;
-                    if let Some((_, params_str)) = k.split_once(';') {
-                        for param in params_str.split(';') {
-                            if let Some((pk, pv)) = param.split_once('=') {
-                                if pk.to_uppercase() == "CN" {
-                                    att_name = Some(pv.trim_matches('"').to_string());
-                                } else if pk.to_uppercase() == "PARTSTAT" {
-                                    att_status = match pv.to_uppercase().as_str() {
-                                        "ACCEPTED" => Some("accepted".to_string()),
-                                        "DECLINED" => Some("declined".to_string()),
-                                        "TENTATIVE" => Some("tentative".to_string()),
-                                        _ => Some("needsAction".to_string()),
-                                    };
-                                }
-                            }
-                        }
-                    }
-                    let mut map = serde_json::Map::new();
-                    map.insert("email".to_string(), serde_json::Value::String(email));
-                    if let Some(n) = att_name {
-                        map.insert("name".to_string(), serde_json::Value::String(n));
-                    }
-                    if let Some(st) = att_status {
-                        map.insert("status".to_string(), serde_json::Value::String(st));
-                    }
-                    attendees.push(serde_json::Value::Object(map));
+        } else if in_vevent && let Some((k, v)) = line.split_once(':') {
+            let k_upper = k.to_uppercase();
+            if k_upper == "SUMMARY" {
+                title = unescape_ics(v);
+            } else if k_upper == "DESCRIPTION" {
+                description = Some(unescape_ics(v));
+            } else if k_upper == "LOCATION" {
+                location = Some(unescape_ics(v));
+            } else if k_upper == "STATUS" {
+                status = Some(unescape_ics(v));
+            } else if k_upper.starts_with("DTSTART") {
+                if let Some((ts, all_day)) = parse_ics_datetime(v) {
+                    start_time = Some(ts);
+                    is_all_day = is_all_day || all_day;
                 }
+            } else if k_upper.starts_with("DTEND") {
+                if let Some((ts, all_day)) = parse_ics_datetime(v) {
+                    end_time = Some(ts);
+                    is_all_day = is_all_day || all_day;
+                }
+            } else if k_upper.starts_with("ORGANIZER") {
+                let email = v.strip_prefix("mailto:").unwrap_or(v).to_string();
+                organizer_email = Some(email);
+                if let Some((_, params_str)) = k.split_once(';') {
+                    for param in params_str.split(';') {
+                        if let Some((pk, pv)) = param.split_once('=')
+                            && pk.to_uppercase() == "CN"
+                        {
+                            organizer_name = Some(pv.trim_matches('"').to_string());
+                        }
+                    }
+                }
+            } else if k_upper.starts_with("ATTENDEE") {
+                let email = v.strip_prefix("mailto:").unwrap_or(v).to_string();
+                let mut att_name = None;
+                let mut att_status = None;
+                if let Some((_, params_str)) = k.split_once(';') {
+                    for param in params_str.split(';') {
+                        if let Some((pk, pv)) = param.split_once('=') {
+                            if pk.to_uppercase() == "CN" {
+                                att_name = Some(pv.trim_matches('"').to_string());
+                            } else if pk.to_uppercase() == "PARTSTAT" {
+                                att_status = match pv.to_uppercase().as_str() {
+                                    "ACCEPTED" => Some("accepted".to_string()),
+                                    "DECLINED" => Some("declined".to_string()),
+                                    "TENTATIVE" => Some("tentative".to_string()),
+                                    _ => Some("needsAction".to_string()),
+                                };
+                            }
+                        }
+                    }
+                }
+                let mut map = serde_json::Map::new();
+                map.insert("email".to_string(), serde_json::Value::String(email));
+                if let Some(n) = att_name {
+                    map.insert("name".to_string(), serde_json::Value::String(n));
+                }
+                if let Some(st) = att_status {
+                    map.insert("status".to_string(), serde_json::Value::String(st));
+                }
+                attendees.push(serde_json::Value::Object(map));
             }
         }
     }
@@ -1518,10 +1518,7 @@ mod tests {
             parse_ics_datetime("20231028T143045Z"),
             Some((1698503445, false))
         );
-        assert_eq!(
-            parse_ics_datetime("20231028"),
-            Some((1698451200, true))
-        );
+        assert_eq!(parse_ics_datetime("20231028"), Some((1698451200, true)));
         assert_eq!(parse_ics_datetime("InvalidString"), None);
     }
 

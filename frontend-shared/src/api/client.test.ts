@@ -35,6 +35,7 @@ import {
   listCalendars,
   getCalendars,
   getEvents,
+  rsvpEvent,
   rsvpExternal,
   markAsRead,
   archiveMessage,
@@ -578,6 +579,8 @@ describe('API Client & Contract Validation', () => {
       { name: 'deleteBookingPage', call: () => deleteBookingPage('b1'), method: 'DELETE', path: '/booking-pages/b1' },
       { name: 'getEvents', call: () => getEvents('2026-01-01T00:00:00Z', '2026-01-31T00:00:00Z'), method: 'GET', path: '/events?start_time=1767225600&end_time=1769817600' },
       { name: 'rsvpExternal', call: () => rsvpExternal('e1', 'accepted'), method: 'POST', path: '/events/rsvp_external' },
+      { name: 'rsvpEvent', call: () => rsvpEvent('e1', 'accepted'), method: 'POST', path: '/events/e1/rsvp' },
+      { name: 'rsvpEvent', call: () => rsvpEvent('e1', 'accepted'), method: 'POST', path: '/events/e1/rsvp' },
       { name: 'listCalendars', call: () => listCalendars(), method: 'GET', path: '/calendars' },
     ];
 

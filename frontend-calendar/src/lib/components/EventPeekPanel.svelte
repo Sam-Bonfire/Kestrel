@@ -260,8 +260,8 @@
     if (!event || !event.id) return;
     const newRsvpStatus = newStatus === 'accepted' ? 'yes' : newStatus === 'declined' ? 'no' : 'maybe';
     event.rsvpStatus = newRsvpStatus;
-    import('@kestrel/shared/api').then(({ rsvpExternal }) => {
-      rsvpExternal(event!.id!, newStatus).catch(console.error);
+    import('@kestrel/shared/api').then(({ rsvpEvent }) => {
+      rsvpEvent(event!.id!, newStatus).catch(console.error);
     });
   }
 </script>

@@ -28,6 +28,7 @@
   createEvent,
   updateEvent,
   deleteEvent,
+  rsvpEvent,
   rsvpExternal,
 } from './client.js';
 

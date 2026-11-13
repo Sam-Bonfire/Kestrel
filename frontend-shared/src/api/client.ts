@@ -920,7 +920,7 @@ export async function updateEvent(
   });
 }
 
-export async function rsvpExternal(
+export async function rsvpEvent(
   eventId: string,
   status: string,
   token?: string,
@@ -928,6 +928,17 @@ export async function rsvpExternal(
   return request<EventDetail>('POST', `/events/${eventId}/rsvp`, {
     token,
     body: { status },
+  });
+}
+
+export async function rsvpExternal(
+  externalId: string,
+  status: string,
+  token?: string,
+): Promise<CalendarEvent> {
+  return request<CalendarEvent>('POST', '/events/rsvp_external', {
+    token,
+    body: { external_id: externalId, status },
   });
 }
 
