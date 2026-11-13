@@ -9,16 +9,6 @@ import {
 import { get } from 'svelte/store';
 
 // In-memory localStorage mock for node test environment
-const mockStorage: Record<string, string> = {};
-globalThis.localStorage = {
-  getItem: (key: string) => mockStorage[key] ?? null,
-  setItem: (key: string, value: string) => { mockStorage[key] = value; },
-  removeItem: (key: string) => { delete mockStorage[key]; },
-  clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); },
-  length: 0,
-  key: () => null,
-};
-
 describe('Shortcuts Engine & Input Guard', () => {
   beforeEach(() => {
     resetShortcuts();

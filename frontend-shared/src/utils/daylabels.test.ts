@@ -1,16 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getDayLabel, getDayLabels, setDayLabel, daysUntil, formatCountdown } from './daylabels.js';
 
-const mockStorage: Record<string, string> = {};
-globalThis.localStorage = {
-  getItem: (key: string) => mockStorage[key] ?? null,
-  setItem: (key: string, value: string) => { mockStorage[key] = value; },
-  removeItem: (key: string) => { delete mockStorage[key]; },
-  clear: () => { Object.keys(mockStorage).forEach((k) => delete mockStorage[k]); },
-  length: 0,
-  key: () => null,
-};
-
 describe('day labels', () => {
   beforeEach(() => localStorage.clear());
 
@@ -22,7 +12,7 @@ describe('day labels', () => {
   });
 
   it('ignores malformed persisted data', () => {
-    mockStorage['kestrel:calendar:day-labels'] = '["not-an-object"]';
+    localStorage.setItem('kestrel:calendar:day-labels', '["not-an-object"]');
     expect(getDayLabel('2026-10-05')).toBeNull();
   });
 
@@ -55,11 +45,11 @@ describe('day labels', () => {
   });
 
   it('filters malformed persisted entries', () => {
-    mockStorage['kestrel:calendar:day-labels'] = JSON.stringify({
+    localStorage.setItem('kestrel:calendar:day-labels', JSON.stringify({
       '2026-10-05': 'OK',
       nope: 'bad key',
       '2026-10-06': 42,
-    });
+    }));
     expect(getDayLabels()).toEqual({ '2026-10-05': 'OK' });
   });
 });
