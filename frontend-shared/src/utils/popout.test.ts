@@ -6,16 +6,6 @@ import {
   buildPopoutUrl,
 } from './popout.js';
 
-const mockStorage: Record<string, string> = {};
-globalThis.localStorage = {
-  getItem: (key: string) => mockStorage[key] ?? null,
-  setItem: (key: string, value: string) => { mockStorage[key] = value; },
-  removeItem: (key: string) => { delete mockStorage[key]; },
-  clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); },
-  length: 0,
-  key: () => null,
-};
-
 describe('Compose pop-out handoff', () => {
   beforeEach(() => {
     localStorage.clear();

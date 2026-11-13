@@ -1,16 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { triageCandidates, shouldRunTriage, markTriageRun } from './triage.js';
 
-const mockStorage: Record<string, string> = {};
-globalThis.localStorage = {
-  getItem: (key: string) => mockStorage[key] ?? null,
-  setItem: (key: string, value: string) => { mockStorage[key] = value; },
-  removeItem: (key: string) => { delete mockStorage[key]; },
-  clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); },
-  length: 0,
-  key: () => null,
-};
-
 const NOW = new Date('2026-09-09T12:00:00Z');
 const OLD = '2026-07-01T10:00:00Z';
 const RECENT = '2026-09-08T10:00:00Z';

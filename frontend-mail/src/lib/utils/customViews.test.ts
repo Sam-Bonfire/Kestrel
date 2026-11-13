@@ -2,16 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { getCustomViews, saveCustomView, deleteCustomView, updateCustomView } from './customViews.js';
 import type { CustomViewFilter } from './customViews.js';
 
-const mockStorage: Record<string, string> = {};
-globalThis.localStorage = {
-  getItem: (key: string) => mockStorage[key] ?? null,
-  setItem: (key: string, value: string) => { mockStorage[key] = value; },
-  removeItem: (key: string) => { delete mockStorage[key]; },
-  clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); },
-  length: 0,
-  key: () => null,
-};
-
 const filter: CustomViewFilter = {
   view: 'inbox',
   category: 'Updates',

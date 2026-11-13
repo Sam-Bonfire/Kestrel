@@ -10,16 +10,6 @@ import {
 
 const ALLOW_KEY = 'kestrel:privacy:remote-image-domains';
 
-const mockStorage: Record<string, string> = {};
-globalThis.localStorage = {
-  getItem: (key: string) => mockStorage[key] ?? null,
-  setItem: (key: string, value: string) => { mockStorage[key] = value; },
-  removeItem: (key: string) => { delete mockStorage[key]; },
-  clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); },
-  length: 0,
-  key: () => null,
-};
-
 describe('Tracking protection', () => {
   beforeEach(() => {
     localStorage.clear();
