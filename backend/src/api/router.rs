@@ -173,6 +173,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/senders/block", post(messages::block_sender))
         .route("/api/v1/messages/:id/labels", post(messages::update_labels))
         .route(
+            "/api/v1/messages/:id/conflict/dismiss",
+            post(messages::dismiss_message_conflict),
+        )
+        .route(
             "/api/v1/labels",
             get(super::labels::list_labels).patch(super::labels::update_label),
         )
@@ -250,6 +254,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/v1/revisions/:id/restore",
             post(revisions::restore_revision),
+        )
+        .route(
+            "/api/v1/events/:id/conflict/dismiss",
+            post(calendars::dismiss_event_conflict),
         )
         .route("/api/v1/sync/stream", get(sync::sync_stream))
         .route("/api/v1/sync/trigger", post(sync::trigger_sync))

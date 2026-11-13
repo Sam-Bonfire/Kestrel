@@ -3,6 +3,8 @@ use axum::{
     extract::{Path, State},
 };
 use serde::Serialize;
+use specta::Type;
+use uuid::Uuid;
 
 use super::auth::AuthUser;
 use super::router::AppState;
@@ -11,6 +13,33 @@ use crate::core::repository::{EventRepository, HistoricalRevisionRepository, Mes
 use crate::db::pool::DbPool;
 use crate::db::postgres::revision_repository::PostgresRevisionRepository;
 use crate::db::sqlite::revision_repository::SqliteRevisionRepository;
+
+/// Conflict pointer attached to detail responses when the live row is flagged
+/// `has_conflict`: identifies the snapshot revision holding the server-side
+/// version, which `POST /revisions/:id/restore` can bring back.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct ConflictInfo {
+    pub revision_id: Uuid,
+    pub revision_number: i32,
+}
+
+pub(crate) async fn latest_conflict_info(
+    state: &AppState,
+    resource_type: &str,
+    resource_id: Uuid,
+) -> Result<Option<ConflictInfo>, KestrelError> {
+    let repo: Box<dyn HistoricalRevisionRepository> = match &state.db {
+        DbPool::Sqlite(pool) => Box::new(SqliteRevisionRepository::new(pool.clone())),
+        DbPool::Postgres(pool) => Box::new(PostgresRevisionRepository::new(pool.clone())),
+    };
+    let latest = repo
+        .find_latest_revision(resource_type, resource_id)
+        .await?;
+    Ok(latest.map(|latest| ConflictInfo {
+        revision_id: latest.id.0,
+        revision_number: latest.revision_number,
+    }))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ColumnType {

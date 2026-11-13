@@ -80,6 +80,7 @@ pub struct MessageDetail {
     pub has_attachments: bool,
     pub is_set_aside: bool,
     pub has_conflict: bool,
+    pub conflict: Option<super::revisions::ConflictInfo>,
     #[specta(type = f64)]
     pub created_at: i64,
     #[specta(type = f64)]
@@ -274,6 +275,68 @@ pub async fn get_message(
         has_attachments: msg.has_attachments,
         is_set_aside: msg.is_set_aside,
         has_conflict: msg.has_conflict,
+        conflict: if msg.has_conflict {
+            super::revisions::latest_conflict_info(&state, "message", msg.id.0).await?
+        } else {
+            None
+        },
+        created_at: msg.created_at,
+        updated_at: msg.updated_at,
+    }))
+}
+
+pub async fn dismiss_message_conflict(
+    State(state): State<AppState>,
+    AuthUser { user_id }: AuthUser,
+    Path(message_id): Path<Uuid>,
+) -> Result<Json<MessageDetail>, KestrelError> {
+    let mut msg = find_message_from_db(&state, message_id)
+        .await?
+        .ok_or_else(|| KestrelError::NotFound("Message not found".to_string()))?;
+
+    let owns = verify_account_ownership(&state, user_id, msg.account_id.0).await?;
+    if !owns {
+        return Err(KestrelError::NotFound("Message not found".to_string()));
+    }
+
+    msg.has_conflict = false;
+    msg.updated_at = chrono::Utc::now().timestamp();
+
+    match &state.db {
+        DbPool::Sqlite(pool) => {
+            SqliteMessageRepository::new(pool.clone())
+                .upsert(&msg)
+                .await?;
+        }
+        DbPool::Postgres(pool) => {
+            PostgresMessageRepository::new(pool.clone())
+                .upsert(&msg)
+                .await?;
+        }
+    }
+
+    Ok(Json(MessageDetail {
+        id: msg.id.0,
+        account_id: msg.account_id.0,
+        external_id: msg.external_id,
+        thread_id: msg.thread_id,
+        subject: msg.subject,
+        sender_name: msg.sender_name,
+        sender_email: msg.sender_email,
+        recipients: msg.recipients,
+        date_sent: msg.date_sent,
+        date_received: msg.date_received,
+        snippet: msg.snippet,
+        body_text: msg.body_text,
+        body_html: msg.body_html,
+        labels: msg.labels,
+        is_read: msg.is_read,
+        is_archived: msg.is_archived,
+        is_deleted: msg.is_deleted,
+        has_attachments: msg.has_attachments,
+        is_set_aside: msg.is_set_aside,
+        has_conflict: msg.has_conflict,
+        conflict: None,
         created_at: msg.created_at,
         updated_at: msg.updated_at,
     }))
