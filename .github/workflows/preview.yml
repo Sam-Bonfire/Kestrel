@@ -300,3 +300,69 @@ jobs:
           echo "| Check | Target | Status | Result |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           echo "| Landing Build | \`frontend-landing/\` | ${{ steps.landing_checks.outcome == 'success' && '✅ Passed' || '❌ Failed' }} | ${{ steps.landing_checks.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  e2e-backend:
+    name: E2E Backend (SQLite)
+    needs: changes
+    if: needs.changes.outputs.mail == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SKIP_BUILD: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache pnpm
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.local/share/pnpm/store
+            ~/AppData/Local/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cache Cargo Registry
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ runner.os }}-
+
+      - name: Cache Cargo Target
+        uses: actions/cache@v6
+        with:
+          path: target/
+          key: cargo-target-${{ runner.os }}-e2e-backend-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-e2e-backend-
+
+      - name: Setup Mise
+        uses: jdx/mise-action@v4
+        with:
+          install: true
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          pnpm install
+          pnpm --filter @kestrel/e2e exec playwright install --with-deps chromium
+
+      - name: Build backend bins and frontends
+        run: |
+          cargo build --manifest-path backend/Cargo.toml --bins
+          pnpm --filter @kestrel/shared build
+          pnpm --filter frontend-mail build
+          pnpm --filter frontend-calendar build
+
+      - name: Run seeded backend E2E suite
+        run: node scripts/run-e2e-backend.mjs
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-backend-traces
+          path: e2e/test-results/
+          retention-days: 5

@@ -140,6 +140,13 @@ run = [
     "pnpm --filter @kestrel/e2e test",
 ]
 
+[tasks."test:e2e:backend"]
+description = "Run Playwright mail suite against a real seeded backend (sqlite)"
+run = [
+    "pnpm --filter frontend-mail build",
+    "node scripts/run-e2e-backend.mjs",
+]
+
 [tasks."test:e2e:install"]
 description = "Install Playwright browsers for the E2E suite"
 run = "pnpm --filter @kestrel/e2e exec playwright install --with-deps chromium"
