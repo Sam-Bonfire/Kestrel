@@ -31,8 +31,8 @@ importers:
         specifier: workspace:*
         version: link:../frontend-shared
       '@tanstack/query-persist-client-core':
-        specifier: ^5.106.1
-        version: 5.106.1
+        specifier: ^5.107.1
+        version: 5.107.1
       '@tauri-apps/api':
         specifier: ^2.12.2
         version: 2.12.4
@@ -132,8 +132,8 @@ importers:
         specifier: workspace:*
         version: link:../frontend-shared
       '@tanstack/query-persist-client-core':
-        specifier: ^5.106.1
-        version: 5.106.1
+        specifier: ^5.107.1
+        version: 5.107.1
       '@tauri-apps/api':
         specifier: ^2.12.2
         version: 2.12.4
@@ -220,8 +220,8 @@ importers:
         specifier: ^5.106.1
         version: 5.106.1
       '@tanstack/query-persist-client-core':
-        specifier: ^5.106.1
-        version: 5.106.1
+        specifier: ^5.107.1
+        version: 5.107.1
       '@tanstack/query-sync-storage-persister':
         specifier: ^5.106.1
         version: 5.106.1
@@ -830,8 +830,14 @@ packages:
   '@tanstack/query-core@5.106.1':
     resolution: {integrity: sha512-erYv/UACddcdgjOL2ixmFdK6tO/AVBeUcTCOtX2N51yZpDQ2U7KJ+xgB/bCNfsF3uoCDTqGHEEbDiFsIO9YUmQ==}
 
+  '@tanstack/query-core@5.107.1':
+    resolution: {integrity: sha512-PSyAik11oQBEVOiVy5hjZWHmoUqOXqK1WYy4v55mcxozEfKaQgpUMsgnXhWjuESzSht8JfzqMS1m6M/9CpNgvg==}
+
   '@tanstack/query-persist-client-core@5.106.1':
     resolution: {integrity: sha512-UprIWmgSMdzj4aW0Erv4BbM89lwmkmsnPuVwsUbEFHg5XUVBIlrOjVTVW837GnqI/AKZykpS0TBiXREpSrh1MQ==}
+
+  '@tanstack/query-persist-client-core@5.107.1':
+    resolution: {integrity: sha512-/qDxEcKh44xViKKFlf8MUoeITritIn58XcT3YkCOQ0Ovj4Wa2EgZtqvHSlw+tnQQGhtq9+gLVZSeUtSfkIL9Kg==}
 
   '@tanstack/query-sync-storage-persister@5.106.1':
     resolution: {integrity: sha512-7J+HtCg6xbapn0iM1AyKsa8wle7Os5/UO78T/G++t+T0GtV2RKJ1QTd4xfLx+r+MzUzQ8qSNIRMqDgR5+GcLzw==}
@@ -2078,9 +2084,15 @@ snapshots:
 
   '@tanstack/query-core@5.106.1': {}
 
+  '@tanstack/query-core@5.107.1': {}
+
   '@tanstack/query-persist-client-core@5.106.1':
     dependencies:
       '@tanstack/query-core': 5.106.1
+
+  '@tanstack/query-persist-client-core@5.107.1':
+    dependencies:
+      '@tanstack/query-core': 5.107.1
 
   '@tanstack/query-sync-storage-persister@5.106.1':
     dependencies:
