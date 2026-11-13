@@ -108,7 +108,8 @@ pub async fn auth_middleware(
     };
 
     if is_from_cookie && is_state_changing_method(req.method()) && !verify_csrf_token(&req) {
-        return KestrelError::Forbidden("Invalid or missing CSRF token".to_string()).into_response();
+        return KestrelError::Forbidden("Invalid or missing CSRF token".to_string())
+            .into_response();
     }
 
     match decode_jwt(&token, &state.jwt_secret) {
@@ -131,7 +132,10 @@ fn is_state_changing_method(method: &axum::http::Method) -> bool {
 }
 
 fn verify_csrf_token(req: &Request<Body>) -> bool {
-    let csrf_header = req.headers().get("x-csrf-token").and_then(|v| v.to_str().ok());
+    let csrf_header = req
+        .headers()
+        .get("x-csrf-token")
+        .and_then(|v| v.to_str().ok());
     let mut csrf_cookie = None;
 
     if let Some(cookie) = req.headers().get(axum::http::header::COOKIE)
@@ -175,7 +179,30 @@ fn extract_bearer_token(req: &Request<Body>) -> Option<(String, bool)> {
         return Some((token.to_string(), false));
     }
 
+    // 3. Fallback to query parameter — SSE/EventSource only.
+    // EventSource cannot set headers and the Tauri WebView shares no cookie
+    // jar with the system browser, so the sync stream is the one route that
+    // accepts ?token=. Everywhere else it is rejected (no log/history leak).
+    if query_token_allowed(req.uri().path())
+        && let Some(query) = req.uri().query()
+    {
+        for pair in query.split('&') {
+            if let Some((k, v)) = pair.split_once('=')
+                && k == "token"
+                && !v.is_empty()
+            {
+                return Some((v.to_string(), false));
+            }
+        }
+    }
+
     None
+}
+
+/// Routes allowed to carry the session token as a `?token=` query parameter.
+/// Exactly one: the SSE sync stream (see extraction fallback above).
+fn query_token_allowed(path: &str) -> bool {
+    path == "/api/v1/sync/stream"
 }
 
 // --- JWT helpers ---
@@ -291,8 +318,8 @@ pub async fn token(
     let bytes = axum::body::to_bytes(body, usize::MAX)
         .await
         .map_err(|e| KestrelError::BadRequest(e.to_string()))?;
-    let req_body: TokenRequest = serde_json::from_slice(&bytes)
-        .map_err(|e| KestrelError::BadRequest(e.to_string()))?;
+    let req_body: TokenRequest =
+        serde_json::from_slice(&bytes).map_err(|e| KestrelError::BadRequest(e.to_string()))?;
 
     let user = find_user_by_username(&state, &req_body.username).await?;
     let user = user.ok_or(KestrelError::Unauthorized)?;
@@ -312,13 +339,11 @@ pub async fn token(
     let suffix = cookie_secure_suffix(&parts.headers);
     let cookie = format!(
         "kestrel_token={}; HttpOnly; Path=/; SameSite=Lax{}",
-        jwt,
-        suffix
+        jwt, suffix
     );
     let csrf_cookie = format!(
         "kestrel_csrf={}; HttpOnly; Path=/; SameSite=Lax{}",
-        csrf_token,
-        suffix
+        csrf_token, suffix
     );
 
     let response = axum::response::Response::builder()
@@ -364,10 +389,13 @@ pub async fn logout(req: Request<Body>) -> Result<Response, KestrelError> {
 /// "; Secure" when the request is made over HTTPS.
 /// Checks `X-Forwarded-Proto` header, fallback to `KESTREL_BASE_URL`.
 fn cookie_secure_suffix(headers: &axum::http::HeaderMap) -> &'static str {
-    if let Some(proto) = headers.get("X-Forwarded-Proto").and_then(|v| v.to_str().ok())
-        && proto.eq_ignore_ascii_case("https") {
-            return "; Secure";
-        }
+    if let Some(proto) = headers
+        .get("X-Forwarded-Proto")
+        .and_then(|v| v.to_str().ok())
+        && proto.eq_ignore_ascii_case("https")
+    {
+        return "; Secure";
+    }
 
     match std::env::var("KESTREL_BASE_URL") {
         Ok(base) if base.trim_start().starts_with("https://") => "; Secure",

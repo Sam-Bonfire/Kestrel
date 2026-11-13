@@ -26,12 +26,17 @@ pub async fn update_label(
 ) -> Result<Json<Label>, KestrelError> {
     let mut label = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            SqliteLabelRepository::new(pool.clone()).find_by_id(payload.id).await?
+            SqliteLabelRepository::new(pool.clone())
+                .find_by_id(payload.id)
+                .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            PostgresLabelRepository::new(pool.clone()).find_by_id(payload.id).await?
+            PostgresLabelRepository::new(pool.clone())
+                .find_by_id(payload.id)
+                .await?
         }
-    }.ok_or_else(|| KestrelError::NotFound("Label not found".to_string()))?;
+    }
+    .ok_or_else(|| KestrelError::NotFound("Label not found".to_string()))?;
 
     if !super::calendars::verify_account_ownership(&state, user_id, label.account_id.0).await? {
         return Err(KestrelError::NotFound("Label not found".to_string()));
@@ -44,10 +49,14 @@ pub async fn update_label(
 
     let rows_affected = match &state.db {
         crate::db::pool::DbPool::Sqlite(pool) => {
-            SqliteLabelRepository::new(pool.clone()).update(&label).await?
+            SqliteLabelRepository::new(pool.clone())
+                .update(&label)
+                .await?
         }
         crate::db::pool::DbPool::Postgres(pool) => {
-            PostgresLabelRepository::new(pool.clone()).update(&label).await?
+            PostgresLabelRepository::new(pool.clone())
+                .update(&label)
+                .await?
         }
     };
 

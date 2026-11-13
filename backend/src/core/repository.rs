@@ -123,7 +123,8 @@ pub trait EventRepository: Send + Sync {
 #[async_trait]
 pub trait LabelRepository: Send + Sync {
     async fn update(&self, label: &crate::core::models::Label) -> Result<u64, sqlx::Error>;
-    async fn find_by_id(&self, id: Uuid) -> Result<Option<crate::core::models::Label>, sqlx::Error>;
+    async fn find_by_id(&self, id: Uuid)
+    -> Result<Option<crate::core::models::Label>, sqlx::Error>;
     async fn list_by_accounts(
         &self,
         account_ids: &[Uuid],
