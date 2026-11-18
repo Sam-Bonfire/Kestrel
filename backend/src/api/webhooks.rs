@@ -45,7 +45,7 @@ pub async fn handle_generic_webhook(
     State(state): State<AppState>,
     Path(provider): Path<String>,
     Query(query_params): Query<HashMap<String, String>>,
-    body: Option<axum::body::Bytes>,
+    body: axum::body::Bytes,
 ) -> Result<impl IntoResponse, KestrelError> {
     let plugin_manager = state.plugin_manager.read().await;
     let plugin = match plugin_manager
@@ -73,7 +73,7 @@ pub async fn handle_generic_webhook(
             KestrelError::Unavailable("Webhook secret not configured".to_string())
         })?;
 
-    let bytes = body.map(|b| b.to_vec()).unwrap_or_default();
+    let bytes = body.to_vec();
 
     let query_vec: Vec<(String, String)> = query_params.into_iter().collect();
 

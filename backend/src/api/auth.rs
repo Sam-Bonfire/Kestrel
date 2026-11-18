@@ -1,7 +1,6 @@
 use argon2::Argon2;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use async_trait::async_trait;
 use axum::Json;
 use axum::body::Body;
 use axum::extract::{FromRequestParts, Query, State};
@@ -79,7 +78,6 @@ pub struct AuthUser {
     pub user_id: Uuid,
 }
 
-#[async_trait]
 impl<S: Send + Sync> FromRequestParts<S> for AuthUser {
     type Rejection = KestrelError;
 

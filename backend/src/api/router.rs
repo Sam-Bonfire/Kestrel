@@ -93,87 +93,90 @@ pub fn create_router(state: AppState) -> Router {
 
     // Webhook routes
     let webhooks = Router::new().route(
-        "/api/webhooks/:provider",
+        "/api/webhooks/{provider}",
         post(webhooks::handle_generic_webhook),
     );
 
     // Public booking routes (token-authenticated via slug, no login required)
     let booking_public = Router::new()
-        .route("/book/:slug", get(booking::guest_page))
+        .route("/book/{slug}", get(booking::guest_page))
         .route(
-            "/api/book/:slug",
+            "/api/book/{slug}",
             get(booking::public_page).post(booking::book_slot),
         )
-        .route("/api/book/:slug/slots", get(booking::public_slots))
+        .route("/api/book/{slug}/slots", get(booking::public_slots))
         .route(
-            "/feeds/calendars/:filename",
+            "/feeds/calendars/{filename}",
             get(calendars::get_calendar_feed),
         );
 
     // Protected routes (auth middleware required)
     let protected = Router::new()
-        .route("/api/v1/auth/callback/:provider", get(auth::callback))
+        .route("/api/v1/auth/callback/{provider}", get(auth::callback))
         .route("/api/v1/auth/logout", post(auth::logout))
         .route("/api/v1/accounts", get(accounts::list_accounts))
-        .route("/api/v1/accounts/:id", delete(accounts::delete_account))
+        .route("/api/v1/accounts/{id}", delete(accounts::delete_account))
         .route("/api/v1/messages", get(messages::list_messages))
-        .route("/api/v1/messages/:id", get(messages::get_message))
+        .route("/api/v1/messages/{id}", get(messages::get_message))
         .route(
-            "/api/v1/messages/:id/attachments/:filename",
+            "/api/v1/messages/{id}/attachments/{filename}",
             get(messages::download_attachment),
         )
         .route(
-            "/api/v1/messages/:id/attachments/:filename/redirect",
+            "/api/v1/messages/{id}/attachments/{filename}/redirect",
             get(messages::redirect_attachment),
         )
         .route(
-            "/api/messages/:id/attachments/:filename/redirect",
+            "/api/messages/{id}/attachments/{filename}/redirect",
             get(messages::redirect_attachment),
         )
-        .route("/api/v1/messages/:id/read", post(messages::mark_read))
+        .route("/api/v1/messages/{id}/read", post(messages::mark_read))
         .route(
-            "/api/v1/messages/:id/archive",
+            "/api/v1/messages/{id}/archive",
             post(messages::archive_message),
         )
         .route(
             "/api/v1/clips",
             get(clips::list_clips).post(clips::create_clip),
         )
-        .route("/api/v1/clips/:id", delete(clips::delete_clip))
+        .route("/api/v1/clips/{id}", delete(clips::delete_clip))
         .route("/api/v1/threads/notes", get(clips::list_notes))
         .route(
-            "/api/v1/threads/:thread_id/notes",
+            "/api/v1/threads/{thread_id}/notes",
             put(clips::set_note).delete(clips::clear_note),
         )
         .route(
-            "/api/v1/messages/:id/snooze",
+            "/api/v1/messages/{id}/snooze",
             post(messages::snooze_message),
         )
         .route(
-            "/api/v1/messages/:id/set-aside",
+            "/api/v1/messages/{id}/set-aside",
             post(messages::set_aside_message),
         )
         .route("/api/v1/threads/overrides", get(threads::list_overrides))
         .route(
-            "/api/v1/threads/:thread_id/subject",
+            "/api/v1/threads/{thread_id}/subject",
             put(threads::set_subject).delete(threads::clear_subject),
         )
         .route(
-            "/api/v1/messages/:id/unsnooze",
+            "/api/v1/messages/{id}/unsnooze",
             post(messages::unsnooze_message),
         )
-        .route("/api/v1/messages/:id/trash", post(messages::trash_message))
-        .route("/api/v1/messages/:id/star", post(messages::toggle_star))
-        .route("/api/v1/messages/:id/mute", post(messages::mute_thread))
+        .route("/api/v1/messages/{id}/trash", post(messages::trash_message))
+        .route("/api/v1/messages/{id}/star", post(messages::toggle_star))
+        .route("/api/v1/messages/{id}/mute", post(messages::mute_thread))
         .route(
-            "/api/v1/messages/:id/report-phishing",
+            "/api/v1/messages/{id}/report-phishing",
             post(messages::report_phishing),
         )
-        .route("/api/v1/messages/:id/raw", get(messages::get_raw_eml))
+        .route("/api/v1/messages/{id}/raw", get(messages::get_raw_eml))
         .route("/api/v1/senders/block", post(messages::block_sender))
-        .route("/api/v1/messages/:id/labels", post(messages::update_labels))
         .route(
-            "/api/v1/messages/:id/conflict/dismiss",
+            "/api/v1/messages/{id}/labels",
+            post(messages::update_labels),
+        )
+        .route(
+            "/api/v1/messages/{id}/conflict/dismiss",
             post(messages::dismiss_message_conflict),
         )
         .route(
@@ -196,13 +199,13 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/contacts/export", get(contacts::export_contacts))
         .route("/api/v1/contacts/import", post(contacts::import_contacts))
         .route(
-            "/api/v1/accounts/:id/vacation",
+            "/api/v1/accounts/{id}/vacation",
             get(vacation::get_vacation).put(vacation::set_vacation),
         )
         .route("/api/v1/calendars", get(calendars::list_calendars))
-        .route("/api/v1/calendars/:id", get(calendars::get_calendar))
+        .route("/api/v1/calendars/{id}", get(calendars::get_calendar))
         .route(
-            "/api/v1/calendars/:id/feed",
+            "/api/v1/calendars/{id}/feed",
             post(calendars::create_calendar_feed).delete(calendars::revoke_calendar_feed),
         )
         .route(
@@ -215,18 +218,18 @@ pub fn create_router(state: AppState) -> Router {
             post(calendars::rsvp_external),
         )
         .route(
-            "/api/v1/events/:id",
+            "/api/v1/events/{id}",
             get(calendars::get_event)
                 .patch(calendars::update_event)
                 .delete(calendars::delete_event),
         )
-        .route("/api/v1/events/:id/rsvp", post(calendars::rsvp_event))
+        .route("/api/v1/events/{id}/rsvp", post(calendars::rsvp_event))
         .route(
-            "/api/v1/events/:id/polls",
+            "/api/v1/events/{id}/polls",
             get(polls::list_polls).post(polls::create_poll),
         )
         .route(
-            "/api/v1/events/:id/polls/:poll_id/vote",
+            "/api/v1/events/{id}/polls/{poll_id}/vote",
             post(polls::vote_poll),
         )
         .route(
@@ -234,17 +237,17 @@ pub fn create_router(state: AppState) -> Router {
             get(booking::list_pages).post(booking::create_page),
         )
         .route(
-            "/api/v1/booking-pages/:id",
+            "/api/v1/booking-pages/{id}",
             get(booking::get_page)
                 .patch(booking::update_page)
                 .delete(booking::delete_page),
         )
         .route(
-            "/api/v1/booking-pages/:id/rotate",
+            "/api/v1/booking-pages/{id}/rotate",
             post(booking::rotate_slug),
         )
         .route(
-            "/api/v1/accounts/:id/freebusy",
+            "/api/v1/accounts/{id}/freebusy",
             post(availability::query_freebusy),
         )
         .route(
@@ -252,11 +255,11 @@ pub fn create_router(state: AppState) -> Router {
             get(settings::get_settings).put(settings::update_settings),
         )
         .route(
-            "/api/v1/revisions/:id/restore",
+            "/api/v1/revisions/{id}/restore",
             post(revisions::restore_revision),
         )
         .route(
-            "/api/v1/events/:id/conflict/dismiss",
+            "/api/v1/events/{id}/conflict/dismiss",
             post(calendars::dismiss_event_conflict),
         )
         .route("/api/v1/sync/stream", get(sync::sync_stream))
